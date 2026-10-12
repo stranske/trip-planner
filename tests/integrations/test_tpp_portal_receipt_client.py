@@ -14,6 +14,7 @@ from trip_planner.integrations.tpp.portal_receipt import PortalReceiptBinding
 from trip_planner.integrations.tpp.portal_receipt_client import (
     OwnerPortalReceiptClient,
     PortalOwnerIdentity,
+    PortalPreparationError,
     PortalReceiptReadError,
 )
 
@@ -123,3 +124,196 @@ def test_malformed_or_oversized_response_is_not_evidence(client_setup, monkeypat
     monkeypatch.setattr(client._opener, "open", open_request)
     with pytest.raises(TPPContractError, match="Malformed TPP portal receipt"):
         client.read_receipt(identity=identity, binding=binding)
+
+
+def _preparation_receipt(binding, *, decision_recorded=False):
+    return {
+        **binding.model_dump(),
+        "contract_version": "portal-receipt/v1",
+        "state": "decision_recorded" if decision_recorded else "prepared",
+        "prepared_at": "2026-10-10T12:00:00Z",
+        "observed_at": "2026-10-10T12:30:00Z",
+        "request_id": "request-1" if decision_recorded else None,
+        "execution_id": "execution-1" if decision_recorded else None,
+        "review_id": "review-1" if decision_recorded else None,
+        "submitted_at": "2026-10-10T12:10:00Z" if decision_recorded else None,
+        "decision": "changes_requested" if decision_recorded else None,
+        "decision_at": "2026-10-10T12:20:00Z" if decision_recorded else None,
+    }
+
+
+@pytest.mark.parametrize("decision_recorded", [False, True])
+def test_owner_preparation_posts_private_answers_and_preserves_retry_evidence(
+    client_setup, monkeypatch, decision_recorded
+):
+    client, identity, binding = client_setup
+    answers = {"traveler_name": "Morgan José", "notes": "Quote + tax & fees = $430.00"}
+    payload = _preparation_receipt(binding, decision_recorded=decision_recorded)
+    requests = []
+
+    @contextmanager
+    def open_request(outgoing, *, timeout):
+        assert outgoing.full_url == "https://portal.example:8443/api/planner/portal-handoffs"
+        assert outgoing.get_method() == "POST"
+        assert outgoing.get_header("Authorization") == identity.authorization
+        assert outgoing.get_header("Content-type") == "application/json; charset=utf-8"
+        assert timeout == 15
+        requests.append(json.loads(outgoing.data))
+        response = io.BytesIO(json.dumps(payload).encode())
+        response.status = 200
+        yield response
+
+    monkeypatch.setattr(client._opener, "open", open_request)
+    for _ in range(2):
+        receipt = client.prepare_handoff(
+            identity=identity,
+            handoff_id=binding.handoff_id,
+            snapshot_version=binding.snapshot_version,
+            answers=answers,
+        )
+        assert receipt.model_dump(mode="json") == payload
+        assert "answers" not in receipt.model_dump()
+    assert (
+        requests
+        == [
+            {
+                "handoff_id": binding.handoff_id,
+                "snapshot_version": binding.snapshot_version,
+                "answers": answers,
+            }
+        ]
+        * 2
+    )
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"handoff_id": "another-handoff"},
+        {"snapshot_version": "another-snapshot"},
+        {"snapshot_sha256": "invalid"},
+        {"decision": "approved"},
+        {"answers": {"traveler_name": "Private traveler"}},
+    ],
+)
+def test_preparation_rejects_uncorrelated_or_malformed_success(client_setup, monkeypatch, changes):
+    client, identity, binding = client_setup
+
+    @contextmanager
+    def open_request(*args, **kwargs):
+        response = io.BytesIO(json.dumps({**_preparation_receipt(binding), **changes}).encode())
+        response.status = 200
+        yield response
+
+    monkeypatch.setattr(client._opener, "open", open_request)
+    with pytest.raises(TPPContractError) as rejected:
+        client.prepare_handoff(
+            identity=identity,
+            handoff_id=binding.handoff_id,
+            snapshot_version=binding.snapshot_version,
+            answers={},
+        )
+    assert "Private traveler" not in str(rejected.value)
+
+
+@pytest.mark.parametrize("code", [302, 401, 403, 409, 422, 500, 503])
+def test_preparation_failure_is_sanitized_without_retrying(client_setup, monkeypatch, code):
+    client, identity, binding = client_setup
+    calls = []
+    private_body = io.BytesIO(b"private upstream answers")
+
+    def fail(outgoing, **kwargs):
+        calls.append(outgoing)
+        raise HTTPError(outgoing.full_url, code, "private error", {}, private_body)
+
+    monkeypatch.setattr(client._opener, "open", fail)
+    with pytest.raises(PortalPreparationError) as rejected:
+        client.prepare_handoff(
+            identity=identity,
+            handoff_id=binding.handoff_id,
+            snapshot_version=binding.snapshot_version,
+            answers={"traveler_name": "Private traveler"},
+        )
+    assert rejected.value.status_code == (code if code in {401, 403, 409, 422, 503} else 502)
+    assert str(rejected.value) == "The portal handoff could not be prepared."
+    assert rejected.value.__suppress_context__
+    assert private_body.closed
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"handoff_id": "caller/path"},
+        {"snapshot_version": "x" * 81},
+        {"answers": {"traveler_name": 42}},
+        {"answers": {"x" * 101: "value"}},
+        {"answers": {"notes": "x" * 4097}},
+        {"answers": {str(i): "value" for i in range(81)}},
+        # Each field is within its own limit; the encoded JSON body is too large.
+        {"answers": {str(i): "é" * 4096 for i in range(9)}},
+    ],
+)
+def test_preparation_rejects_invalid_or_oversized_requests_before_transport(
+    client_setup, monkeypatch, changes
+):
+    client, identity, binding = client_setup
+
+    def unexpected_request(*args, **kwargs):
+        pytest.fail("Invalid preparation reached the producer")
+
+    monkeypatch.setattr(client._opener, "open", unexpected_request)
+    with pytest.raises(
+        TPPContractError, match="Invalid TPP portal preparation request"
+    ) as rejected:
+        client.prepare_handoff(
+            identity=identity,
+            **{
+                "handoff_id": binding.handoff_id,
+                "snapshot_version": binding.snapshot_version,
+                "answers": {},
+                **changes,
+            },
+        )
+    assert str(rejected.value) == "Invalid TPP portal preparation request."
+
+
+@pytest.mark.parametrize("failure", [TimeoutError(), URLError("private upstream address")])
+def test_preparation_network_failure_never_establishes_a_binding(
+    client_setup, monkeypatch, failure
+):
+    client, identity, binding = client_setup
+
+    def fail(*args, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(client._opener, "open", fail)
+    with pytest.raises(PortalPreparationError) as rejected:
+        client.prepare_handoff(
+            identity=identity,
+            handoff_id=binding.handoff_id,
+            snapshot_version=binding.snapshot_version,
+            answers={},
+        )
+    assert rejected.value.status_code == 502
+    assert str(rejected.value) == "The portal handoff could not be prepared."
+
+
+@pytest.mark.parametrize("body", [b"not JSON", b"\xff", b"x" * 65_537])
+def test_preparation_rejects_invalid_or_oversized_response(client_setup, monkeypatch, body):
+    client, identity, binding = client_setup
+
+    @contextmanager
+    def open_request(*args, **kwargs):
+        response = io.BytesIO(body)
+        response.status = 200
+        yield response
+
+    monkeypatch.setattr(client._opener, "open", open_request)
+    with pytest.raises(TPPContractError, match="Malformed TPP portal receipt"):
+        client.prepare_handoff(
+            identity=identity,
+            handoff_id=binding.handoff_id,
+            snapshot_version=binding.snapshot_version,
+            answers={},
+        )

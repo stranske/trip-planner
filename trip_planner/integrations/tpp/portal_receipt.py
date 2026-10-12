@@ -24,6 +24,19 @@ Identifier = Annotated[str, Field(strict=True, pattern=r"^[A-Za-z0-9_.:-]{1,80}$
 SnapshotDigest = Annotated[str, Field(strict=True, pattern=r"^[0-9a-f]{64}$")]
 
 
+class PortalPreparationRequest(BaseModel):
+    """Server-selected retry identity and complete, privately transported answers."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    handoff_id: Identifier
+    snapshot_version: Identifier
+    answers: dict[
+        Annotated[str, Field(strict=True, min_length=1, max_length=100)],
+        Annotated[str, Field(strict=True, max_length=4096)],
+    ] = Field(max_length=80)
+
+
 class PortalReceiptBinding(BaseModel):
     """Server-retained correlation for an immutable prepared producer draft.
 
