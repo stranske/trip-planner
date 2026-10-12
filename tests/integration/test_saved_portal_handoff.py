@@ -13,10 +13,112 @@ from trip_planner.app.services.proposal import (
     save_workspace_proposal_evaluation,
 )
 from trip_planner.app.services.trip_prices import save_trip_price
+from trip_planner.app.services.trips import update_trip
 from trip_planner.persistence.db import get_session_factory
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.persistence.models.trip_price import PersistedTripPrice
+
+
+@pytest.mark.parametrize("already_prepared", [False, True], ids=["first-handoff", "retry"])
+@pytest.mark.parametrize("concurrent_change", ["trip", "price", "removed-price", "cleared-verdict"])
+def test_form_preparation_rechecks_facts_changed_while_building_the_form(
+    saved_portal_handoff, monkeypatch, already_prepared: bool, concurrent_change: str
+) -> None:
+    session, user, trip_id, original_form = saved_portal_handoff
+    stored = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+    trip = session.get(PersistedTrip, trip_id)
+    price_id = f"trip-price:{trip_id}:transport"
+    price = session.get(PersistedTripPrice, price_id)
+    assert stored is not None and trip is not None and price is not None
+    if not already_prepared:
+        stored.portal_handoff = {
+            **stored.portal_handoff,
+            "status": "eligible",
+            "prepared_at": None,
+        }
+        session.commit()
+    session.expire_all()
+    before = deepcopy(stored.portal_handoff)
+    verdict = deepcopy(stored.evaluation_record)
+    revision = stored.updated_at
+    trip_updated_at = trip.updated_at
+    original_amount = price.amount
+
+    def edit_facts_while_building_form(snapshot):
+        # Use a separate committed transaction, as a second workspace request
+        # would. These edits leave the proposal revision unchanged.
+        with get_session_factory()() as another_session:
+            if concurrent_change == "trip":
+                edited_trip = another_session.get(PersistedTrip, trip_id)
+                assert edited_trip is not None
+                edited_trip.title = "Changed during form preparation"
+            elif concurrent_change == "cleared-verdict":
+                # The production edit service deletes the saved verdict when
+                # a policy determinant such as the trip purpose changes.
+                assert (
+                    update_trip(
+                        another_session,
+                        user=user,
+                        trip_id=trip_id,
+                        changes={"summary": "Changed during form preparation"},
+                    )
+                    is not None
+                )
+            else:
+                edited_price = another_session.get(PersistedTripPrice, price_id)
+                assert edited_price is not None
+                if concurrent_change == "price":
+                    edited_price.amount += 100
+                else:
+                    another_session.delete(edited_price)
+            another_session.commit()
+        return original_form["fields"]
+
+    with monkeypatch.context() as delayed_form:
+        delayed_form.setattr(
+            "trip_planner.app.services.proposal.build_portal_fields",
+            edit_facts_while_building_form,
+        )
+        with pytest.raises(HTTPException) as rejected:
+            prepare_workspace_proposal_portal_handoff(
+                trip_id=trip_id,
+                _payload=WorkspaceProposalHandoffRequest(),
+                response=Response(),
+                user=user,
+                db_session=session,
+            )
+    assert rejected.value.status_code == 409
+    session.expire_all()
+    if concurrent_change == "cleared-verdict":
+        assert session.query(PersistedProposalState).filter_by(trip_id=trip_id).count() == 0
+        assert trip.summary == "Changed during form preparation"
+        assert trip.updated_at != trip_updated_at
+        return
+    assert stored.portal_handoff == before
+    assert stored.evaluation_record == verdict
+    assert stored.updated_at == revision
+    if concurrent_change == "trip":
+        assert trip.title == "Changed during form preparation"
+        assert trip.updated_at != trip_updated_at
+    else:
+        assert trip.updated_at == trip_updated_at
+        edited_price = session.get(PersistedTripPrice, price_id)
+        if concurrent_change == "price":
+            assert edited_price is not None and edited_price.amount == original_amount + 100
+        else:
+            assert edited_price is None
+    # The next request still refuses the obsolete verdict; no stale form was
+    # committed that could make a retry look prepared for the changed facts.
+    with pytest.raises(HTTPException) as retry:
+        prepare_workspace_proposal_portal_handoff(
+            trip_id=trip_id,
+            _payload=WorkspaceProposalHandoffRequest(),
+            response=Response(),
+            user=user,
+            db_session=session,
+        )
+    assert retry.value.status_code == (422 if concurrent_change == "removed-price" else 409)
 
 
 @pytest.mark.parametrize("already_prepared", [False, True], ids=["first-handoff", "retry"])

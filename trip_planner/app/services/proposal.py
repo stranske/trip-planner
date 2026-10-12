@@ -1909,7 +1909,7 @@ def prepare_workspace_proposal_handoff(
         )
 
     stored = dict(record.portal_handoff or {})
-    retained_revision = record.updated_at
+    retained_revision, record_id = record.updated_at, record.proposal_state_id
     if stored.get("producer_binding") and client is None:
         raise WorkspaceProposalHandoffNotReadyError(
             "This owner-bound handoff must use its authenticated browser review session."
@@ -1985,12 +1985,32 @@ def prepare_workspace_proposal_handoff(
     except ValidationError:
         # Pydantic errors include input values; keep traveler facts out of logs.
         raise ValueError("The prepared portal form is invalid.") from None
+    # A second workspace request can edit trip or price rows without updating
+    # the proposal revision. Re-read those facts after mapping, just as the
+    # authenticated preparation path does after its producer requests.
+    db_session.expire_all()
+    trip_record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    latest_record = _get_latest_proposal_state(db_session, trip_id=trip_id, user_id=user.user_id)
+    if latest_record is None:
+        raise WorkspaceProposalHandoffStaleError(
+            "The saved proposal was cleared while preparing the handoff. Run the policy check again."
+        )
+    latest_snapshot = _portal_handoff_snapshot(
+        record=latest_record,
+        trip_record=trip_record,
+        user=user,
+        trip_prices=read_trip_prices_for_owner(db_session, user_id=user.user_id, trip_id=trip_id),
+    )
+    if snapshot_hash(latest_snapshot) != stored["source_snapshot_hash"]:
+        raise WorkspaceProposalHandoffStaleError(
+            "Trip facts changed while preparing the handoff. Run the policy check again."
+        )
     # Form mapping may overlap another policy check or authenticated preparation.
     # Commit only against the saved proposal we validated, so a delayed legacy
     # preparation cannot overwrite newer verdict or producer receipt authority.
     prepared = db_session.execute(
         update(PersistedProposalState)
-        .where(PersistedProposalState.proposal_state_id == record.proposal_state_id)
+        .where(PersistedProposalState.proposal_state_id == record_id)
         .where(PersistedProposalState.updated_at == retained_revision)
         .values(portal_handoff=handoff)
         .returning(PersistedProposalState.proposal_state_id)
