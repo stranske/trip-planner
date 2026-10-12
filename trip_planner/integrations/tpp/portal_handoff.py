@@ -126,6 +126,16 @@ def _portal_host_is_loopback(parsed: SplitResult) -> bool:
     """Validate browser-compatible host spelling before classifying loopback."""
 
     hostname = parsed.hostname or ""
+    # Python accepts suffix text after an IPv6 closing bracket and omits it
+    # from hostname. A browser origin permits only an optional numeric port.
+    if parsed.netloc.startswith("["):
+        _, closing_bracket, suffix = parsed.netloc.partition("]")
+        if not closing_bracket or (
+            suffix and not (suffix.startswith(":") and suffix[1:].isdigit())
+        ):
+            raise TPPPortalHandoffConfigurationError(
+                "Travel-Plan-Permission portal handoff must be configured as a valid origin."
+            )
     # Native forms apply Unicode host normalization that urlsplit does not.
     # Require the configured ASCII spelling (Punycode for international domains)
     # before validating numeric labels and persisting a prepared destination.

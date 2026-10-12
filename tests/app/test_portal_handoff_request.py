@@ -4,6 +4,7 @@ from urllib.parse import urlencode
 
 import pytest
 from fastapi import HTTPException, Request
+from fastapi.routing import APIRoute
 
 from trip_planner.app.routes.proposal import _require_json_handoff, router
 
@@ -34,7 +35,11 @@ def _request(query: dict[str, str], content_type: str = "application/json") -> R
 def test_handoff_routes_reject_query_overrides(query: dict[str, str], suffix: str) -> None:
     # Exercise the dependency registered on both routes, before their service
     # functions can persist preparation or read a producer receipt.
-    route = next(route for route in router.routes if route.path.endswith(suffix))
+    route = next(
+        route
+        for route in router.routes
+        if isinstance(route, APIRoute) and route.path.endswith(suffix)
+    )
     guard = next(
         dependency.call
         for dependency in route.dependant.dependencies

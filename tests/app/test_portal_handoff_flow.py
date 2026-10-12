@@ -975,7 +975,6 @@ def test_saved_verdict_handoff_survives_application_and_database_cache_restart(
         assert restarted.get(proposal_path).json() == before
         prepared = restarted.post(
             f"{proposal_path}/handoff",
-            params={"action_url": "https://caller.example", "traveler_name": "Caller name"},
             json={},
         )
         assert prepared.status_code == 200

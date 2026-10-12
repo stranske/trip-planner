@@ -1,7 +1,7 @@
 import json
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal, Self, cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -32,7 +32,7 @@ class _FakeHTTPResponse:
     def read(self) -> bytes:
         return json.dumps(self._payload).encode("utf-8")
 
-    def __enter__(self) -> "_FakeHTTPResponse":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> Literal[False]:
@@ -414,15 +414,19 @@ def test_handoff_rejects_caller_supplied_destination_fields_and_manager_state(
     assert client.get(f"/api/workspace/{trip_id}/proposal").json() == before
 
 
-def test_handoff_ignores_query_overrides_and_uses_saved_traveler(
+def test_handoff_rejects_query_overrides_then_prepares_from_saved_traveler(
     client: TestClient, checked_handoff: tuple[str, dict, dict]
 ) -> None:
     trip_id, _, _ = checked_handoff
-    prepared = client.post(
+    before = client.get(f"/api/workspace/{trip_id}/proposal").json()
+    rejected = client.post(
         f"/api/workspace/{trip_id}/proposal/handoff",
         params={"action_url": "https://caller.example", "traveler_name": "Caller supplied name"},
         json={},
     )
+    assert rejected.status_code == 422
+    assert client.get(f"/api/workspace/{trip_id}/proposal").json() == before
+    prepared = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
     assert prepared.status_code == 200
     payload = prepared.json()
     assert payload["action_url"] == "https://tpp.example/portal/handoff"
@@ -546,7 +550,6 @@ def test_handoff_configuration_recovery_preserves_the_saved_verdict(
     monkeypatch.setenv("TPP_BASE_URL", "https://fallback-tpp.example")
     prepared = client.post(
         f"/api/workspace/{trip_id}/proposal/handoff",
-        params={"action_url": "https://caller.example", "traveler_name": "Caller name"},
         json={},
     )
     assert prepared.status_code == 200
