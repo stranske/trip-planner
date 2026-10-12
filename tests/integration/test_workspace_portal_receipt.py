@@ -8,7 +8,10 @@ import pytest
 from fastapi import HTTPException, Request, Response
 
 from trip_planner.app.main import create_app
-from trip_planner.app.routes.proposal import refresh_workspace_proposal_portal_receipt
+from trip_planner.app.routes.proposal import (
+    prepare_workspace_proposal_portal_handoff,
+    refresh_workspace_proposal_portal_receipt,
+)
 from trip_planner.app.schemas.proposal import WorkspaceProposalHandoffRequest
 from trip_planner.app.services.portal_receipt import refresh_workspace_portal_receipt
 from trip_planner.app.services.proposal import (
@@ -24,6 +27,7 @@ from trip_planner.integrations.tpp.portal_receipt_client import (
 )
 from trip_planner.persistence.db import get_session_factory
 from trip_planner.persistence.models.proposal import PersistedProposalState
+from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.persistence.models.trip_price import PersistedTripPrice
 
 
@@ -236,6 +240,74 @@ def test_legacy_preparation_cannot_erase_a_recorded_owner_bound_decision(bound_w
     with pytest.raises(WorkspaceProposalHandoffNotReadyError):
         prepare_workspace_proposal_handoff(session, user=user, trip_id=trip_id)
     assert record.portal_handoff == before
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        "bound_only",
+        "prepared",
+        "submitted",
+        "pending_review",
+        "approved",
+        "rejected",
+        "changes_requested",
+    ],
+)
+@pytest.mark.parametrize("observation_available", [False, True], ids=["historical", "current"])
+@pytest.mark.parametrize("portal_configured", [False, True])
+def test_browser_handoff_route_preserves_authenticated_producer_state(
+    bound_workspace, monkeypatch, state, observation_available, portal_configured
+):
+    session, user, trip_id, record, client = bound_workspace
+    if state in {"approved", "rejected", "changes_requested"}:
+        decide(client, state)
+    elif state in {"submitted", "pending_review"}:
+        client.payload.update(state=state, request_id="request-1", execution_id="execution-1")
+        if state == "pending_review":
+            client.payload.update(review_id="review-1", submitted_at="2026-10-10T12:10:00Z")
+    if state != "bound_only":
+        refresh(bound_workspace)
+    if not observation_available:
+        client.failure = PortalReceiptReadError("unavailable")
+        refresh(bound_workspace)
+
+    # Producer correlation must block the legacy form even before a first receipt
+    # is observed, and after a failed read hides the current submission/decision.
+    session.expire_all()
+    before = deepcopy(record.portal_handoff)
+    verdict = deepcopy(record.evaluation_record)
+    public_before = get_workspace_proposal_payload(session, user=user, trip_id=trip_id)
+    trip = session.get(PersistedTrip, trip_id)
+    assert trip is not None
+    trip_updated_at, proposal_updated_at = trip.updated_at, record.updated_at
+    reads_before, users_before = client.reads, list(client.users)
+    if not portal_configured:
+        monkeypatch.delenv("TPP_PORTAL_BASE_URL", raising=False)
+        monkeypatch.delenv("TPP_BASE_URL", raising=False)
+
+    def unexpected_form(*args, **kwargs):
+        pytest.fail("An owner-bound handoff must not regenerate the legacy browser form")
+
+    monkeypatch.setattr("trip_planner.app.services.proposal.build_portal_fields", unexpected_form)
+    for _ in range(2):
+        with pytest.raises(HTTPException) as rejected:
+            prepare_workspace_proposal_portal_handoff(
+                trip_id=trip_id,
+                _payload=WorkspaceProposalHandoffRequest(),
+                response=Response(),
+                user=user,
+                db_session=session,
+            )
+        assert rejected.value.status_code == 409
+        assert "handoff-1" not in rejected.value.detail
+        assert "draft-1" not in rejected.value.detail
+        session.expire_all()
+        assert record.portal_handoff == before
+        assert record.evaluation_record == verdict
+        assert (trip.updated_at, record.updated_at) == (trip_updated_at, proposal_updated_at)
+        assert get_workspace_proposal_payload(session, user=user, trip_id=trip_id) == public_before
+        assert (client.reads, client.users) == (reads_before, users_before)
 
 
 def test_absent_identity_bridge_returns_unknown_without_shared_service_fallback(bound_workspace):
