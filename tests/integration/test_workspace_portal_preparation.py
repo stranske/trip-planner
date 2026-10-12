@@ -20,6 +20,7 @@ from trip_planner.app.services.proposal import (
     _bind_portal_handoff_snapshot,
     get_workspace_proposal_payload,
 )
+from trip_planner.app.services.trips import update_trip
 from trip_planner.integrations.tpp.portal_receipt import PortalBrowserSession
 from trip_planner.integrations.tpp.portal_receipt_client import PortalPreparationError
 from trip_planner.persistence.db import get_db_session, get_session_factory
@@ -181,11 +182,11 @@ def test_bound_retry_does_not_transport_to_another_owner_or_origin(
     assert record.portal_handoff["receipt_status"] == "unauthorized"
 
 
-@pytest.mark.parametrize("change", ["price", "proposal"])
+@pytest.mark.parametrize("change", ["price", "proposal", "cleared-verdict"])
 def test_slow_preparation_cannot_overwrite_a_concurrent_edit(
     saved_portal_handoff, monkeypatch, change
 ):
-    session, _user, trip_id, _ = saved_portal_handoff
+    session, user, trip_id, _ = saved_portal_handoff
     client = PreparationClient()
     record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
     before = deepcopy(record.portal_handoff)
@@ -196,6 +197,16 @@ def test_slow_preparation_cannot_overwrite_a_concurrent_edit(
             if change == "price":
                 price = other.get(PersistedTripPrice, f"trip-price:{trip_id}:transport")
                 price.amount += 1
+            elif change == "cleared-verdict":
+                assert (
+                    update_trip(
+                        other,
+                        user=user,
+                        trip_id=trip_id,
+                        changes={"summary": "Changed during authenticated preparation"},
+                    )
+                    is not None
+                )
             else:
                 proposal = other.get(PersistedProposalState, record.proposal_state_id)
                 proposal.portal_handoff = {**proposal.portal_handoff, "newer_write": True}
@@ -207,6 +218,22 @@ def test_slow_preparation_cannot_overwrite_a_concurrent_edit(
         prepare(saved_portal_handoff, client)
     assert rejected.value.status_code == 409
     session.expire_all()
+    if change == "cleared-verdict":
+        assert session.query(PersistedProposalState).filter_by(trip_id=trip_id).count() == 0
+        trip = session.get(PersistedTrip, trip_id)
+        assert trip.summary == "Changed during authenticated preparation"
+        assert (
+            get_workspace_proposal_payload(session, user=user, trip_id=trip_id)["proposal_state"]
+            is None
+        )
+        # A producer capability for the removed verdict must never become a
+        # saved browser handoff, including when the traveler retries.
+        with pytest.raises(HTTPException) as retry:
+            prepare(saved_portal_handoff, client)
+        assert retry.value.status_code == 409
+        assert len(client.preparations) == 1
+        assert len(client.browser_bindings) == 1
+        return
     assert record.portal_handoff == (
         {**before, "newer_write": True} if change == "proposal" else before
     )

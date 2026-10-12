@@ -14,6 +14,7 @@ from trip_planner.app.schemas.proposal import WorkspaceProposalReceiptHandoffRes
 from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.app.services.proposal import (
     WorkspaceProposalHandoffStaleError,
+    _get_latest_proposal_state,
     _get_owned_trip_record,
     _portal_handoff_snapshot,
     _public_portal_handoff,
@@ -133,8 +134,13 @@ def prepare_owner_portal_handoff(
     # Reload before persisting so a capability for obsolete facts is never returned.
     db_session.expire_all()
     current_trip = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    current_record = _get_latest_proposal_state(db_session, trip_id=trip_id, user_id=user.user_id)
+    if current_record is None or current_record.proposal_state_id != record_id:
+        raise WorkspaceProposalHandoffStaleError(
+            "The saved proposal was cleared or replaced during portal preparation."
+        )
     current_snapshot = _portal_handoff_snapshot(
-        record=record,
+        record=current_record,
         trip_record=current_trip,
         user=user,
         trip_prices=read_trip_prices_for_owner(db_session, user_id=user.user_id, trip_id=trip_id),
