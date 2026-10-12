@@ -122,3 +122,30 @@ class WorkspaceProposalHandoffResponse(BaseModel):
         str,
     ] = Field(min_length=1)
     handoff: WorkspaceProposalHandoffMetadata
+
+
+class WorkspaceProposalReceiptHandoffMetadata(BaseModel):
+    """Metadata from a validated owner-authenticated producer observation."""
+
+    schema_version: Literal["tpp-portal-handoff/v1"]
+    source_snapshot_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    prepared_at: str
+    status: Literal["prepared"]
+    receipt_status: Literal["current"]
+    receipt_observed_at: str
+    manager_submission_status: Literal[
+        "unknown", "submitted", "pending_review", "decision_recorded"
+    ]
+    manager_decision: Literal["approved", "rejected", "changes_requested"] | None
+    manager_decision_at: str | None
+    last_manager_submission_status: str
+    last_manager_decision: Literal["approved", "rejected", "changes_requested"] | None
+
+
+class WorkspaceProposalReceiptHandoffResponse(BaseModel):
+    """Short-lived native form for the producer's saved, owner-bound review."""
+
+    action_url: str
+    method: Literal["POST"] = "POST"
+    fields: dict[Literal["handoff_token"], str] = Field(min_length=1, max_length=1)
+    handoff: WorkspaceProposalReceiptHandoffMetadata

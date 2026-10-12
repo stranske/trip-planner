@@ -10,6 +10,7 @@ from trip_planner.app.schemas.proposal import (
     WorkspaceProposalFollowUpRequest,
     WorkspaceProposalHandoffRequest,
     WorkspaceProposalHandoffResponse,
+    WorkspaceProposalReceiptHandoffResponse,
     WorkspaceProposalReoptimizeRequest,
     WorkspaceProposalResponse,
     WorkspaceProposalSubmissionRequest,
@@ -37,6 +38,7 @@ from trip_planner.integrations.tpp import TPPTransportError
 from trip_planner.integrations.tpp.portal_handoff import (
     TPPPortalHandoffConfigurationError,
 )
+from trip_planner.integrations.tpp.portal_receipt_client import OwnerPortalReceiptClient
 from trip_planner.persistence.db import get_db_session
 
 router = APIRouter(tags=["proposal"])
@@ -66,6 +68,10 @@ def _require_json_handoff(request: Request) -> None:
         )
 
 
+def _portal_receipt_client(request: Request) -> OwnerPortalReceiptClient | None:
+    return getattr(request.app.state, "portal_receipt_client", None)
+
+
 @router.get("/workspace/{trip_id}/proposal", response_model=WorkspaceProposalResponse)
 def read_workspace_proposal(
     trip_id: str,
@@ -85,7 +91,7 @@ def read_workspace_proposal(
 
 @router.post(
     "/workspace/{trip_id}/proposal/handoff",
-    response_model=WorkspaceProposalHandoffResponse,
+    response_model=WorkspaceProposalHandoffResponse | WorkspaceProposalReceiptHandoffResponse,
     dependencies=[Depends(_require_json_handoff)],
 )
 def prepare_workspace_proposal_portal_handoff(
@@ -94,12 +100,14 @@ def prepare_workspace_proposal_portal_handoff(
     response: Response,
     user: AuthenticatedUser = Depends(require_authenticated_user),
     db_session: Session = Depends(get_db_session),
-) -> WorkspaceProposalHandoffResponse:
+    client: Annotated[OwnerPortalReceiptClient | None, Depends(_portal_receipt_client)] = None,
+) -> WorkspaceProposalHandoffResponse | WorkspaceProposalReceiptHandoffResponse:
     try:
         result = prepare_workspace_proposal_handoff(
             db_session,
             user=user,
             trip_id=trip_id,
+            client=client,
         )
     except WorkspaceProposalNotFoundError as error:
         raise public_http_error(
@@ -122,6 +130,12 @@ def prepare_workspace_proposal_portal_handoff(
             status_code=503,
             message="The approver portal handoff is not configured.",
         ) from error
+    except TPPTransportError as error:
+        raise public_http_error(
+            error,
+            status_code=error.status_code,
+            message="The approver portal could not prepare the saved proposal.",
+        ) from error
     except ValueError as error:
         raise public_http_error(
             error,
@@ -130,6 +144,8 @@ def prepare_workspace_proposal_portal_handoff(
         ) from error
     # The short-lived form payload contains traveler facts and must not be cached.
     response.headers["Cache-Control"] = "no-store"
+    if client is not None:
+        return WorkspaceProposalReceiptHandoffResponse.model_validate(result)
     return WorkspaceProposalHandoffResponse.model_validate(result)
 
 

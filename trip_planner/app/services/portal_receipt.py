@@ -18,7 +18,10 @@ from trip_planner.app.services.proposal import (
 )
 from trip_planner.app.services.trip_prices import read_trip_prices_for_owner
 from trip_planner.integrations.tpp.client import TPPTransportError
-from trip_planner.integrations.tpp.portal_handoff import snapshot_hash
+from trip_planner.integrations.tpp.portal_handoff import (
+    portal_action_url,
+    snapshot_hash,
+)
 from trip_planner.integrations.tpp.portal_receipt import (
     PortalReceiptBinding,
     validate_portal_receipt,
@@ -64,7 +67,10 @@ def refresh_workspace_portal_receipt(
         try:
             binding = PortalReceiptBinding.model_validate(stored["producer_binding"])
             identity = client.resolve_owner(user.user_id)
-            if identity.owner_binding() != stored["producer_owner"]:
+            origin = stored.get("producer_origin")
+            if identity.owner_binding() != stored["producer_owner"] or (
+                origin is not None and origin != portal_action_url().removesuffix("/portal/handoff")
+            ):
                 observation_status = "unauthorized"
             else:
                 previous = (

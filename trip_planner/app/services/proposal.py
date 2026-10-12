@@ -53,6 +53,7 @@ from trip_planner.integrations.tpp.portal_handoff import (
     portal_action_url,
     snapshot_hash,
 )
+from trip_planner.integrations.tpp.portal_receipt_client import OwnerPortalReceiptClient
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.persistence.models.trip_price import PersistedTripPrice
@@ -864,6 +865,7 @@ def _bind_portal_handoff_snapshot(
         trip_prices=trip_prices,
     )
     record.portal_handoff = {
+        **_retained_portal_history(record.portal_handoff),
         "schema_version": PORTAL_HANDOFF_SCHEMA_VERSION,
         "source_snapshot_hash": snapshot_hash(snapshot),
         "source_snapshot": snapshot,
@@ -872,6 +874,15 @@ def _bind_portal_handoff_snapshot(
         "manager_submission_status": "unknown",
         "manager_decision": None,
     }
+
+
+def _retained_portal_history(stored: dict[str, Any] | None) -> dict[str, Any]:
+    """Keep immutable producer preparations when a new policy snapshot replaces one."""
+    stored = stored or {}
+    history = list(stored.get("producer_history") or [])
+    if stored.get("producer_binding"):
+        history.append({key: value for key, value in stored.items() if key != "producer_history"})
+    return {"producer_history": history} if history else {}
 
 
 def _bind_portal_handoff_evaluation_snapshot(
@@ -906,7 +917,7 @@ def _bind_portal_handoff_evaluation_snapshot(
         and bound_hash == snapshot_hash(current_snapshot)
     )
     record.portal_handoff = {
-        **(stored_handoff if still_prepared else {}),
+        **(stored_handoff if still_prepared else _retained_portal_history(stored_handoff)),
         "schema_version": PORTAL_HANDOFF_SCHEMA_VERSION,
         "source_snapshot_hash": bound_hash,
         "source_snapshot": snapshot,
@@ -1880,6 +1891,7 @@ def prepare_workspace_proposal_handoff(
     *,
     user: AuthenticatedUser,
     trip_id: str,
+    client: OwnerPortalReceiptClient | None = None,
 ) -> dict[str, Any]:
     """Prepare a freshness-bound browser form without claiming it was submitted."""
 
@@ -1898,7 +1910,7 @@ def prepare_workspace_proposal_handoff(
 
     stored = dict(record.portal_handoff or {})
     retained_revision = record.updated_at
-    if stored.get("producer_binding"):
+    if stored.get("producer_binding") and client is None:
         raise WorkspaceProposalHandoffNotReadyError(
             "This owner-bound handoff must use its authenticated browser review session."
         )
@@ -1935,6 +1947,20 @@ def prepare_workspace_proposal_handoff(
     # Preparation is complete only once the outgoing form can be built. A mapping
     # failure must leave the saved verdict and any prior handoff state unchanged.
     fields = build_portal_fields(current_snapshot)
+    if client is not None:
+        # Import here because preparation shares the saved-snapshot validation
+        # above and the receipt service uses this module's ownership helpers.
+        from trip_planner.app.services.portal_preparation import prepare_owner_portal_handoff
+
+        return prepare_owner_portal_handoff(
+            db_session,
+            user=user,
+            record=record,
+            trip_record=trip_record,
+            snapshot=current_snapshot,
+            fields=fields,
+            client=client,
+        )
     # Retrying the same bound snapshot regenerates the form without rewriting
     # its preparation history. A changed saved verdict clears this timestamp.
     prepared_at = stored.get("prepared_at") if stored.get("status") == "prepared" else None

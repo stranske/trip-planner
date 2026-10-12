@@ -56,6 +56,57 @@ def test_receipt_uses_owner_authorization_and_fixed_route(client_setup, monkeypa
     assert "authorization" not in identity.owner_binding()
 
 
+def test_browser_capability_uses_owner_authorization_and_exact_binding(client_setup, monkeypatch):
+    client, identity, binding = client_setup
+    capability = uuid4().hex
+
+    @contextmanager
+    def open_request(outgoing, *, timeout):
+        parsed = urlsplit(outgoing.full_url)
+        assert parsed.netloc == "portal.example:8443"
+        assert parsed.path == "/api/planner/portal-handoffs/trip%3Ahandoff-1/browser-session"
+        assert parse_qs(parsed.query) == {"snapshot_version": [binding.snapshot_version]}
+        assert outgoing.get_method() == "POST" and outgoing.data == b""
+        assert outgoing.get_header("Authorization") == identity.authorization
+        response = io.BytesIO(
+            json.dumps({"draft_id": binding.draft_id, "handoff_token": capability}).encode()
+        )
+        response.status = 200
+        yield response
+
+    monkeypatch.setattr(client._opener, "open", open_request)
+    browser = client.create_browser_session(identity=identity, binding=binding)
+    assert browser.draft_id == binding.draft_id
+    assert browser.handoff_token.get_secret_value() == capability
+    assert capability not in repr(browser)
+
+
+@pytest.mark.parametrize("invalid", ["different-draft", "extra-field", "empty", "oversized"])
+def test_browser_capability_rejects_malformed_or_foreign_response(
+    client_setup, monkeypatch, invalid
+):
+    client, identity, binding = client_setup
+    payload = {"draft_id": binding.draft_id, "handoff_token": uuid4().hex}
+    if invalid == "different-draft":
+        payload["draft_id"] = "another-draft"
+    elif invalid == "extra-field":
+        payload["private"] = "private producer detail"
+    else:
+        payload["handoff_token"] = "" if invalid == "empty" else "x" * 1025
+
+    @contextmanager
+    def open_request(*args, **kwargs):
+        response = io.BytesIO(json.dumps(payload).encode())
+        response.status = 200
+        yield response
+
+    monkeypatch.setattr(client._opener, "open", open_request)
+    with pytest.raises(TPPContractError) as rejected:
+        client.create_browser_session(identity=identity, binding=binding)
+    assert "private producer detail" not in str(rejected.value)
+    assert payload["handoff_token"] not in str(rejected.value) or not payload["handoff_token"]
+
+
 @pytest.mark.parametrize(
     ("code", "expected"),
     [

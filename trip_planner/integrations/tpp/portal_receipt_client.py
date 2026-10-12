@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from .client import TPPConfigurationError, TPPContractError, TPPTransportError
 from .portal_handoff import portal_action_url
 from .portal_receipt import (
+    PortalBrowserSession,
     PortalPreparationRequest,
     PortalReceiptBinding,
     TPPPortalReceipt,
@@ -144,6 +145,28 @@ class OwnerPortalReceiptClient:
             return PortalReceiptReadError(status.get(code, "unavailable"))
 
         return self._exchange_json(outgoing, failure_factory=failed_read)
+
+    def create_browser_session(
+        self, *, identity: PortalOwnerIdentity, binding: PortalReceiptBinding
+    ) -> PortalBrowserSession:
+        """Obtain a fresh review capability without giving the browser owner authorization."""
+        origin = portal_action_url().removesuffix("/portal/handoff")
+        path = parse.quote(binding.handoff_id, safe="")
+        query = parse.urlencode({"snapshot_version": binding.snapshot_version})
+        outgoing = request.Request(
+            f"{origin}/api/planner/portal-handoffs/{path}/browser-session?{query}",
+            data=b"",
+            headers={"Authorization": identity.authorization, "Accept": "application/json"},
+            method="POST",
+        )
+        payload = self._exchange_json(outgoing, failure_factory=PortalPreparationError)
+        try:
+            session = PortalBrowserSession.model_validate(payload)
+        except ValidationError:
+            raise TPPContractError("Malformed TPP browser review capability.") from None
+        if session.draft_id != binding.draft_id:
+            raise TPPContractError("TPP browser review does not match the prepared draft.")
+        return session
 
     def _exchange_json(
         self,

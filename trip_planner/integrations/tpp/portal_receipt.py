@@ -14,6 +14,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    SecretStr,
     ValidationError,
     model_validator,
 )
@@ -50,6 +51,15 @@ class PortalReceiptBinding(BaseModel):
     snapshot_version: Identifier
     snapshot_sha256: SnapshotDigest
     draft_id: Identifier
+
+
+class PortalBrowserSession(BaseModel):
+    """An ephemeral view-only capability, never durable receipt evidence."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, revalidate_instances="always")
+
+    draft_id: Identifier
+    handoff_token: SecretStr = Field(min_length=1, max_length=1024)
 
 
 class TPPPortalReceipt(PortalReceiptBinding):
