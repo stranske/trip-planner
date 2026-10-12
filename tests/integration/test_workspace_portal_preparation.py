@@ -19,6 +19,7 @@ from trip_planner.app.services.proposal import (
     _bind_portal_handoff_evaluation_snapshot,
     _bind_portal_handoff_snapshot,
     get_workspace_proposal_payload,
+    save_workspace_proposal_evaluation,
 )
 from trip_planner.app.services.trips import update_trip
 from trip_planner.integrations.tpp.portal_receipt import PortalBrowserSession
@@ -312,3 +313,89 @@ def test_new_policy_snapshot_retains_private_producer_history(saved_portal_hando
     assert record.portal_handoff["manager_decision"] is None
     public = get_workspace_proposal_payload(session, user=user, trip_id=trip_id)
     assert "producer_history" not in public["proposal_state"]["portal_handoff"]
+
+
+@pytest.mark.parametrize("decision", ["approved", "rejected", "changes_requested"])
+def test_fresh_policy_result_cannot_downgrade_an_authenticated_handoff(
+    saved_portal_handoff, decision
+):
+    session, user, trip_id, _ = saved_portal_handoff
+    client = PreparationClient()
+    prepare(saved_portal_handoff, client)
+    decide(client, decision)
+    refresh_workspace_portal_receipt(session, user=user, trip_id=trip_id, client=client)
+    record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+    previous = deepcopy(record.portal_handoff)
+    evaluation = deepcopy(record.evaluation_record)
+    changed_result = {
+        **evaluation["evaluation_result"],
+        "evaluation_id": "fresh-policy-check",
+    }
+    request = {
+        "operation": "fetch_evaluation_result",
+        "request_id": evaluation["request_id"],
+        "correlation_id": evaluation["correlation_id"],
+        "transport_pattern": evaluation["transport_pattern"],
+        "organization_id": record.organization_id,
+        "trip_id": trip_id,
+        "proposal_id": record.proposal_id,
+        "payload": evaluation["request_payload"],
+    }
+    refreshed = save_workspace_proposal_evaluation(
+        session,
+        user=user,
+        trip_id=trip_id,
+        request_payload=request,
+        response_payload={
+            **request,
+            "execution_status": evaluation["execution_status"],
+            "result_payload": {
+                **evaluation["response_payload"],
+                "evaluation_result": changed_result,
+            },
+        },
+        proposal_version=record.proposal_version,
+        scenario_id=record.scenario_id,
+    )
+    metadata = refreshed["proposal_state"]["portal_handoff"]
+    assert metadata["status"] == "eligible"
+    assert metadata["source_snapshot_hash"] != previous["source_snapshot_hash"]
+    assert metadata["manager_decision"] is None
+    before = deepcopy(record.portal_handoff)
+    revision = record.updated_at
+    trip = session.get(PersistedTrip, trip_id)
+    trip_updated_at = trip.updated_at
+
+    # Losing the trusted owner client after a fresh check must not silently
+    # replace the authenticated receipt path with an uncorrelated browser form.
+    with pytest.raises(HTTPException) as rejected:
+        prepare(saved_portal_handoff, None)
+    assert rejected.value.status_code == 409
+    session.expire_all()
+    assert record.portal_handoff == before
+    assert record.updated_at == revision
+    assert trip.updated_at == trip_updated_at
+
+    # Restoring the client prepares the new version and retains the old decision
+    # privately; that decision is never treated as approval of the fresh check.
+    result = prepare(saved_portal_handoff, client)
+    assert len(client.preparations) == 2
+    assert client.preparations[0][0] != client.preparations[1][0]
+    assert client.preparations[1][1] == metadata["source_snapshot_hash"]
+    assert result["action_url"] == "https://tpp.example/portal/handoff/receipt"
+    assert result["fields"] == {"handoff_token": client.capability}
+    assert result["handoff"]["manager_submission_status"] == "unknown"
+    assert result["handoff"]["manager_decision"] is None
+    assert record.portal_handoff["producer_history"] == [previous]
+    assert record.portal_handoff["producer_binding"]["snapshot_version"] == (
+        metadata["source_snapshot_hash"]
+    )
+    assert "producer_history" not in result["handoff"]
+    assert "source_snapshot" not in result["handoff"]
+    assert client.capability not in str(record.portal_handoff)
+    assert (
+        get_workspace_proposal_payload(session, user=user, trip_id=trip_id)["proposal_state"][
+            "portal_handoff"
+        ]
+        == result["handoff"]
+    )

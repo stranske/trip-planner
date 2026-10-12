@@ -1910,7 +1910,10 @@ def prepare_workspace_proposal_handoff(
 
     stored = dict(record.portal_handoff or {})
     retained_revision, record_id = record.updated_at, record.proposal_state_id
-    if stored.get("producer_binding") and client is None:
+    # A fresh policy snapshot archives the active producer binding. Keep that
+    # trip on the authenticated path even while only its prior versions remain;
+    # losing the client must not downgrade it to an uncorrelated browser form.
+    if (stored.get("producer_binding") or stored.get("producer_history")) and client is None:
         raise WorkspaceProposalHandoffNotReadyError(
             "This owner-bound handoff must use its authenticated browser review session."
         )
