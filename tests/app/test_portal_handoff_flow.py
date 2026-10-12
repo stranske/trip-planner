@@ -897,6 +897,79 @@ def test_production_handoff_rejects_query_facts_before_preparing_a_form(
     assert operations == ["poll_execution_status", "fetch_evaluation_result"]
 
 
+@pytest.mark.parametrize("already_prepared", [False, True], ids=["first-handoff", "retry"])
+@pytest.mark.parametrize("suffix", ["/handoff", "/handoff/status"])
+@pytest.mark.parametrize(
+    ("content_type", "body"),
+    [
+        (
+            "application/x-www-form-urlencoded",
+            "action_url=https%3A%2F%2Fcaller.example%2Fportal%2Fhandoff&traveler_name=Caller",
+        ),
+        (
+            "multipart/form-data; boundary=handoff",
+            (
+                '--handoff\r\nContent-Disposition: form-data; name="traveler_name"\r\n'
+                "\r\nCaller\r\n--handoff--\r\n"
+            ),
+        ),
+        ("text/plain", "{}"),
+        (None, "{}"),
+    ],
+    ids=["native-form", "multipart-form", "plain-text-json", "untyped-json"],
+)
+def test_handoff_http_routes_reject_non_json_without_changing_saved_state(
+    tpp_client: TestClient,
+    submitted_trip: str,
+    monkeypatch: pytest.MonkeyPatch,
+    already_prepared: bool,
+    suffix: str,
+    content_type: str | None,
+    body: str,
+) -> None:
+    operations = _install_verdict_transport(monkeypatch, "compliant")
+    path = f"/api/workspace/{submitted_trip}/proposal"
+    assert tpp_client.post(f"{path}/refresh").status_code == 200
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    if already_prepared:
+        assert tpp_client.post(f"{path}/handoff", json={}).status_code == 200
+    before = tpp_client.get(path).json()
+
+    def unexpected_preparation(*args, **kwargs):
+        pytest.fail("Non-JSON requests must be rejected before handoff or receipt services run")
+
+    with monkeypatch.context() as guarded:
+        for service in ("prepare_workspace_proposal_handoff", "refresh_workspace_portal_receipt"):
+            guarded.setattr(f"trip_planner.app.routes.proposal.{service}", unexpected_preparation)
+        rejected = tpp_client.post(
+            f"{path}{suffix}",
+            content=body,
+            headers={"Content-Type": content_type} if content_type is not None else {},
+        )
+
+    assert rejected.status_code == 415
+    assert rejected.json() == {"detail": "Prepare the portal handoff using JSON."}
+    assert tpp_client.get(path).json() == before
+
+    # Only the outgoing TPP navigation is a native form POST. The planner's
+    # preparation request must remain empty JSON resolved from its saved verdict.
+    retried = tpp_client.post(f"{path}/handoff", json={})
+    assert retried.status_code == 200
+    form = retried.json()
+    assert retried.headers["cache-control"] == "no-store"
+    assert form["action_url"] == "https://tpp.example/portal/handoff"
+    assert form["method"] == "POST"
+    assert form["fields"]["traveler_name"] == "Dana Chen"
+    assert form["handoff"]["source_snapshot_hash"] == (
+        before["proposal_state"]["portal_handoff"]["source_snapshot_hash"]
+    )
+    assert form["handoff"]["manager_submission_status"] == "unknown"
+    assert form["handoff"]["manager_decision"] is None
+    if already_prepared:
+        assert form["handoff"] == before["proposal_state"]["portal_handoff"]
+    assert operations == ["poll_execution_status", "fetch_evaluation_result"]
+
+
 def test_production_handoff_uses_requested_trip_not_travelers_latest_policy_check(
     tpp_client: TestClient, submitted_trip: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
