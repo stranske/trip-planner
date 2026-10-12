@@ -496,6 +496,91 @@ def test_invalid_form_preserves_saved_handoff_and_allows_retry(
     )
 
 
+@pytest.mark.parametrize("already_prepared", [False, True], ids=["first-handoff", "retry"])
+@pytest.mark.parametrize(
+    "portal_origin",
+    ["http://portal.example", "https://portal.example/api", "https://portal.example:25"],
+    ids=["insecure", "non-origin", "browser-blocked-port"],
+)
+def test_invalid_explicit_portal_never_falls_back_to_a_valid_policy_api(
+    saved_portal_handoff,
+    monkeypatch: pytest.MonkeyPatch,
+    already_prepared: bool,
+    portal_origin: str,
+) -> None:
+    session, user, trip_id, original_form = saved_portal_handoff
+    stored = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+    trip = session.get(PersistedTrip, trip_id)
+    assert stored is not None and trip is not None
+    if not already_prepared:
+        stored.portal_handoff = {
+            **stored.portal_handoff,
+            "status": "eligible",
+            "prepared_at": None,
+        }
+        session.commit()
+    saved_handoff = deepcopy(stored.portal_handoff)
+    saved_verdict = deepcopy(stored.evaluation_record)
+    updated_at = trip.updated_at
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.setenv("TPP_BASE_URL", "https://policy-api.example")
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", portal_origin)
+
+    def unexpected_mapping(*args, **kwargs):
+        pytest.fail("An invalid portal destination must not generate traveler form fields")
+
+    def unexpected_policy_call(*args, **kwargs):
+        pytest.fail("Configuration recovery must use the saved policy verdict")
+
+    monkeypatch.setattr(
+        "trip_planner.app.services.proposal.HTTPTPPIntegrationClient", unexpected_policy_call
+    )
+    with monkeypatch.context() as invalid_configuration:
+        invalid_configuration.setattr(
+            "trip_planner.app.services.proposal.build_portal_fields", unexpected_mapping
+        )
+        with pytest.raises(HTTPException) as rejected:
+            prepare_workspace_proposal_portal_handoff(
+                trip_id=trip_id,
+                _payload=WorkspaceProposalHandoffRequest(),
+                response=Response(),
+                user=user,
+                db_session=session,
+            )
+    assert rejected.value.status_code == 503
+    session.expire_all()
+    assert stored.portal_handoff == saved_handoff
+    assert stored.evaluation_record == saved_verdict
+    assert trip.updated_at == updated_at
+
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", "https://tpp.example")
+    response = Response()
+    retried = prepare_workspace_proposal_portal_handoff(
+        trip_id=trip_id,
+        _payload=WorkspaceProposalHandoffRequest(),
+        response=response,
+        user=user,
+        db_session=session,
+    ).model_dump()
+    assert retried["action_url"] == "https://tpp.example/portal/handoff"
+    assert retried["method"] == "POST"
+    assert retried["fields"] == original_form["fields"]
+    assert response.headers["cache-control"] == "no-store"
+    assert retried["handoff"]["source_snapshot_hash"] == saved_handoff["source_snapshot_hash"]
+    assert retried["handoff"]["manager_submission_status"] == "unknown"
+    assert retried["handoff"]["manager_decision"] is None
+    if already_prepared:
+        assert retried == original_form
+    session.expire_all()
+    assert stored.evaluation_record == saved_verdict
+    assert (
+        get_workspace_proposal_payload(session, user=user, trip_id=trip_id)["proposal_state"][
+            "portal_handoff"
+        ]
+        == retried["handoff"]
+    )
+
+
 @pytest.mark.parametrize("already_prepared", [False, True])
 @pytest.mark.parametrize("setting", ["TPP_PORTAL_BASE_URL", "TPP_BASE_URL"])
 @pytest.mark.parametrize(
