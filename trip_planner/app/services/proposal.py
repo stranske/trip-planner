@@ -7,7 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from trip_planner._option_contracts import MoneyRange
@@ -1897,6 +1897,7 @@ def prepare_workspace_proposal_handoff(
         )
 
     stored = dict(record.portal_handoff or {})
+    retained_revision = record.updated_at
     if stored.get("producer_binding"):
         raise WorkspaceProposalHandoffNotReadyError(
             "This owner-bound handoff must use its authenticated browser review session."
@@ -1958,7 +1959,22 @@ def prepare_workspace_proposal_handoff(
     except ValidationError:
         # Pydantic errors include input values; keep traveler facts out of logs.
         raise ValueError("The prepared portal form is invalid.") from None
-    record.portal_handoff = handoff
+    # Form mapping may overlap another policy check or authenticated preparation.
+    # Commit only against the saved proposal we validated, so a delayed legacy
+    # preparation cannot overwrite newer verdict or producer receipt authority.
+    prepared = db_session.execute(
+        update(PersistedProposalState)
+        .where(PersistedProposalState.proposal_state_id == record.proposal_state_id)
+        .where(PersistedProposalState.updated_at == retained_revision)
+        .values(portal_handoff=handoff)
+        .returning(PersistedProposalState.proposal_state_id)
+        .execution_options(synchronize_session=False)
+    ).scalar_one_or_none()
+    if prepared is None:
+        db_session.rollback()
+        raise WorkspaceProposalHandoffStaleError(
+            "The saved proposal changed while preparing the handoff. Run the policy check again."
+        )
     trip_record.updated_at = datetime.now(UTC)
     db_session.commit()
     db_session.refresh(record)

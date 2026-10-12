@@ -13,9 +13,85 @@ from trip_planner.app.services.proposal import (
     save_workspace_proposal_evaluation,
 )
 from trip_planner.app.services.trip_prices import save_trip_price
+from trip_planner.persistence.db import get_session_factory
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.persistence.models.trip_price import PersistedTripPrice
+
+
+@pytest.mark.parametrize("already_prepared", [False, True], ids=["first-handoff", "retry"])
+@pytest.mark.parametrize("concurrent_change", ["policy-check", "authenticated-preparation"])
+def test_form_preparation_cannot_overwrite_a_newer_saved_proposal(
+    saved_portal_handoff, monkeypatch, already_prepared, concurrent_change
+) -> None:
+    session, user, trip_id, original_form = saved_portal_handoff
+    stored = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+    trip = session.get(PersistedTrip, trip_id)
+    assert stored is not None and trip is not None
+    if not already_prepared:
+        stored.portal_handoff = {
+            **stored.portal_handoff,
+            "status": "eligible",
+            "prepared_at": None,
+        }
+        session.commit()
+    trip_updated_at = trip.updated_at
+    newer_state = {}
+
+    def save_newer_proposal_while_building_form(snapshot):
+        with get_session_factory()() as another_session:
+            newer = another_session.get(PersistedProposalState, stored.proposal_state_id)
+            assert newer is not None
+            if concurrent_change == "policy-check":
+                result = deepcopy(newer.evaluation_record)
+                result["evaluation_result"]["evaluation_id"] = "newer-policy-check"
+                newer.evaluation_record = result
+                newer.portal_handoff = {
+                    **newer.portal_handoff,
+                    "status": "eligible",
+                    "prepared_at": None,
+                    "source_snapshot_hash": "sha256:" + "a" * 64,
+                }
+            else:
+                newer.portal_handoff = {
+                    **newer.portal_handoff,
+                    "producer_binding": {
+                        "handoff_id": "newer-handoff",
+                        "snapshot_version": "v1",
+                        "snapshot_sha256": "b" * 64,
+                        "draft_id": "newer-draft",
+                    },
+                    "producer_owner": {"namespace": "test-owner", "subject": "traveler"},
+                }
+            another_session.commit()
+            another_session.refresh(newer)
+            newer_state.update(
+                handoff=deepcopy(newer.portal_handoff),
+                evaluation=deepcopy(newer.evaluation_record),
+                updated_at=newer.updated_at,
+            )
+        return original_form["fields"]
+
+    monkeypatch.setattr(
+        "trip_planner.app.services.proposal.build_portal_fields",
+        save_newer_proposal_while_building_form,
+    )
+    response = Response()
+    with pytest.raises(HTTPException) as rejected:
+        prepare_workspace_proposal_portal_handoff(
+            trip_id=trip_id,
+            _payload=WorkspaceProposalHandoffRequest(),
+            response=response,
+            user=user,
+            db_session=session,
+        )
+    assert rejected.value.status_code == 409
+    assert "newer-draft" not in rejected.value.detail
+    session.expire_all()
+    assert stored.portal_handoff == newer_state["handoff"]
+    assert stored.evaluation_record == newer_state["evaluation"]
+    assert stored.updated_at == newer_state["updated_at"]
+    assert trip.updated_at == trip_updated_at
 
 
 def test_saved_verdict_produces_portal_form_and_private_snapshot(saved_portal_handoff) -> None:
