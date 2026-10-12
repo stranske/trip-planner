@@ -173,6 +173,77 @@ def test_policy_tab_verdict_controls_browser_handoff(
 
 @pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
 @pytest.mark.parametrize("already_prepared", [False, True], ids=["first-handoff", "retry-handoff"])
+def test_request_headers_cannot_route_or_rewrite_a_saved_verdict_handoff(
+    tpp_client: TestClient,
+    submitted_trip: str,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+    already_prepared: bool,
+) -> None:
+    operations = _install_verdict_transport(monkeypatch, outcome)
+    path = f"/api/workspace/{submitted_trip}/proposal"
+    assert tpp_client.post(f"{path}/refresh").status_code == 200
+    if already_prepared:
+        assert tpp_client.post(f"{path}/handoff", json={}).status_code == 200
+    before = tpp_client.get(path).json()
+
+    # The portal can be hosted separately from the policy API. Neither the
+    # browser's origin nor reverse-proxy headers own the outgoing destination.
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.setenv("TPP_BASE_URL", "https://policy-api.example")
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", "https://traveler-portal.example:8443/")
+
+    def unavailable(*args, **kwargs):
+        pytest.fail("Preparing a header-supplied request must use the saved policy result")
+
+    for operation in (
+        "fetch_policy_constraints",
+        "submit_proposal",
+        "poll_execution_status",
+        "fetch_evaluation_result",
+    ):
+        monkeypatch.setattr(HTTPTPPIntegrationClient, operation, unavailable)
+
+    prepared = tpp_client.post(
+        f"{path}/handoff",
+        json={},
+        headers={
+            "Host": "caller.example",
+            "Origin": "https://caller.example",
+            "Referer": "https://caller.example/portal/handoff?traveler_name=Caller",
+            "Forwarded": 'host="caller.example";proto=http',
+            "X-Forwarded-Host": "caller.example",
+            "X-Forwarded-Proto": "http",
+            "X-Forwarded-Port": "80",
+            "X-Original-URL": "/portal/handoff?traveler_name=Caller",
+        },
+    )
+    assert prepared.status_code == 200
+    assert prepared.headers["cache-control"] == "no-store"
+    form = prepared.json()
+    assert form["action_url"] == "https://traveler-portal.example:8443/portal/handoff"
+    assert form["method"] == "POST"
+    assert form["fields"]["traveler_name"] == "Dana Chen"
+    assert form["fields"]["business_purpose"] == "Review the client's quarterly plan"
+    assert "USD 612.00" in form["fields"]["notes"]
+    assert f"status={outcome};" in form["fields"]["notes"]
+    assert "caller.example" not in json.dumps(form)
+    assert form["handoff"]["source_snapshot_hash"] == (
+        before["proposal_state"]["portal_handoff"]["source_snapshot_hash"]
+    )
+    assert form["handoff"]["manager_submission_status"] == "unknown"
+    assert form["handoff"]["manager_decision"] is None
+    assert "source_snapshot" not in form["handoff"]
+    if already_prepared:
+        assert form["handoff"] == before["proposal_state"]["portal_handoff"]
+    reloaded = tpp_client.get(path).json()
+    assert reloaded["proposal_state"]["portal_handoff"] == form["handoff"]
+    assert reloaded["proposal_state"]["evaluation"] == before["proposal_state"]["evaluation"]
+    assert operations == ["poll_execution_status", "fetch_evaluation_result"]
+
+
+@pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
+@pytest.mark.parametrize("already_prepared", [False, True], ids=["first-handoff", "retry-handoff"])
 @pytest.mark.parametrize("session_state", ["missing", "expired", "revoked"])
 def test_returning_traveler_must_have_a_live_session_before_preparing_handoff(
     tpp_client: TestClient,
