@@ -11,6 +11,10 @@ from sqlalchemy import select
 
 from tests.app.tpp_intercept import seed_policy
 from trip_planner.app.main import create_app
+from trip_planner.app.services.auth import (
+    SESSION_COOKIE_NAME,
+    create_session_for_user,
+)
 from trip_planner.integrations.tpp.client import HTTPTPPIntegrationClient
 from trip_planner.integrations.tpp.contracts import TPPResponseEnvelope
 from trip_planner.persistence.db import get_session_factory, reset_database_state
@@ -997,3 +1001,147 @@ def test_saved_verdict_handoff_survives_application_and_database_cache_restart(
             assert metadata == previous_form["handoff"]
         assert restarted.get(proposal_path).json()["proposal_state"]["portal_handoff"] == metadata
     assert operations == ["poll_execution_status", "fetch_evaluation_result"]
+
+
+@pytest.mark.parametrize("already_prepared", [False, True], ids=["first-handoff", "retry-handoff"])
+def test_live_traveler_sessions_receive_only_their_own_saved_handoff(
+    tpp_client: TestClient,
+    submitted_trip: str,
+    monkeypatch: pytest.MonkeyPatch,
+    already_prepared: bool,
+) -> None:
+    owner_operations = _install_verdict_transport(monkeypatch, "compliant")
+    first_path = f"/api/workspace/{submitted_trip}/proposal"
+    assert tpp_client.post(f"{first_path}/refresh").status_code == 200
+
+    with get_session_factory()() as session:
+        second_user = UserAccount(
+            user_id="handoff-second-owner",
+            email="second@example.test",
+            display_name="Riley Navarro",
+            password_hash="unused",
+        )
+        session.add(second_user)
+        session.commit()
+        second_cookie, _ = create_session_for_user(session, user=second_user)
+
+    # Both browser sessions remain live. The server must resolve the saved trip
+    # using the current session, rather than the last traveler to prepare a form.
+    with TestClient(tpp_client.app, cookies={SESSION_COOKIE_NAME: second_cookie}) as second_browser:
+        departure = datetime.now(UTC).date() + timedelta(days=60)
+        created = second_browser.post(
+            "/api/trips",
+            json={
+                "title": "Boston planning visit",
+                "summary": "Review Riley's annual plan",
+                "mode": "business",
+                "trip_frame": {
+                    "origin": "Portland",
+                    "start_date": departure.isoformat(),
+                    "end_date": (departure + timedelta(days=2)).isoformat(),
+                    "duration_days": 3,
+                    "primary_regions": ["Boston"],
+                },
+            },
+        )
+        assert created.status_code == 201
+        second_trip = created.json()["trip"]["trip_id"]
+        second_path = f"/api/workspace/{second_trip}/proposal"
+        seed_policy(second_browser, second_trip)
+        assert (
+            second_browser.put(
+                f"/api/workspace/{second_trip}/prices",
+                json={"component": "lodging", "amount": 825.0, "note": "Riley's hotel quote"},
+            ).status_code
+            == 200
+        )
+        assert second_browser.post(f"{second_path}/submit", json={}).status_code == 200
+        second_operations = _install_verdict_transport(monkeypatch, "non_compliant")
+        assert second_browser.post(f"{second_path}/refresh").status_code == 200
+        monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+        monkeypatch.setenv("TPP_PORTAL_BASE_URL", "https://traveler-portal.example:8443")
+
+        def unexpected_transport(*args, **kwargs):
+            pytest.fail("Live traveler handoffs must use persisted verdicts")
+
+        for operation in (
+            "fetch_policy_constraints",
+            "submit_proposal",
+            "poll_execution_status",
+            "fetch_evaluation_result",
+        ):
+            monkeypatch.setattr(HTTPTPPIntegrationClient, operation, unexpected_transport)
+
+        browsers = [(tpp_client, first_path), (second_browser, second_path)]
+        if already_prepared:
+            for browser, path in browsers:
+                assert browser.post(f"{path}/handoff", json={}).status_code == 200
+        before = [browser.get(path).json() for browser, path in browsers]
+        with get_session_factory()() as session:
+            stored_before = {}
+            for trip_id in (submitted_trip, second_trip):
+                record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+                trip = session.get(PersistedTrip, trip_id)
+                assert record is not None and trip is not None
+                stored_before[trip_id] = (deepcopy(record.portal_handoff), trip.updated_at)
+
+        def unexpected_mapping(*args, **kwargs):
+            pytest.fail("Another traveler's saved facts must never reach the form mapper")
+
+        with monkeypatch.context() as denied_requests:
+            denied_requests.setattr(
+                "trip_planner.app.services.proposal.build_portal_fields", unexpected_mapping
+            )
+            for browser, other_path in [(tpp_client, second_path), (second_browser, first_path)]:
+                denied = browser.post(f"{other_path}/handoff", json={})
+                missing = browser.post("/api/workspace/missing-trip/proposal/handoff", json={})
+                assert denied.status_code == missing.status_code == 404
+                # Each failure has its own diagnostic reference. The public
+                # message must not disclose whether the other owner's trip exists.
+                denied_message = denied.json()["detail"].split(" Reference ID:", maxsplit=1)[0]
+                missing_message = missing.json()["detail"].split(" Reference ID:", maxsplit=1)[0]
+                assert denied_message == missing_message
+
+        assert [browser.get(path).json() for browser, path in browsers] == before
+        with get_session_factory()() as session:
+            for trip_id, (handoff, updated_at) in stored_before.items():
+                record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+                trip = session.get(PersistedTrip, trip_id)
+                assert record is not None and trip is not None
+                assert record.portal_handoff == handoff
+                assert trip.updated_at == updated_at
+
+        forms = []
+        for browser, path in browsers:
+            prepared = browser.post(f"{path}/handoff", json={})
+            assert prepared.status_code == 200
+            assert prepared.headers["cache-control"] == "no-store"
+            form = prepared.json()
+            assert form["action_url"] == "https://traveler-portal.example:8443/portal/handoff"
+            assert form["method"] == "POST"
+            assert form["handoff"]["manager_submission_status"] == "unknown"
+            assert form["handoff"]["manager_decision"] is None
+            assert "source_snapshot" not in form["handoff"]
+            assert browser.get(path).json()["proposal_state"]["portal_handoff"] == form["handoff"]
+            forms.append(form)
+
+        assert forms[0]["fields"]["traveler_name"] == "Dana Chen"
+        assert forms[1]["fields"]["traveler_name"] == "Riley Navarro"
+        assert forms[0]["fields"]["city_state"] == "Chicago"
+        assert forms[1]["fields"]["city_state"] == "Boston"
+        assert "USD 612.00" in forms[0]["fields"]["notes"]
+        assert "USD 825.00" in forms[1]["fields"]["notes"]
+        assert "status=compliant;" in forms[0]["fields"]["notes"]
+        assert "status=non_compliant;" in forms[1]["fields"]["notes"]
+        assert (
+            forms[0]["handoff"]["source_snapshot_hash"]
+            != forms[1]["handoff"]["source_snapshot_hash"]
+        )
+        for (browser, path), form in zip(browsers, forms):
+            assert browser.post(f"{path}/handoff", json={}).json() == form
+
+    assert (
+        owner_operations
+        == second_operations
+        == ["poll_execution_status", "fetch_evaluation_result"]
+    )
