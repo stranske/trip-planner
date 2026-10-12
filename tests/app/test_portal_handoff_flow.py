@@ -1144,3 +1144,75 @@ def test_live_traveler_sessions_receive_only_their_own_saved_handoff(
         == second_operations
         == ["poll_execution_status", "fetch_evaluation_result"]
     )
+
+
+@pytest.mark.parametrize("already_prepared", [False, True], ids=["first-handoff", "retry-handoff"])
+@pytest.mark.parametrize(
+    ("changes", "verdict_cleared"),
+    [
+        ({"summary": "Review the client's annual plan"}, True),
+        ({"trip_frame": {"primary_regions": ["Denver"]}}, True),
+        ({"trip_frame": {"start_date": "2027-03-08", "end_date": "2027-03-10"}}, True),
+        ({"title": "Revised client visit"}, False),
+    ],
+    ids=["purpose", "destination", "dates", "snapshot-only-title"],
+)
+def test_trip_edit_requires_a_fresh_policy_check_before_browser_handoff(
+    tpp_client: TestClient,
+    submitted_trip: str,
+    monkeypatch: pytest.MonkeyPatch,
+    already_prepared: bool,
+    changes: dict,
+    verdict_cleared: bool,
+) -> None:
+    operations = _install_verdict_transport(monkeypatch, "compliant")
+    path = f"/api/workspace/{submitted_trip}/proposal"
+    assert tpp_client.post(f"{path}/refresh").status_code == 200
+    if already_prepared:
+        assert tpp_client.post(f"{path}/handoff", json={}).status_code == 200
+    original = tpp_client.get(path).json()
+    original_hash = original["proposal_state"]["portal_handoff"]["source_snapshot_hash"]
+
+    # Use the same authenticated edit route as the workspace. Determinant edits
+    # delete the verdict; other bound facts must still fail the snapshot check.
+    edited = tpp_client.patch(f"/api/trips/{submitted_trip}", json=changes)
+    assert edited.status_code == 200
+    assert edited.json()["verdict_cleared"] is verdict_cleared
+    trip = edited.json()["trip"]
+    after_edit = tpp_client.get(path).json()
+
+    def unexpected_mapping(snapshot):
+        pytest.fail("Edited trips cannot produce form fields from the original verdict")
+
+    with monkeypatch.context() as stale_attempt:
+        stale_attempt.setattr(
+            "trip_planner.app.services.proposal.build_portal_fields", unexpected_mapping
+        )
+        assert tpp_client.post(f"{path}/handoff", json={}).status_code == 409
+        assert tpp_client.get(path).json() == after_edit
+        # Refreshing the original execution is not a fresh policy check.
+        refreshed = tpp_client.post(f"{path}/refresh")
+        assert refreshed.status_code == (404 if verdict_cleared else 200)
+        assert tpp_client.post(f"{path}/handoff", json={}).status_code == 409
+
+    assert tpp_client.post(f"{path}/submit", json={}).status_code == 200
+    assert tpp_client.post(f"{path}/handoff", json={}).status_code == 409
+    assert tpp_client.post(f"{path}/refresh").status_code == 200
+    operations_before_handoff = list(operations)
+    prepared = tpp_client.post(f"{path}/handoff", json={})
+    assert prepared.status_code == 200
+    assert prepared.headers["cache-control"] == "no-store"
+    form = prepared.json()
+    assert form["action_url"] == "https://tpp.example/portal/handoff"
+    assert form["method"] == "POST"
+    assert form["fields"]["business_purpose"] == trip["summary"]
+    frame = trip["trip_frame"]
+    assert form["fields"]["city_state"] == ", ".join(frame["primary_regions"])
+    assert form["fields"]["depart_date"] == frame["start_date"]
+    assert form["fields"]["return_date"] == frame["end_date"]
+    assert form["handoff"]["source_snapshot_hash"] != original_hash
+    assert form["handoff"]["manager_submission_status"] == "unknown"
+    assert form["handoff"]["manager_decision"] is None
+    assert "source_snapshot" not in form["handoff"]
+    assert tpp_client.get(path).json()["proposal_state"]["portal_handoff"] == form["handoff"]
+    assert operations == operations_before_handoff
