@@ -119,6 +119,78 @@ def test_production_route_uses_configured_owner_client_and_saved_facts(saved_por
     )
 
 
+@pytest.mark.parametrize("already_bound", [False, True], ids=["first-preparation", "bound-retry"])
+@pytest.mark.parametrize("suffix", ["/handoff", "/handoff/status"])
+@pytest.mark.parametrize(
+    ("request_kwargs", "status_code"),
+    [
+        ({"json": {"action_url": "https://caller.example/portal/handoff"}}, 422),
+        ({"json": {"fields": {"traveler_name": "Caller supplied traveler"}}}, 422),
+        ({"json": {"source_snapshot_hash": "sha256:" + "0" * 64}}, 422),
+        (
+            {"json": {}, "params": {"action_url": "https://caller.example/portal/handoff"}},
+            422,
+        ),
+        ({"json": {}, "params": {"traveler_name": "Caller supplied traveler"}}, 422),
+        ({"data": {"traveler_name": "Caller supplied traveler"}}, 415),
+    ],
+    ids=[
+        "json-destination",
+        "json-fields",
+        "json-binding",
+        "query-destination",
+        "query-fact",
+        "form",
+    ],
+)
+def test_authenticated_routes_reject_caller_facts_before_producer_side_effects(
+    saved_portal_handoff, already_bound, suffix, request_kwargs, status_code
+):
+    session, user, trip_id, original = saved_portal_handoff
+    client = PreparationClient()
+    if already_bound:
+        prepare(saved_portal_handoff, client)
+    record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+    trip = session.get(PersistedTrip, trip_id)
+    before = deepcopy(record.portal_handoff)
+    evaluation = deepcopy(record.evaluation_record)
+    revision, trip_revision = record.updated_at, trip.updated_at
+    calls = (
+        list(client.users),
+        deepcopy(client.preparations),
+        list(client.browser_bindings),
+        client.reads,
+    )
+    app = create_app(portal_receipt_client=client)
+    app.dependency_overrides[require_authenticated_user] = lambda: user
+    app.dependency_overrides[get_db_session] = lambda: session
+
+    with TestClient(app) as browser:
+        rejected = browser.post(f"/api/workspace/{trip_id}/proposal{suffix}", **request_kwargs)
+        assert rejected.status_code == status_code
+        # Neither preparation nor status refresh may contact the producer or
+        # resolve forwarded owner identity for caller-controlled handoff inputs.
+        assert (client.users, client.preparations, client.browser_bindings, client.reads) == calls
+        session.expire_all()
+        assert record.portal_handoff == before
+        assert record.evaluation_record == evaluation
+        assert record.updated_at == revision
+        assert trip.updated_at == trip_revision
+
+        retried = browser.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+
+    assert retried.status_code == 200
+    result = retried.json()
+    assert result["action_url"] == "https://tpp.example/portal/handoff/receipt"
+    assert result["method"] == "POST"
+    assert len(client.preparations) == 1
+    assert client.preparations[0][2] == original["fields"]
+    assert result["handoff"]["source_snapshot_hash"] == before["source_snapshot_hash"]
+    assert result["handoff"]["manager_submission_status"] == "unknown"
+    assert result["handoff"]["manager_decision"] is None
+    assert "source_snapshot" not in result["handoff"]
+
+
 @pytest.mark.parametrize("status_code", [400, 422])
 def test_production_route_preserves_validation_refusal_and_can_retry(
     saved_portal_handoff, status_code
@@ -154,6 +226,44 @@ def test_production_route_preserves_validation_refusal_and_can_retry(
     assert accepted.json()["handoff"]["manager_submission_status"] == "unknown"
     assert accepted.json()["handoff"]["manager_decision"] is None
     assert client.preparations[0] == client.preparations[1]
+    assert client.preparations[0][2] == original["fields"]
+
+
+@pytest.mark.parametrize("already_bound", [False, True], ids=["first-preparation", "bound-retry"])
+@pytest.mark.parametrize("field", [None, "source_snapshot", "return_url", "destination_zip"])
+def test_authenticated_preparation_validates_prefill_before_forwarding_to_producer(
+    saved_portal_handoff, monkeypatch, already_bound, field
+):
+    session, _user, trip_id, original = saved_portal_handoff
+    client = PreparationClient()
+    if already_bound:
+        prepare(saved_portal_handoff, client)
+    record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+    trip = session.get(PersistedTrip, trip_id)
+    before = deepcopy(record.portal_handoff)
+    revision, trip_revision = record.updated_at, trip.updated_at
+    calls = (list(client.users), deepcopy(client.preparations), list(client.browser_bindings))
+    # Simulate mapper drift: internal facts and traveler-completed answers must
+    # be rejected even when the authenticated path posts answers server to server.
+    invalid = {**original["fields"], field: "Unsupported prefill"} if field else {}
+    with monkeypatch.context() as invalid_mapper:
+        invalid_mapper.setattr(
+            "trip_planner.app.services.proposal.build_portal_fields", lambda _: invalid
+        )
+        with pytest.raises(HTTPException) as rejected:
+            prepare(saved_portal_handoff, client)
+    assert rejected.value.status_code == 422
+    assert "Unsupported prefill" not in rejected.value.detail
+    assert (client.users, client.preparations, client.browser_bindings) == calls
+    assert client.reads == 0
+    session.expire_all()
+    assert record.portal_handoff == before
+    assert record.updated_at == revision
+    assert trip.updated_at == trip_revision
+
+    retried = prepare(saved_portal_handoff, client)
+    assert retried["action_url"] == "https://tpp.example/portal/handoff/receipt"
+    assert len(client.preparations) == 1
     assert client.preparations[0][2] == original["fields"]
 
 

@@ -6,12 +6,15 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from trip_planner._option_contracts import MoneyRange
-from trip_planner.app.schemas.proposal import WorkspaceProposalHandoffResponse
+from trip_planner.app.schemas.proposal import (
+    WorkspaceProposalHandoffResponse,
+    WorkspaceProposalPrefillFields,
+)
 from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.app.services.trip_prices import (
     COMPONENT_LABELS,
@@ -60,6 +63,7 @@ from trip_planner.persistence.models.trip_price import PersistedTripPrice
 from trip_planner.state import ScenarioVersion
 
 logger = logging.getLogger(__name__)
+_PORTAL_PREFILL_FIELDS = TypeAdapter(WorkspaceProposalPrefillFields)
 
 
 class WorkspaceProposalNotFoundError(ValueError):
@@ -1949,7 +1953,14 @@ def prepare_workspace_proposal_handoff(
     action_url = portal_action_url()
     # Preparation is complete only once the outgoing form can be built. A mapping
     # failure must leave the saved verdict and any prior handoff state unchanged.
-    fields = build_portal_fields(current_snapshot)
+    try:
+        fields: dict[str, str] = dict(
+            _PORTAL_PREFILL_FIELDS.validate_python(build_portal_fields(current_snapshot)).items()
+        )
+    except ValidationError:
+        # Reject mapper drift before either path can forward private facts or
+        # establish producer authority. Validation errors contain input values.
+        raise ValueError("The prepared portal form is invalid.") from None
     if client is not None:
         # Import here because preparation shares the saved-snapshot validation
         # above and the receipt service uses this module's ownership helpers.

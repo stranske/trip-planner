@@ -1,4 +1,4 @@
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -96,12 +96,8 @@ class WorkspaceProposalHandoffMetadata(BaseModel):
     manager_decision: None = None
 
 
-class WorkspaceProposalHandoffResponse(BaseModel):
-    action_url: str
-    method: Literal["POST"] = "POST"
-    # Only server-owned prefill facts may leave in the native form. In particular,
-    # internal snapshots and traveler-completed portal fields are not this contract.
-    fields: dict[
+WorkspaceProposalPrefillFields = Annotated[
+    dict[
         Literal[
             "traveler_name",
             "business_purpose",
@@ -120,7 +116,17 @@ class WorkspaceProposalHandoffResponse(BaseModel):
             "fare_evidence_attached",
         ],
         str,
-    ] = Field(min_length=1)
+    ],
+    Field(min_length=1),
+]
+
+
+class WorkspaceProposalHandoffResponse(BaseModel):
+    action_url: str
+    method: Literal["POST"] = "POST"
+    # Share the field contract with authenticated producer preparation so neither
+    # path can forward internal snapshots or traveler-completed portal answers.
+    fields: WorkspaceProposalPrefillFields
     handoff: WorkspaceProposalHandoffMetadata
 
 
