@@ -8,7 +8,10 @@ from fastapi import HTTPException, Response
 
 from trip_planner.app.routes.proposal import prepare_workspace_proposal_portal_handoff
 from trip_planner.app.schemas.proposal import WorkspaceProposalHandoffRequest
-from trip_planner.app.services.proposal import get_workspace_proposal_payload
+from trip_planner.app.services.proposal import (
+    get_workspace_proposal_payload,
+    save_workspace_proposal_evaluation,
+)
 from trip_planner.app.services.trip_prices import save_trip_price
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
@@ -47,6 +50,123 @@ def test_saved_verdict_produces_portal_form_and_private_snapshot(saved_portal_ha
     session.expire_all()
     reloaded = get_workspace_proposal_payload(session, user=user, trip_id=trip_id)
     assert reloaded["proposal_state"]["portal_handoff"] == metadata
+
+
+@pytest.mark.parametrize("already_prepared", [False, True])
+@pytest.mark.parametrize(
+    ("result_field", "new_value"),
+    [
+        ("evaluation_id", "eval-rechecked-same-status"),
+        (
+            "approval_requirements",
+            [{"role": "manager", "reason": "Revised approval reason", "mandatory": True}],
+        ),
+        (
+            "approval_requirements",
+            [{"role": "manager", "reason": "International travel", "mandatory": False}],
+        ),
+        ("exception_guidance", ["Use the revised exception process"]),
+        ("notes", ["Revised policy detail with the same compliant verdict"]),
+        ("compliance_score", 0.95),
+    ],
+    ids=["evaluation-id", "approval-reason", "mandatory-approval", "guidance", "notes", "score"],
+)
+def test_handoff_binds_policy_details_even_when_the_form_and_verdict_status_are_unchanged(
+    saved_portal_handoff,
+    already_prepared: bool,
+    result_field: str,
+    new_value: object,
+) -> None:
+    session, user, trip_id, original_form = saved_portal_handoff
+    stored = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+    assert stored is not None
+    if not already_prepared:
+        stored.portal_handoff = {
+            **stored.portal_handoff,
+            "status": "eligible",
+            "prepared_at": None,
+        }
+    original_handoff = deepcopy(stored.portal_handoff)
+    original_evaluation = deepcopy(stored.evaluation_record)
+    changed_result = deepcopy(original_evaluation["evaluation_result"])
+    changed_result[result_field] = new_value
+    assert changed_result["status"] == original_evaluation["evaluation_result"]["status"]
+
+    # A changed saved result cannot reuse the original binding merely because
+    # its headline verdict and browser prefill still look the same.
+    stored.evaluation_record = {**original_evaluation, "evaluation_result": changed_result}
+    session.commit()
+    trip = session.get(PersistedTrip, trip_id)
+    assert trip is not None
+    updated_at = trip.updated_at
+    with pytest.raises(HTTPException) as rejected:
+        prepare_workspace_proposal_portal_handoff(
+            trip_id=trip_id,
+            _payload=WorkspaceProposalHandoffRequest(),
+            response=Response(),
+            user=user,
+            db_session=session,
+        )
+    assert rejected.value.status_code == 409
+    session.expire_all()
+    assert stored.portal_handoff == original_handoff
+    assert stored.evaluation_record["evaluation_result"] == changed_result
+    assert trip.updated_at == updated_at
+
+    # Ingest the fresh result through the real policy service, then prepare a
+    # new form. Its hash must bind the complete result, not just displayed fields.
+    request_payload = {
+        "operation": "fetch_evaluation_result",
+        "request_id": original_evaluation["request_id"],
+        "correlation_id": original_evaluation["correlation_id"],
+        "transport_pattern": original_evaluation["transport_pattern"],
+        "organization_id": stored.organization_id,
+        "trip_id": trip_id,
+        "proposal_id": stored.proposal_id,
+        "payload": original_evaluation["request_payload"],
+    }
+    response_payload = {
+        **request_payload,
+        "execution_status": original_evaluation["execution_status"],
+        "result_payload": {
+            **original_evaluation["response_payload"],
+            "evaluation_result": changed_result,
+        },
+    }
+    refreshed = save_workspace_proposal_evaluation(
+        session,
+        user=user,
+        trip_id=trip_id,
+        request_payload=request_payload,
+        response_payload=response_payload,
+        proposal_version=stored.proposal_version,
+        scenario_id=stored.scenario_id,
+    )
+    metadata = refreshed["proposal_state"]["portal_handoff"]
+    assert metadata["status"] == "eligible"
+    assert metadata["prepared_at"] is None
+    assert metadata["source_snapshot_hash"] != original_handoff["source_snapshot_hash"]
+    assert "source_snapshot" not in metadata
+
+    response = Response()
+    fresh_form = prepare_workspace_proposal_portal_handoff(
+        trip_id=trip_id,
+        _payload=WorkspaceProposalHandoffRequest(),
+        response=response,
+        user=user,
+        db_session=session,
+    ).model_dump()
+    assert fresh_form["action_url"] == original_form["action_url"]
+    assert fresh_form["method"] == "POST"
+    assert fresh_form["fields"] == original_form["fields"]
+    assert response.headers["cache-control"] == "no-store"
+    assert fresh_form["handoff"]["source_snapshot_hash"] == metadata["source_snapshot_hash"]
+    assert fresh_form["handoff"]["status"] == "prepared"
+    assert fresh_form["handoff"]["manager_submission_status"] == "unknown"
+    assert fresh_form["handoff"]["manager_decision"] is None
+    session.expire_all()
+    reloaded = get_workspace_proposal_payload(session, user=user, trip_id=trip_id)
+    assert reloaded["proposal_state"]["portal_handoff"] == fresh_form["handoff"]
 
 
 @pytest.mark.parametrize(
