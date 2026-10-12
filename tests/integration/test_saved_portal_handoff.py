@@ -36,7 +36,7 @@ def test_form_preparation_cannot_overwrite_a_newer_saved_proposal(
         }
         session.commit()
     trip_updated_at = trip.updated_at
-    newer_state = {}
+    newer_state: dict[str, object] = {}
 
     def save_newer_proposal_while_building_form(snapshot):
         with get_session_factory()() as another_session:

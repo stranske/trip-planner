@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import QueryParams
 from sqlalchemy import select
 
 from tests.app.tpp_intercept import seed_policy
@@ -794,7 +795,7 @@ def test_production_handoff_rejects_query_facts_before_preparing_a_form(
             guarded.setattr(
                 "trip_planner.app.services.proposal.build_portal_fields", unexpected_mapping
             )
-            rejected = tpp_client.post(f"{path}/handoff", params=query, json={})
+            rejected = tpp_client.post(f"{path}/handoff", params=QueryParams(tuple(query)), json={})
 
         assert rejected.status_code == 422
         assert rejected.json() == {"detail": "Prepare the portal handoff without query parameters."}
