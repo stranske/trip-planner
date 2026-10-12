@@ -125,6 +125,32 @@ def test_portal_action_url_rejects_empty_userinfo(monkeypatch, origin) -> None:
         portal_action_url()
 
 
+@pytest.mark.parametrize("setting", ["TPP_PORTAL_BASE_URL", "TPP_BASE_URL"])
+@pytest.mark.parametrize(
+    ("environment", "origin"),
+    [("production", "https://tpp.example"), ("test", "http://127.0.0.1")],
+)
+@pytest.mark.parametrize("port", [0, 21, 22, 25, 6000, 6667, 10080])
+def test_portal_action_url_rejects_ports_blocked_by_native_browser_forms(
+    monkeypatch, setting, environment, origin, port
+) -> None:
+    monkeypatch.delenv("TPP_PORTAL_BASE_URL", raising=False)
+    monkeypatch.delenv("TPP_BASE_URL", raising=False)
+    monkeypatch.setenv("TRIP_PLANNER_ENV", environment)
+    monkeypatch.setenv(setting, f"{origin}:{port}")
+
+    with pytest.raises(TPPPortalHandoffConfigurationError, match="browser.*port"):
+        portal_action_url()
+
+
+@pytest.mark.parametrize("port", [80, 443, 8000, 8080, 8443, 6664, 6670, 10081, 65535])
+def test_portal_action_url_preserves_allowed_explicit_ports(monkeypatch, port) -> None:
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", f"https://tpp.example:{port}")
+
+    assert portal_action_url() == f"https://tpp.example:{port}/portal/handoff"
+
+
 @pytest.mark.parametrize(
     "origin",
     [

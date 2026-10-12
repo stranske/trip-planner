@@ -11,6 +11,97 @@ from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 PORTAL_HANDOFF_SCHEMA_VERSION = "tpp-portal-handoff/v1"
 
+# HTTP(S) native form navigations use Fetch's bad-port rules. A syntactically
+# valid origin on one of these ports cannot receive the prepared browser POST.
+# Source: https://fetch.spec.whatwg.org/#port-blocking
+_BROWSER_BLOCKED_PORTS = frozenset(
+    {
+        0,
+        1,
+        7,
+        9,
+        11,
+        13,
+        15,
+        17,
+        19,
+        20,
+        21,
+        22,
+        23,
+        25,
+        37,
+        42,
+        43,
+        53,
+        69,
+        77,
+        79,
+        87,
+        95,
+        101,
+        102,
+        103,
+        104,
+        109,
+        110,
+        111,
+        113,
+        115,
+        117,
+        119,
+        123,
+        135,
+        137,
+        139,
+        143,
+        161,
+        179,
+        389,
+        427,
+        465,
+        512,
+        513,
+        514,
+        515,
+        526,
+        530,
+        531,
+        532,
+        540,
+        548,
+        554,
+        556,
+        563,
+        587,
+        601,
+        636,
+        989,
+        990,
+        993,
+        995,
+        1719,
+        1720,
+        1723,
+        2049,
+        3659,
+        4045,
+        4190,
+        5060,
+        5061,
+        6000,
+        6566,
+        6665,
+        6666,
+        6667,
+        6668,
+        6669,
+        6679,
+        6697,
+        10080,
+    }
+)
+
 
 class TPPPortalHandoffConfigurationError(ValueError):
     """The configured portal origin cannot safely receive a browser handoff."""
@@ -90,7 +181,7 @@ def portal_action_url() -> str:
     try:
         parsed = urlsplit(raw)
         # Accessing port validates its syntax and range; urlsplit alone does not.
-        _ = parsed.port
+        port = parsed.port
     except ValueError as error:
         raise TPPPortalHandoffConfigurationError(
             "Travel-Plan-Permission portal handoff must be configured as a valid origin."
@@ -113,6 +204,10 @@ def portal_action_url() -> str:
     ):
         raise TPPPortalHandoffConfigurationError(
             "Travel-Plan-Permission portal handoff must be configured as an origin only."
+        )
+    if port in _BROWSER_BLOCKED_PORTS:
+        raise TPPPortalHandoffConfigurationError(
+            "Travel-Plan-Permission portal handoff cannot use a browser-blocked port."
         )
     origin = urlunsplit((parsed.scheme, parsed.netloc, "", "", "")).rstrip("/")
     return f"{origin}/portal/handoff"

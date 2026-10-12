@@ -499,7 +499,16 @@ def test_invalid_form_preserves_saved_handoff_and_allows_retry(
 @pytest.mark.parametrize("already_prepared", [False, True])
 @pytest.mark.parametrize("setting", ["TPP_PORTAL_BASE_URL", "TPP_BASE_URL"])
 @pytest.mark.parametrize(
-    "hostname", ["tpp。123", "１２７．１", "tpp.example\u200b", "[v1.tpp.example]"]
+    "hostname",
+    [
+        "tpp。123",
+        "１２７．１",
+        "tpp.example\u200b",
+        "[v1.tpp.example]",
+        "tpp.example:0",
+        "tpp.example:25",
+        "[::1]:6000",
+    ],
 )
 def test_browser_invalid_origin_preserves_saved_verdict_until_valid_configuration_retry(
     saved_portal_handoff,
