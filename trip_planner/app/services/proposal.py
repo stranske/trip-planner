@@ -532,6 +532,11 @@ def _public_portal_handoff(value: dict[str, Any] | None) -> dict[str, Any] | Non
         "status",
         "manager_submission_status",
         "manager_decision",
+        "manager_decision_at",
+        "receipt_status",
+        "receipt_observed_at",
+        "last_manager_submission_status",
+        "last_manager_decision",
     }
     return {key: value.get(key) for key in public_keys if key in value}
 
@@ -901,13 +906,18 @@ def _bind_portal_handoff_evaluation_snapshot(
         and bound_hash == snapshot_hash(current_snapshot)
     )
     record.portal_handoff = {
+        **(stored_handoff if still_prepared else {}),
         "schema_version": PORTAL_HANDOFF_SCHEMA_VERSION,
         "source_snapshot_hash": bound_hash,
         "source_snapshot": snapshot,
         "prepared_at": stored_handoff.get("prepared_at") if still_prepared else None,
         "status": "prepared" if still_prepared else "eligible",
-        "manager_submission_status": "unknown",
-        "manager_decision": None,
+        "manager_submission_status": (
+            stored_handoff.get("manager_submission_status", "unknown")
+            if still_prepared
+            else "unknown"
+        ),
+        "manager_decision": stored_handoff.get("manager_decision") if still_prepared else None,
     }
 
 
@@ -1544,15 +1554,30 @@ def get_workspace_proposal_payload(
     user: AuthenticatedUser,
     trip_id: str,
 ) -> dict[str, Any]:
-    _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    trip_record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     proposal_state = _get_latest_proposal_state(db_session, trip_id=trip_id, user_id=user.user_id)
     if proposal_state is None:
         return {
             "proposal_state": None,
             "summary": {"trip_id": trip_id, "status": "missing"},
         }
+    serialized = _serialize_proposal_state(proposal_state)
+    handoff = serialized.get("portal_handoff")
+    if handoff and handoff.get("receipt_status") == "current":
+        current_snapshot = _portal_handoff_snapshot(
+            record=proposal_state,
+            trip_record=trip_record,
+            user=user,
+            trip_prices=read_trip_prices_for_owner(
+                db_session, user_id=user.user_id, trip_id=trip_id
+            ),
+        )
+        if snapshot_hash(current_snapshot) != handoff.get("source_snapshot_hash"):
+            handoff.update(
+                receipt_status="stale", manager_submission_status="unknown", manager_decision=None
+            )
     return {
-        "proposal_state": _serialize_proposal_state(proposal_state),
+        "proposal_state": serialized,
         "summary": dict(proposal_state.summary),
     }
 
@@ -1872,6 +1897,10 @@ def prepare_workspace_proposal_handoff(
         )
 
     stored = dict(record.portal_handoff or {})
+    if stored.get("producer_binding"):
+        raise WorkspaceProposalHandoffNotReadyError(
+            "This owner-bound handoff must use its authenticated browser review session."
+        )
     if stored.get("status") not in {"eligible", "prepared"} or not stored.get("source_snapshot"):
         raise WorkspaceProposalHandoffNotReadyError(
             "Run the policy check again to bind this proposal to the portal handoff."

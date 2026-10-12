@@ -1,4 +1,5 @@
 import os
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
@@ -16,6 +17,7 @@ from trip_planner.app.schemas.proposal import (
 )
 from trip_planner.app.services.auth import AuthenticatedUser, require_authenticated_user
 from trip_planner.app.services.policy import WorkspacePolicyNotFoundError
+from trip_planner.app.services.portal_receipt import refresh_workspace_portal_receipt
 from trip_planner.app.services.proposal import (
     WorkspacePolicyMissingForSubmissionError,
     WorkspaceProposalHandoffNotReadyError,
@@ -125,6 +127,38 @@ def prepare_workspace_proposal_portal_handoff(
     # The short-lived form payload contains traveler facts and must not be cached.
     response.headers["Cache-Control"] = "no-store"
     return WorkspaceProposalHandoffResponse.model_validate(result)
+
+
+@router.post(
+    "/workspace/{trip_id}/proposal/handoff/status",
+    response_model=WorkspaceProposalResponse,
+    dependencies=[Depends(_require_json_handoff)],
+)
+def refresh_workspace_proposal_portal_receipt(
+    trip_id: str,
+    request: Request,
+    response: Response,
+    _payload: WorkspaceProposalHandoffRequest,
+    user: Annotated[AuthenticatedUser, Depends(require_authenticated_user)],
+    db_session: Annotated[Session, Depends(get_db_session)],
+) -> WorkspaceProposalResponse:
+    try:
+        result = refresh_workspace_portal_receipt(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            client=getattr(request.app.state, "portal_receipt_client", None),
+        )
+    except WorkspaceProposalNotFoundError as error:
+        raise public_http_error(
+            error, status_code=404, message="The requested workspace proposal was not found."
+        ) from error
+    except WorkspaceProposalHandoffNotReadyError as error:
+        raise public_http_error(
+            error, status_code=409, message="Prepare an owner-bound portal handoff first."
+        ) from error
+    response.headers["Cache-Control"] = "no-store"
+    return WorkspaceProposalResponse.model_validate(result)
 
 
 @router.put("/workspace/{trip_id}/proposal", response_model=WorkspaceProposalResponse)
