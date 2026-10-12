@@ -748,6 +748,83 @@ def test_production_handoff_rejects_overrides_without_mutating_the_saved_verdict
     assert operations == ["poll_execution_status", "fetch_evaluation_result"]
 
 
+@pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
+@pytest.mark.parametrize("already_prepared", [False, True], ids=["first-handoff", "retry-handoff"])
+@pytest.mark.parametrize(
+    "query",
+    [
+        [("action_url", "https://caller.example/portal/handoff")],
+        [("fields", json.dumps({"traveler_name": "Caller José & another traveler"}))],
+        [("traveler_name", "Caller José & another traveler")],
+        [("action_url", ""), ("action_url", "https://caller.example/portal/handoff")],
+    ],
+    ids=["destination", "fields", "traveler-fact", "duplicate-destination"],
+)
+def test_production_handoff_rejects_query_facts_before_preparing_a_form(
+    tpp_client: TestClient,
+    submitted_trip: str,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+    already_prepared: bool,
+    query: list[tuple[str, str]],
+) -> None:
+    operations = _install_verdict_transport(monkeypatch, outcome)
+    path = f"/api/workspace/{submitted_trip}/proposal"
+    assert tpp_client.post(f"{path}/refresh").status_code == 200
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", "https://traveler-portal.example")
+    if already_prepared:
+        assert tpp_client.post(f"{path}/handoff", json={}).status_code == 200
+
+    before = tpp_client.get(path).json()
+    with get_session_factory()() as session:
+        record = session.scalar(
+            select(PersistedProposalState).where(PersistedProposalState.trip_id == submitted_trip)
+        )
+        trip = session.get(PersistedTrip, submitted_trip)
+        assert record is not None and trip is not None
+        saved_handoff = deepcopy(record.portal_handoff)
+        saved_verdict = deepcopy(record.evaluation_record)
+        updated_at = trip.updated_at
+
+        def unexpected_mapping(snapshot):
+            pytest.fail("Caller query facts must be rejected before generating traveler fields")
+
+        with monkeypatch.context() as guarded:
+            guarded.setattr(
+                "trip_planner.app.services.proposal.build_portal_fields", unexpected_mapping
+            )
+            rejected = tpp_client.post(f"{path}/handoff", params=query, json={})
+
+        assert rejected.status_code == 422
+        assert rejected.json() == {"detail": "Prepare the portal handoff without query parameters."}
+        assert "Caller" not in rejected.text
+        assert "caller.example" not in rejected.text
+        session.expire_all()
+        assert record.portal_handoff == saved_handoff
+        assert record.evaluation_record == saved_verdict
+        assert trip.updated_at == updated_at
+
+    assert tpp_client.get(path).json() == before
+    # The rejected URL cannot poison a subsequent empty request or change its routing.
+    retried = tpp_client.post(f"{path}/handoff", json={})
+    assert retried.status_code == 200
+    assert retried.headers["cache-control"] == "no-store"
+    form = retried.json()
+    assert form["action_url"] == "https://traveler-portal.example/portal/handoff"
+    assert form["method"] == "POST"
+    assert form["fields"]["traveler_name"] == "Dana Chen"
+    assert f"status={outcome}" in form["fields"]["notes"]
+    assert form["handoff"]["source_snapshot_hash"] == (
+        before["proposal_state"]["portal_handoff"]["source_snapshot_hash"]
+    )
+    assert form["handoff"]["manager_submission_status"] == "unknown"
+    assert form["handoff"]["manager_decision"] is None
+    if already_prepared:
+        assert form["handoff"] == before["proposal_state"]["portal_handoff"]
+    assert operations == ["poll_execution_status", "fetch_evaluation_result"]
+
+
 def test_production_handoff_uses_requested_trip_not_travelers_latest_policy_check(
     tpp_client: TestClient, submitted_trip: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
