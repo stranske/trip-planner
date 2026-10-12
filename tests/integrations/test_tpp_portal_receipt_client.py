@@ -267,7 +267,7 @@ def test_preparation_rejects_uncorrelated_or_malformed_success(client_setup, mon
     assert "Private traveler" not in str(rejected.value)
 
 
-@pytest.mark.parametrize("code", [302, 401, 403, 409, 422, 500, 503])
+@pytest.mark.parametrize("code", [302, 400, 401, 403, 409, 422, 500, 503])
 def test_preparation_failure_is_sanitized_without_retrying(client_setup, monkeypatch, code):
     client, identity, binding = client_setup
     calls = []
@@ -285,7 +285,7 @@ def test_preparation_failure_is_sanitized_without_retrying(client_setup, monkeyp
             snapshot_version=binding.snapshot_version,
             answers={"traveler_name": "Private traveler"},
         )
-    assert rejected.value.status_code == (code if code in {401, 403, 409, 422, 503} else 502)
+    assert rejected.value.status_code == (code if code in {400, 401, 403, 409, 422, 503} else 502)
     assert str(rejected.value) == "The portal handoff could not be prepared."
     assert rejected.value.__suppress_context__
     assert private_body.closed

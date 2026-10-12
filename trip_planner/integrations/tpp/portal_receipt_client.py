@@ -59,9 +59,11 @@ class PortalPreparationError(TPPTransportError):
     """Preparation failed without establishing a producer binding or receipt."""
 
     def __init__(self, status_code: int | None) -> None:
+        # A rejected draft is a completed producer validation response, not a
+        # broken connection. Preserve it without exposing the producer's body.
         super().__init__(
             "The portal handoff could not be prepared.",
-            status_code=status_code if status_code in {401, 403, 409, 422, 503} else 502,
+            status_code=status_code if status_code in {400, 401, 403, 409, 422, 503} else 502,
         )
 
 

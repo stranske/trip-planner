@@ -119,9 +119,49 @@ def test_production_route_uses_configured_owner_client_and_saved_facts(saved_por
     )
 
 
-@pytest.mark.parametrize("failure_stage", ["answers", "browser"])
+@pytest.mark.parametrize("status_code", [400, 422])
+def test_production_route_preserves_validation_refusal_and_can_retry(
+    saved_portal_handoff, status_code
+):
+    session, user, trip_id, original = saved_portal_handoff
+    client = PreparationClient()
+    client.failure = PortalPreparationError(status_code)
+    record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+    before = deepcopy(record.portal_handoff)
+    revision = record.updated_at
+    app = create_app(portal_receipt_client=client)
+    app.dependency_overrides[require_authenticated_user] = lambda: user
+    app.dependency_overrides[get_db_session] = lambda: session
+
+    with TestClient(app) as browser:
+        rejected = browser.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+        assert rejected.status_code == status_code
+        assert set(rejected.json()) == {"detail"}
+        assert user.display_name not in rejected.text
+        assert "source_snapshot" not in rejected.text
+        assert not client.browser_bindings
+        session.expire_all()
+        assert record.portal_handoff == before and record.updated_at == revision
+
+        # A corrected producer response may reuse the same saved policy facts;
+        # the refusal must not establish authority or consume the retry key.
+        client.failure = None
+        accepted = browser.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert accepted.status_code == 200
+    assert accepted.headers["cache-control"] == "no-store"
+    assert accepted.json()["action_url"] == "https://tpp.example/portal/handoff/receipt"
+    assert accepted.json()["method"] == "POST"
+    assert accepted.json()["handoff"]["manager_submission_status"] == "unknown"
+    assert accepted.json()["handoff"]["manager_decision"] is None
+    assert client.preparations[0] == client.preparations[1]
+    assert client.preparations[0][2] == original["fields"]
+
+
+@pytest.mark.parametrize(
+    ("failure_stage", "status_code"), [("answers", 400), ("answers", 422), ("browser", 503)]
+)
 def test_failed_preparation_is_atomic_and_same_snapshot_retries_same_key(
-    saved_portal_handoff, failure_stage
+    saved_portal_handoff, failure_stage, status_code
 ):
     session, _user, trip_id, _ = saved_portal_handoff
     client = PreparationClient()
@@ -129,12 +169,12 @@ def test_failed_preparation_is_atomic_and_same_snapshot_retries_same_key(
     before = deepcopy(record.portal_handoff)
     revision = record.updated_at
     if failure_stage == "answers":
-        client.failure = PortalPreparationError(422)
+        client.failure = PortalPreparationError(status_code)
     else:
-        client.browser_failure = PortalPreparationError(503)
+        client.browser_failure = PortalPreparationError(status_code)
     with pytest.raises(HTTPException) as failure:
         prepare(saved_portal_handoff, client)
-    assert failure.value.status_code == (422 if failure_stage == "answers" else 503)
+    assert failure.value.status_code == status_code
     session.expire_all()
     assert record.portal_handoff == before and record.updated_at == revision
     client.failure = client.browser_failure = None
