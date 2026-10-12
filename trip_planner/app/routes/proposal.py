@@ -56,10 +56,14 @@ def _fixture_response_enabled() -> bool:
 
 
 def _require_json_handoff(request: Request) -> None:
-    """Keep the preparation request separate from the outgoing native form POST."""
+    """Accept only JSON without caller-supplied facts or routing in the URL."""
     media_type = request.headers.get("content-type", "").split(";", maxsplit=1)[0].strip().lower()
     if media_type != "application/json":
         raise HTTPException(status_code=415, detail="Prepare the portal handoff using JSON.")
+    if request.query_params:
+        raise HTTPException(
+            status_code=422, detail="Prepare the portal handoff without query parameters."
+        )
 
 
 @router.get("/workspace/{trip_id}/proposal", response_model=WorkspaceProposalResponse)
