@@ -113,3 +113,23 @@ checkout and installed frontend dependencies are absent here. This run changed
 no protected files. Staging failed because the shared `.git` is read-only;
 the source commit, patch and bundle are preserved under `/tmp` for application
 by the owning automation.
+
+## Closer producer-pin audit (2026-10-12)
+
+The protected cross-repo smoke pin now selects accepted producer PR1659 at
+`3010e3e39eb0ae039a1e648f957d8e87441d8e2a`, replacing its pre-receipt parent.
+On consumer head `3f37d9d0cc39bb9768fb9b1ffd954cb85629b7c4`, the three focused
+preparation/workspace-receipt/client suites passed 113 tests. The existing real
+portal handoff contract and smoke-workflow suite passed 41 tests against that
+exact producer checkout, with `TPP_PINNED_REF` verified by the checkout guard.
+
+These checks establish preparation wiring and compatibility with the accepted
+producer. The existing real contract exercises the legacy browser submission
+and intentionally leaves consumer status unknown; it does not test the new
+owner-authenticated decision/status round trip. Full acceptance stays OPEN:
+traveler destination ZIP/booking-date collection, trusted individual identity
+provisioning, and the actual two-app receipt round trip remain required. The
+empty request schema forbids those traveler answer fields today, and default
+`create_app()` has no owner client. Neither a green smoke nor checked task
+boxes establish these missing capabilities. No production credentials or
+external provider calls were used in this audit.
