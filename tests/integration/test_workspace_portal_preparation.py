@@ -2,7 +2,7 @@
 
 import io
 import json
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from copy import deepcopy
 from dataclasses import replace
 from hashlib import sha256
@@ -37,7 +37,11 @@ from trip_planner.integrations.tpp.portal_receipt_client import (
     PortalOwnerIdentity,
     PortalPreparationError,
 )
-from trip_planner.persistence.db import get_db_session, get_session_factory
+from trip_planner.persistence.db import (
+    get_db_session,
+    get_session_factory,
+    reset_database_state,
+)
 from trip_planner.persistence.models.account import UserAccount
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
@@ -321,8 +325,9 @@ def test_real_preparation_transport_refusal_never_creates_a_browser_handoff(
 
 
 @pytest.mark.parametrize("decision", ["approved", "rejected", "changes_requested"])
+@pytest.mark.parametrize("restart", [False, True], ids=["same-app", "restarted-app"])
 def test_real_owner_client_prepares_and_returns_correlated_status_through_live_session(
-    saved_portal_handoff, monkeypatch, decision
+    saved_portal_handoff, monkeypatch, decision, restart
 ):
     """Exercise consumer HTTP serialization; synthetic replies are not producer acceptance."""
     session, user, trip_id, original = saved_portal_handoff
@@ -399,7 +404,8 @@ def test_real_owner_client_prepares_and_returns_correlated_status_through_live_s
     app = create_app(portal_receipt_client=client)
     assert not app.dependency_overrides
     path = f"/api/workspace/{trip_id}/proposal/handoff"
-    with TestClient(app) as browser:
+    with ExitStack() as browsers:
+        browser = browsers.enter_context(TestClient(app))
         browser.cookies.set(SESSION_COOKIE_NAME, browser_session)
         prepared = browser.post(path, json={})
         assert prepared.status_code == 200
@@ -409,6 +415,23 @@ def test_real_owner_client_prepares_and_returns_correlated_status_through_live_s
         assert prepared.headers["cache-control"] == "no-store"
         assert form["handoff"]["manager_submission_status"] == "unknown"
         assert form["handoff"]["manager_decision"] is None
+
+        if restart:
+            proposal_path = path.removesuffix("/handoff")
+            before_restart = browser.get(proposal_path).json()
+            browsers.close()
+            session.close()
+            reset_database_state()
+            # Recreate both app and transport: the producer binding and local
+            # session must come from disk, not an old dependency or ORM cache.
+            client = OwnerPortalReceiptClient(resolve_owner)
+            monkeypatch.setattr(client._opener, "open", exchange)
+            restarted_app = create_app(portal_receipt_client=client)
+            assert not restarted_app.dependency_overrides
+            browser = browsers.enter_context(TestClient(restarted_app))
+            browser.cookies.set(SESSION_COOKIE_NAME, browser_session)
+            assert browser.get(proposal_path).json() == before_restart
+            assert len(requests) == 2
 
         for state in ("submitted", "pending_review", "decision_recorded"):
             receipt.update(state=state, request_id="request-1", execution_id="execution-1")
@@ -452,13 +475,14 @@ def test_real_owner_client_prepares_and_returns_correlated_status_through_live_s
         "GET",
         "POST",
     ]
-    session.expire_all()
-    assert record.portal_handoff["source_snapshot"] == snapshot
-    assert record.portal_handoff["producer_owner"] == identity.owner_binding()
-    assert record.portal_handoff["producer_binding"]["snapshot_version"] == source_hash
-    assert record.portal_handoff["receipt"]["decision"] == decision
-    assert all(capability not in str(record.portal_handoff) for capability in capabilities)
-    assert identity.authorization not in str(record.portal_handoff)
+    with get_session_factory()() as reloaded_session:
+        record = reloaded_session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+        assert record.portal_handoff["source_snapshot"] == snapshot
+        assert record.portal_handoff["producer_owner"] == identity.owner_binding()
+        assert record.portal_handoff["producer_binding"]["snapshot_version"] == source_hash
+        assert record.portal_handoff["receipt"]["decision"] == decision
+        assert all(capability not in str(record.portal_handoff) for capability in capabilities)
+        assert identity.authorization not in str(record.portal_handoff)
 
 
 @pytest.mark.parametrize("already_bound", [False, True], ids=["first-preparation", "bound-retry"])
