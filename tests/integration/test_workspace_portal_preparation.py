@@ -2,10 +2,12 @@
 
 import io
 import json
+from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import replace
 from hashlib import sha256
 from urllib import error
+from urllib.parse import parse_qs, quote, urlsplit
 from uuid import uuid4
 
 import pytest
@@ -16,7 +18,11 @@ from tests.integration.test_workspace_portal_receipt import ReceiptClient, decid
 from trip_planner.app.main import create_app
 from trip_planner.app.routes.proposal import prepare_workspace_proposal_portal_handoff
 from trip_planner.app.schemas.proposal import WorkspaceProposalHandoffRequest
-from trip_planner.app.services.auth import require_authenticated_user
+from trip_planner.app.services.auth import (
+    SESSION_COOKIE_NAME,
+    create_session_for_user,
+    require_authenticated_user,
+)
 from trip_planner.app.services.portal_receipt import refresh_workspace_portal_receipt
 from trip_planner.app.services.proposal import (
     _bind_portal_handoff_evaluation_snapshot,
@@ -32,6 +38,7 @@ from trip_planner.integrations.tpp.portal_receipt_client import (
     PortalPreparationError,
 )
 from trip_planner.persistence.db import get_db_session, get_session_factory
+from trip_planner.persistence.models.account import UserAccount
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.persistence.models.trip_price import PersistedTripPrice
@@ -311,6 +318,147 @@ def test_real_preparation_transport_refusal_never_creates_a_browser_handoff(
     assert record.updated_at == revision
     assert trip.updated_at == trip_revision
     assert get_workspace_proposal_payload(session, user=user, trip_id=trip_id) == public_before
+
+
+@pytest.mark.parametrize("decision", ["approved", "rejected", "changes_requested"])
+def test_real_owner_client_prepares_and_returns_correlated_status_through_live_session(
+    saved_portal_handoff, monkeypatch, decision
+):
+    """Exercise consumer HTTP serialization; synthetic replies are not producer acceptance."""
+    session, user, trip_id, original = saved_portal_handoff
+    record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+    snapshot = deepcopy(record.portal_handoff["source_snapshot"])
+    source_hash = record.portal_handoff["source_snapshot_hash"]
+    browser_session, _ = create_session_for_user(
+        session, user=session.get(UserAccount, user.user_id)
+    )
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", "https://traveler-portal.example:8443")
+    monkeypatch.setenv("TPP_BASE_URL", "https://policy-api.example")
+    identity = PortalOwnerIdentity("oidc:tenant-a", "traveler-a", "Bearer " + uuid4().hex)
+    resolved_users, requests, capabilities = [], [], []
+    handoff_id = "planner:" + sha256(f"{trip_id}:{source_hash}".encode()).hexdigest()
+    receipt = {
+        "handoff_id": handoff_id,
+        "snapshot_version": source_hash,
+        "snapshot_sha256": sha256(json.dumps(original["fields"]).encode()).hexdigest(),
+        "draft_id": "draft-1",
+        "contract_version": "portal-receipt/v1",
+        "state": "prepared",
+        "prepared_at": "2026-10-10T12:00:00Z",
+        "observed_at": "2026-10-10T12:30:00Z",
+        "request_id": None,
+        "execution_id": None,
+        "review_id": None,
+        "submitted_at": None,
+        "decision": None,
+        "decision_at": None,
+    }
+
+    def resolve_owner(user_id):
+        resolved_users.append(user_id)
+        return identity
+
+    client = OwnerPortalReceiptClient(resolve_owner)
+
+    @contextmanager
+    def exchange(outgoing, *, timeout):
+        parsed = urlsplit(outgoing.full_url)
+        assert parsed.scheme == "https" and parsed.netloc == "traveler-portal.example:8443"
+        assert outgoing.get_header("Authorization") == identity.authorization
+        assert timeout == 15
+        method = outgoing.get_method()
+        requests.append((method, parsed.path))
+        base_path = "/api/planner/portal-handoffs"
+        bound_path = f"{base_path}/{quote(handoff_id, safe='')}"
+        if parsed.path == base_path:
+            assert method == "POST" and not parsed.query
+            assert json.loads(outgoing.data) == {
+                "handoff_id": handoff_id,
+                "snapshot_version": source_hash,
+                "answers": original["fields"],
+            }
+            assert outgoing.get_header("Content-type") == "application/json; charset=utf-8"
+            payload = receipt
+        else:
+            assert parse_qs(parsed.query) == {"snapshot_version": [source_hash]}
+            if parsed.path == f"{bound_path}/browser-session":
+                assert method == "POST" and outgoing.data == b""
+                capabilities.append(uuid4().hex)
+                payload = {"draft_id": receipt["draft_id"], "handoff_token": capabilities[-1]}
+            else:
+                assert parsed.path == bound_path and method == "GET" and outgoing.data is None
+                payload = receipt
+        with io.BytesIO(json.dumps(payload).encode()) as response:
+            response.status = 200
+            yield response
+
+    # Keep the actual owner client, route dependencies, session authentication,
+    # persistence and receipt validators. Replace only the producer network boundary.
+    monkeypatch.setattr(client._opener, "open", exchange)
+    app = create_app(portal_receipt_client=client)
+    assert not app.dependency_overrides
+    path = f"/api/workspace/{trip_id}/proposal/handoff"
+    with TestClient(app) as browser:
+        browser.cookies.set(SESSION_COOKIE_NAME, browser_session)
+        prepared = browser.post(path, json={})
+        assert prepared.status_code == 200
+        form = prepared.json()
+        assert form["action_url"] == "https://traveler-portal.example:8443/portal/handoff/receipt"
+        assert form["method"] == "POST" and form["fields"] == {"handoff_token": capabilities[0]}
+        assert prepared.headers["cache-control"] == "no-store"
+        assert form["handoff"]["manager_submission_status"] == "unknown"
+        assert form["handoff"]["manager_decision"] is None
+
+        for state in ("submitted", "pending_review", "decision_recorded"):
+            receipt.update(state=state, request_id="request-1", execution_id="execution-1")
+            if state != "submitted":
+                receipt.update(review_id="review-1", submitted_at="2026-10-10T12:10:00Z")
+            if state == "decision_recorded":
+                receipt.update(decision=decision, decision_at="2026-10-10T12:20:00Z")
+            refreshed = browser.post(f"{path}/status", json={})
+            assert refreshed.status_code == 200
+            assert refreshed.headers["cache-control"] == "no-store"
+            public = refreshed.json()["proposal_state"]["portal_handoff"]
+            assert public["receipt_status"] == "current"
+            assert public["manager_submission_status"] == state
+            assert public["manager_decision"] == (
+                decision if state == "decision_recorded" else None
+            )
+            assert public["source_snapshot_hash"] == source_hash
+            assert not {"producer_owner", "producer_binding", "receipt", "source_snapshot"} & (
+                public.keys()
+            )
+            assert identity.authorization not in refreshed.text
+            assert all(capability not in refreshed.text for capability in capabilities)
+
+        retried = browser.post(path, json={})
+        assert retried.status_code == 200
+        assert retried.json()["fields"] == {"handoff_token": capabilities[1]}
+        assert retried.json()["handoff"]["manager_decision"] == decision
+        assert retried.json()["handoff"]["prepared_at"] == form["handoff"]["prepared_at"]
+        assert (
+            browser.get(path.removesuffix("/handoff")).json()["proposal_state"]["portal_handoff"]
+            == retried.json()["handoff"]
+        )
+
+    assert resolved_users == [user.user_id] * 5
+    assert [method for method, _ in requests] == [
+        "POST",
+        "POST",
+        "GET",
+        "GET",
+        "GET",
+        "GET",
+        "POST",
+    ]
+    session.expire_all()
+    assert record.portal_handoff["source_snapshot"] == snapshot
+    assert record.portal_handoff["producer_owner"] == identity.owner_binding()
+    assert record.portal_handoff["producer_binding"]["snapshot_version"] == source_hash
+    assert record.portal_handoff["receipt"]["decision"] == decision
+    assert all(capability not in str(record.portal_handoff) for capability in capabilities)
+    assert identity.authorization not in str(record.portal_handoff)
 
 
 @pytest.mark.parametrize("already_bound", [False, True], ids=["first-preparation", "bound-retry"])
