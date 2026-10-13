@@ -172,6 +172,78 @@ def test_policy_tab_verdict_controls_browser_handoff(
 
 
 @pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
+@pytest.mark.parametrize("rename_stage", ["submitted", "evaluated", "prepared"])
+def test_handoff_requires_a_new_policy_check_when_the_saved_traveler_name_changes(
+    tpp_client: TestClient,
+    submitted_trip: str,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+    rename_stage: str,
+) -> None:
+    operations = _install_verdict_transport(monkeypatch, outcome)
+    path = f"/api/workspace/{submitted_trip}/proposal"
+    if rename_stage != "submitted":
+        assert tpp_client.post(f"{path}/refresh").status_code == 200
+    if rename_stage == "prepared":
+        assert tpp_client.post(f"{path}/handoff", json={}).status_code == 200
+    before = tpp_client.get(path).json()
+    original_hash = before["proposal_state"]["portal_handoff"]["source_snapshot_hash"]
+
+    # Account edits keep the same owner and live session, but the outgoing form
+    # must never combine a new traveler name with the prior evaluated snapshot.
+    current_name = "Dana José Chen & Partners"
+    with get_session_factory()() as session:
+        proposal = session.get(PersistedProposalState, f"proposal-state:{submitted_trip}")
+        assert proposal is not None
+        account = session.get(UserAccount, proposal.user_id)
+        assert account is not None
+        account.display_name = current_name
+        session.commit()
+
+    def unexpected_mapping(snapshot):
+        pytest.fail("Changed traveler facts must be rejected before form mapping")
+
+    with monkeypatch.context() as stale_attempt:
+        stale_attempt.setattr(
+            "trip_planner.app.services.proposal.build_portal_fields", unexpected_mapping
+        )
+        assert tpp_client.post(f"{path}/handoff", json={}).status_code == 409
+        assert tpp_client.get(path).json() == before
+
+        # Reading the old execution's verdict must not rebind its name, including
+        # a rename between policy submission and the first evaluation refresh.
+        assert tpp_client.post(f"{path}/refresh").status_code == 200
+        refreshed = tpp_client.get(path).json()
+        assert tpp_client.post(f"{path}/handoff", json={}).status_code == 409
+        assert tpp_client.get(path).json() == refreshed
+        with get_session_factory()() as session:
+            proposal = session.get(PersistedProposalState, f"proposal-state:{submitted_trip}")
+            assert proposal is not None
+            assert proposal.portal_handoff is not None
+            assert proposal.portal_handoff["source_snapshot"]["traveler_name"] == "Dana Chen"
+
+    assert tpp_client.post(f"{path}/submit", json={}).status_code == 200
+    assert tpp_client.post(f"{path}/handoff", json={}).status_code == 409
+    assert tpp_client.post(f"{path}/refresh").status_code == 200
+    calls_before_handoff = list(operations)
+    prepared = tpp_client.post(f"{path}/handoff", json={})
+    assert prepared.status_code == 200
+    assert prepared.headers["cache-control"] == "no-store"
+    form = prepared.json()
+    assert form["action_url"] == "https://tpp.example/portal/handoff"
+    assert form["method"] == "POST"
+    assert form["fields"]["traveler_name"] == current_name
+    assert current_name not in form["action_url"]
+    assert f"status={outcome};" in form["fields"]["notes"]
+    assert form["handoff"]["source_snapshot_hash"] != original_hash
+    assert form["handoff"]["manager_submission_status"] == "unknown"
+    assert form["handoff"]["manager_decision"] is None
+    assert "source_snapshot" not in form["handoff"]
+    assert tpp_client.get(path).json()["proposal_state"]["portal_handoff"] == form["handoff"]
+    assert operations == calls_before_handoff
+
+
+@pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
 @pytest.mark.parametrize("already_prepared", [False, True], ids=["first-handoff", "retry-handoff"])
 def test_request_headers_cannot_route_or_rewrite_a_saved_verdict_handoff(
     tpp_client: TestClient,
