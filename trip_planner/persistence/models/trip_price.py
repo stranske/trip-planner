@@ -51,7 +51,9 @@ class PersistedTripPrice(Base):
     lowest_amount: Mapped[float | None] = mapped_column(Float(), nullable=True)
     #: The traveller's statement that they hold fare evidence (e.g. a screenshot) to give the
     #: approver. An attestation, not an attachment; sent as `fare_evidence_attached`.
-    evidence_attested: Mapped[bool] = mapped_column(Boolean(), default=False, server_default=false())
+    evidence_attested: Mapped[bool] = mapped_column(
+        Boolean(), default=False, server_default=false()
+    )
     #: Cabin booked (economy, premium_economy, business, first), from the traveller's quote.
     cabin_class: Mapped[str | None] = mapped_column(String(32), nullable=True)
     #: Longest flight's duration in hours, from the traveller's itinerary. Deliberately not the

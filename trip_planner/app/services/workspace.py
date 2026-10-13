@@ -12,10 +12,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from trip_planner.app.services.auth import AuthenticatedUser
-from trip_planner.app.services.trip_prices import (
-    build_trip_prices_payload,
-    read_trip_prices_for_owner,
-)
 from trip_planner.app.services.budget import (
     build_fixture_budget_payload,
     load_budget_payload_for_workspace,
@@ -41,6 +37,10 @@ from trip_planner.app.services.scenarios import (
     build_scenario_ranking_outputs,
     build_scenario_ranking_payload,
     build_workspace_scenario_search,
+)
+from trip_planner.app.services.trip_prices import (
+    build_trip_prices_payload,
+    read_trip_prices_for_owner,
 )
 from trip_planner.app.services.workspace_fixtures import (
     FIXTURES,
@@ -1594,11 +1594,15 @@ def _public_workspace_proposal_state(proposal_state: Any) -> dict[str, Any] | No
     # from "nothing evaluated yet" and ends up claiming compliance while blocking export.
     public_summary["has_saved_verdict"] = _proposal_state_has_saved_verdict(proposal_state)
 
+    handoff = proposal_state.get("portal_handoff")
+    public_handoff = deepcopy(handoff) if isinstance(handoff, dict) and handoff else None
+
     return {
         "proposal": public_proposal,
         "evaluation": {"evaluation_result": None},
         "summary": public_summary,
         "follow_up": _public_workspace_follow_up(proposal_state.get("follow_up")),
+        "portal_handoff": public_handoff,
     }
 
 

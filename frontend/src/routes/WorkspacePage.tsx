@@ -12,6 +12,9 @@ import {
   fetchPlannerSession,
   fetchTripPrices,
   fetchWorkspace,
+  prepareWorkspaceProposalHandoff,
+  submitWorkspacePortalHandoff,
+  refreshWorkspacePortalReceipt,
   recordWorkspaceSpendEvent,
   refreshWorkspaceProposalStatus,
   syncWorkspacePolicy,
@@ -53,6 +56,8 @@ import { PlannerSidePanelSurface } from "../components/planner/PlannerSidePanelS
 import { TripComparison } from "../components/trips/TripComparison";
 import { PlanningNotebookPanel } from "../components/workspace/PlanningNotebookPanel";
 import { ApprovalPacket } from "../components/workspace/ApprovalPacket";
+import { PortalTravelerAnswersForm, type PortalTravelerAnswers } from "../components/workspace/PortalTravelerAnswersForm";
+import { PortalHandoffStatus } from "../components/workspace/PortalHandoffStatus";
 import { PlannerPanel } from "../components/workspace/panels/PlannerPanel";
 import {
   derivePolicyPanelView,
@@ -76,6 +81,8 @@ import { PlanPanel } from "./workspace/PlanPanel";
 import { PolicyPanel as PolicyTabPanel } from "./workspace/PolicyPanel";
 import { formatMoney } from "../lib/money";
 import { NOT_MEASURED, describeAvailability } from "../lib/metrics";
+import { submitTppPortalHandoff } from "../lib/tppPortalHandoff";
+import { policyCheckStatusMessage } from "../lib/policyCheckStatus";
 
 type LoaderData = {
   workspace: Promise<WorkspaceData>;
@@ -1306,9 +1313,25 @@ function WorkspacePageContent({
   });
   const plannerSessionLoadVersion = useRef(0);
   const proposalRefreshVersion = useRef(0);
+  const portalHandoffAttempt = useRef<{ cancelled: boolean } | null>(null);
   const plannerConversationTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const previousWorkspaceRef = useRef(workspace);
   const isCompactLayout = useCompactWorkspaceLayout();
+  useEffect(() => {
+    // A delayed response belongs to the workspace that requested it. Leaving or
+    // reloading that workspace must not navigate the browser to its old form.
+    if (portalHandoffAttempt.current !== null) {
+      portalHandoffAttempt.current.cancelled = true;
+      portalHandoffAttempt.current = null;
+      setProposalBusyLabel(null);
+    }
+    return () => {
+      if (portalHandoffAttempt.current !== null) {
+        portalHandoffAttempt.current.cancelled = true;
+      }
+    };
+  }, [workspace]);
+
   useEffect(() => {
     const previousWorkspace = previousWorkspaceRef.current;
     previousWorkspaceRef.current = workspace;
@@ -1962,7 +1985,7 @@ function WorkspacePageContent({
         return;
       }
       if (nextProposalState == null) {
-        setProposalStatusMessage("Submission completed, but no approval packet was saved.");
+        setProposalStatusMessage("Policy check returned no saved result or approval packet.");
         return;
       }
       const nextLifecycle = deriveProposalLifecyclePresentation(
@@ -1987,11 +2010,7 @@ function WorkspacePageContent({
           ...(submittedViewModel !== undefined ? { view_model: submittedViewModel } : {}),
         }));
       });
-      setProposalStatusMessage(
-        nextLifecycle.state === "failed"
-          ? `Submission completed with a policy failure: ${nextLifecycle.summary}`
-          : `Submitted for approval: ${nextLifecycle.summary}`
-      );
+      setProposalStatusMessage(policyCheckStatusMessage(nextLifecycle));
     } catch (error) {
       if (refreshVersion === proposalRefreshVersion.current) {
         setProposalError(error instanceof Error ? error.message : "Approval submission failed.");
@@ -1999,6 +2018,88 @@ function WorkspacePageContent({
     } finally {
       if (refreshVersion === proposalRefreshVersion.current) {
         setProposalBusyLabel(null);
+      }
+    }
+  }
+
+  async function handlePortalReceiptRefresh(submit = false) {
+    if (portalHandoffAttempt.current !== null) portalHandoffAttempt.current.cancelled = true;
+    const attempt = { cancelled: false };
+    portalHandoffAttempt.current = attempt;
+    setProposalBusyLabel(submit ? "Submitting reviewed request…" : "Refreshing approver status…");
+    setProposalError(null);
+    try {
+      const result = await (submit ? submitWorkspacePortalHandoff(trip.trip_id) : refreshWorkspacePortalReceipt(trip.trip_id));
+      if (!attempt.cancelled) {
+        setCurrentWorkspace((current) => ({ ...current, proposal_state: result.proposal_state }));
+      }
+    } catch {
+      if (!attempt.cancelled) {
+        setCurrentWorkspace((current) => {
+          const handoff = current.proposal_state?.portal_handoff;
+          if (!current.proposal_state || !handoff) return current;
+          return {
+            ...current,
+            proposal_state: {
+              ...current.proposal_state,
+              portal_handoff: {
+                ...handoff,
+                receipt_status: "unavailable",
+                last_manager_submission_status:
+                  handoff.last_manager_submission_status ?? handoff.manager_submission_status,
+                last_manager_decision: handoff.last_manager_decision ?? handoff.manager_decision,
+                manager_submission_status: "unknown",
+                manager_decision: null,
+              },
+            },
+          };
+        });
+        setProposalError(
+          "Approver status could not be refreshed. Previously recorded state may be outdated."
+        );
+      }
+    } finally {
+      if (portalHandoffAttempt.current === attempt) {
+        portalHandoffAttempt.current = null;
+        if (!attempt.cancelled) setProposalBusyLabel(null);
+      }
+    }
+  }
+
+  async function handlePortalHandoff(answers?: PortalTravelerAnswers) {
+    if (portalHandoffAttempt.current !== null) {
+      portalHandoffAttempt.current.cancelled = true;
+    }
+    const attempt = { cancelled: false };
+    portalHandoffAttempt.current = attempt;
+    setProposalBusyLabel("Preparing approver portal handoff…");
+    setProposalError(null);
+    setProposalStatusMessage(null);
+    try {
+      const handoff = await prepareWorkspaceProposalHandoff(trip.trip_id, answers);
+      if (attempt.cancelled) {
+        return;
+      }
+      setCurrentWorkspace((current) => ({
+        ...current,
+        proposal_state:
+          current.proposal_state == null
+            ? null
+            : { ...current.proposal_state, portal_handoff: handoff.handoff },
+      }));
+      submitTppPortalHandoff(handoff);
+    } catch (error) {
+      if (!attempt.cancelled) {
+        setProposalError(
+          error instanceof Error ? error.message : "Approver portal handoff failed."
+        );
+      }
+    } finally {
+      if (portalHandoffAttempt.current === attempt) {
+        portalHandoffAttempt.current = null;
+        if (!attempt.cancelled) {
+          setProposalBusyLabel(null);
+        }
       }
     }
   }
@@ -2926,6 +3027,27 @@ function WorkspacePageContent({
                   >
                     Print / Export approval packet
                   </button>
+                  <PortalTravelerAnswersForm
+                    prepared={Boolean(currentWorkspace.proposal_state.portal_handoff?.receipt_status)}
+                    disabled={!hasSavedVerdict || Boolean(proposalBusyLabel)}
+                    onSubmit={(answers) => void handlePortalHandoff(answers)}
+                  />
+                  <p className="muted-copy">
+                    Continue in Travel-Plan-Permission to complete the request. Preparing this
+                    handoff does not submit it.
+                  </p>
+                  {currentWorkspace.proposal_state.portal_handoff?.receipt_status === "current" &&
+                    currentWorkspace.proposal_state.portal_handoff.manager_submission_status === "unknown" ? (
+                    <button type="button" className="primary-button" disabled={Boolean(proposalBusyLabel)}
+                      onClick={() => void handlePortalReceiptRefresh(true)}>
+                      Submit reviewed request
+                    </button>
+                  ) : null}
+                  <PortalHandoffStatus
+                    handoff={currentWorkspace.proposal_state.portal_handoff}
+                    busy={Boolean(proposalBusyLabel)}
+                    onRefresh={() => void handlePortalReceiptRefresh()}
+                  />
                   {!hasSavedVerdict ? (
                     <p className="muted-copy">A saved policy verdict is required before an approval packet can be printed.</p>
                   ) : null}

@@ -6,16 +6,20 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import select
+from pydantic import TypeAdapter, ValidationError
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from trip_planner._option_contracts import MoneyRange
+from trip_planner.app.schemas.proposal import (
+    WorkspaceProposalHandoffResponse,
+    WorkspaceProposalPrefillFields,
+)
 from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.app.services.trip_prices import (
     COMPONENT_LABELS,
     read_trip_prices_for_owner,
 )
-from trip_planner.persistence.models.trip_price import PersistedTripPrice
 from trip_planner.business import (
     ExceptionRequest,
     PolicyEvaluationResult,
@@ -46,11 +50,21 @@ from trip_planner.integrations.tpp import (
     TPPTransportError,
     tpp_transport_error_from_exception,
 )
+from trip_planner.integrations.tpp.portal_handoff import (
+    PORTAL_HANDOFF_SCHEMA_VERSION,
+    build_portal_fields,
+    portal_action_url,
+    snapshot_hash,
+)
+from trip_planner.integrations.tpp.portal_receipt_client import OwnerPortalReceiptClient
+from trip_planner.persistence.models.account import UserAccount
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
+from trip_planner.persistence.models.trip_price import PersistedTripPrice
 from trip_planner.state import ScenarioVersion
 
 logger = logging.getLogger(__name__)
+_PORTAL_PREFILL_FIELDS = TypeAdapter(WorkspaceProposalPrefillFields)
 
 
 class WorkspaceProposalNotFoundError(ValueError):
@@ -59,6 +73,25 @@ class WorkspaceProposalNotFoundError(ValueError):
 
 class WorkspacePolicyMissingForSubmissionError(ValueError):
     """The trip must have a synced policy before proposal submission."""
+
+
+class WorkspaceProposalHandoffNotReadyError(ValueError):
+    """The saved proposal does not yet have a verdict-bound portal handoff."""
+
+
+class WorkspaceProposalHandoffStaleError(ValueError):
+    """Trip facts changed after the saved verdict that authorized the handoff."""
+
+
+def _require_unchanged_portal_traveler(db_session: Session, *, user: AuthenticatedUser) -> None:
+    """Re-read the persisted name rather than trusting the request's identity snapshot."""
+    current_name = db_session.scalar(
+        select(UserAccount.display_name).where(UserAccount.user_id == user.user_id)
+    )
+    if current_name != user.display_name:
+        raise WorkspaceProposalHandoffStaleError(
+            "Traveler facts changed during portal preparation. Run the policy check again."
+        )
 
 
 def _owner_profile_id(record: PersistedTrip) -> str:
@@ -506,6 +539,25 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
+def _public_portal_handoff(value: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not value:
+        return None
+    public_keys = {
+        "schema_version",
+        "source_snapshot_hash",
+        "prepared_at",
+        "status",
+        "manager_submission_status",
+        "manager_decision",
+        "manager_decision_at",
+        "receipt_status",
+        "receipt_observed_at",
+        "last_manager_submission_status",
+        "last_manager_decision",
+    }
+    return {key: value.get(key) for key in public_keys if key in value}
+
+
 def _derive_follow_up_state(
     *,
     proposal_payload: dict[str, Any],
@@ -741,6 +793,161 @@ def _reset_evaluation_state(record: PersistedProposalState) -> None:
     record.evaluation_record = {}
 
 
+def _portal_handoff_verdict(record: PersistedProposalState) -> dict[str, Any]:
+    """Keep display metadata and the complete saved result in the hash input."""
+
+    evaluation_result = dict(record.evaluation_record.get("evaluation_result") or {})
+    failure_reasons = list(evaluation_result.get("failure_reasons") or [])
+    blocking_codes = sorted(
+        {
+            str(reason.get("code"))
+            for reason in failure_reasons
+            if isinstance(reason, dict) and reason.get("code")
+        }
+    )
+    return {
+        "status": evaluation_result.get("status"),
+        "outcome": record.summary.get("submission_outcome"),
+        "blocking_codes": blocking_codes,
+        "result": evaluation_result,
+    }
+
+
+def _portal_handoff_snapshot(
+    *,
+    record: PersistedProposalState,
+    trip_record: PersistedTrip,
+    user: AuthenticatedUser,
+    trip_prices: list[PersistedTripPrice],
+) -> dict[str, Any]:
+    return {
+        "schema_version": PORTAL_HANDOFF_SCHEMA_VERSION,
+        "trip_id": record.trip_id,
+        "proposal_id": record.proposal_id,
+        "proposal_version": record.proposal_version,
+        "scenario_id": record.scenario_id,
+        "execution_id": record.execution_id,
+        "traveler_name": user.display_name,
+        "proposal": dict(record.proposal_payload),
+        "trip": {
+            "title": trip_record.title,
+            "summary": trip_record.summary,
+            "mode": trip_record.mode,
+            "origin": trip_record.origin,
+            "primary_regions": list(trip_record.primary_regions),
+            "start_date": trip_record.start_date,
+            "end_date": trip_record.end_date,
+            "duration_days": trip_record.duration_days,
+            "traveler_party": {
+                "kind": trip_record.traveler_party_kind,
+                "traveler_count": trip_record.traveler_count,
+                "notes": trip_record.traveler_notes,
+            },
+        },
+        "prices": [
+            {
+                "component": price.component,
+                "label": COMPONENT_LABELS.get(price.component, price.component),
+                "amount": price.amount,
+                "currency": price.currency,
+                "note": price.note,
+                "source": {
+                    "attributed_to": price.entered_by,
+                    "captured_at": price.captured_at,
+                },
+                "lowest_amount": price.lowest_amount,
+                "evidence_attested": price.evidence_attested,
+                "cabin_class": price.cabin_class,
+                "flight_hours": price.flight_hours,
+            }
+            for price in trip_prices
+        ],
+        "verdict": _portal_handoff_verdict(record),
+    }
+
+
+def _bind_portal_handoff_snapshot(
+    *,
+    record: PersistedProposalState,
+    trip_record: PersistedTrip,
+    user: AuthenticatedUser,
+    trip_prices: list[PersistedTripPrice],
+    status: str,
+) -> None:
+    snapshot = _portal_handoff_snapshot(
+        record=record,
+        trip_record=trip_record,
+        user=user,
+        trip_prices=trip_prices,
+    )
+    record.portal_handoff = {
+        **_retained_portal_history(record.portal_handoff),
+        "schema_version": PORTAL_HANDOFF_SCHEMA_VERSION,
+        "source_snapshot_hash": snapshot_hash(snapshot),
+        "source_snapshot": snapshot,
+        "prepared_at": None,
+        "status": status,
+        "manager_submission_status": "unknown",
+        "manager_decision": None,
+    }
+
+
+def _retained_portal_history(stored: dict[str, Any] | None) -> dict[str, Any]:
+    """Keep immutable producer preparations when a new policy snapshot replaces one."""
+    stored = stored or {}
+    history = list(stored.get("producer_history") or [])
+    if stored.get("producer_binding"):
+        history.append({key: value for key, value in stored.items() if key != "producer_history"})
+    return {"producer_history": history} if history else {}
+
+
+def _bind_portal_handoff_evaluation_snapshot(
+    *,
+    record: PersistedProposalState,
+    current_snapshot: dict[str, Any],
+) -> None:
+    """Bind a verdict without rebasing it onto facts changed after submission."""
+
+    stored_handoff = record.portal_handoff or {}
+    stored_snapshot = dict(stored_handoff.get("source_snapshot") or {})
+    if not stored_snapshot:
+        # A legacy submission has no reliable record of the facts it evaluated.
+        # Fetching its verdict cannot authorize today's trip and prices.
+        record.portal_handoff = None
+        return
+    snapshot = {
+        **stored_snapshot,
+        "proposal_id": record.proposal_id,
+        "proposal_version": record.proposal_version,
+        "scenario_id": record.scenario_id,
+        "execution_id": record.execution_id,
+        "verdict": _portal_handoff_verdict(record),
+    }
+    bound_hash = snapshot_hash(snapshot)
+    # Refreshing the same verdict must retain the preparation history. Changed
+    # verdicts or current trip facts still require a newly prepared form, without
+    # rebasing the evaluated snapshot onto facts edited after submission.
+    still_prepared = (
+        stored_handoff.get("status") == "prepared"
+        and bound_hash == stored_handoff.get("source_snapshot_hash")
+        and bound_hash == snapshot_hash(current_snapshot)
+    )
+    record.portal_handoff = {
+        **(stored_handoff if still_prepared else _retained_portal_history(stored_handoff)),
+        "schema_version": PORTAL_HANDOFF_SCHEMA_VERSION,
+        "source_snapshot_hash": bound_hash,
+        "source_snapshot": snapshot,
+        "prepared_at": stored_handoff.get("prepared_at") if still_prepared else None,
+        "status": "prepared" if still_prepared else "eligible",
+        "manager_submission_status": (
+            stored_handoff.get("manager_submission_status", "unknown")
+            if still_prepared
+            else "unknown"
+        ),
+        "manager_decision": stored_handoff.get("manager_decision") if still_prepared else None,
+    }
+
+
 def _serialize_proposal_state(record: PersistedProposalState) -> dict[str, Any]:
     follow_up = _resolved_follow_up_payload(record)
     return {
@@ -759,6 +966,7 @@ def _serialize_proposal_state(record: PersistedProposalState) -> dict[str, Any]:
         "evaluation": dict(record.evaluation_record),
         "summary": dict(record.summary),
         "follow_up": follow_up,
+        "portal_handoff": _public_portal_handoff(record.portal_handoff),
     }
 
 
@@ -1373,15 +1581,30 @@ def get_workspace_proposal_payload(
     user: AuthenticatedUser,
     trip_id: str,
 ) -> dict[str, Any]:
-    _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    trip_record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     proposal_state = _get_latest_proposal_state(db_session, trip_id=trip_id, user_id=user.user_id)
     if proposal_state is None:
         return {
             "proposal_state": None,
             "summary": {"trip_id": trip_id, "status": "missing"},
         }
+    serialized = _serialize_proposal_state(proposal_state)
+    handoff = serialized.get("portal_handoff")
+    if handoff and handoff.get("receipt_status") == "current":
+        current_snapshot = _portal_handoff_snapshot(
+            record=proposal_state,
+            trip_record=trip_record,
+            user=user,
+            trip_prices=read_trip_prices_for_owner(
+                db_session, user_id=user.user_id, trip_id=trip_id
+            ),
+        )
+        if snapshot_hash(current_snapshot) != handoff.get("source_snapshot_hash"):
+            handoff.update(
+                receipt_status="stale", manager_submission_status="unknown", manager_decision=None
+            )
     return {
-        "proposal_state": _serialize_proposal_state(proposal_state),
+        "proposal_state": serialized,
         "summary": dict(proposal_state.summary),
     }
 
@@ -1468,6 +1691,7 @@ def save_workspace_proposal_submission(
         raise ValueError("proposal.trip_id must match the workspace trip.")
 
     request = TPPRequestEnvelope.from_dict(request_payload)
+    trip_prices = read_trip_prices_for_owner(db_session, user_id=user.user_id, trip_id=trip_id)
     try:
         response = _resolve_submission_response(
             request,
@@ -1476,9 +1700,7 @@ def save_workspace_proposal_submission(
             trip_record=trip_record,
             user=user,
             proposal=proposal,
-            trip_prices=read_trip_prices_for_owner(
-                db_session, user_id=user.user_id, trip_id=trip_id
-            ),
+            trip_prices=trip_prices,
         )
     except TPPTransportError as error:
         if not _should_persist_stored_policy_fallback(error):
@@ -1531,6 +1753,13 @@ def save_workspace_proposal_submission(
         evaluation_record={},
         proposal_payload=record.proposal_payload,
         persisted_follow_up=dict(existing.summary.get("follow_up") or {}) if existing else None,
+    )
+    _bind_portal_handoff_snapshot(
+        record=record,
+        trip_record=trip_record,
+        user=user,
+        trip_prices=trip_prices,
+        status="awaiting_evaluation",
     )
 
     if existing is None:
@@ -1652,6 +1881,17 @@ def save_workspace_proposal_evaluation(
         proposal_payload=dict(existing.proposal_payload),
         persisted_follow_up=dict(existing.summary.get("follow_up") or {}),
     )
+    _bind_portal_handoff_evaluation_snapshot(
+        record=existing,
+        current_snapshot=_portal_handoff_snapshot(
+            record=existing,
+            trip_record=trip_record,
+            user=user,
+            trip_prices=read_trip_prices_for_owner(
+                db_session, user_id=user.user_id, trip_id=trip_id
+            ),
+        ),
+    )
 
     trip_record.updated_at = datetime.now(UTC)
     db_session.commit()
@@ -1660,6 +1900,165 @@ def save_workspace_proposal_evaluation(
         "proposal_state": _serialize_proposal_state(existing),
         "summary": dict(existing.summary),
     }
+
+
+def prepare_workspace_proposal_handoff(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    client: OwnerPortalReceiptClient | None = None,
+    traveler_answers: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Prepare a freshness-bound browser form without claiming it was submitted."""
+
+    trip_record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    if trip_record.mode != "business":
+        raise ValueError("Only business trips can prepare an approver portal handoff.")
+    record = _get_latest_proposal_state(
+        db_session,
+        trip_id=trip_id,
+        user_id=user.user_id,
+    )
+    if record is None or not record.evaluation_record.get("evaluation_result"):
+        raise WorkspaceProposalHandoffNotReadyError(
+            "Run and save the trip-planner policy check before preparing the handoff."
+        )
+
+    stored = dict(record.portal_handoff or {})
+    retained_revision, record_id = record.updated_at, record.proposal_state_id
+    # A fresh policy snapshot archives the active producer binding. Keep that
+    # trip on the authenticated path even while only its prior versions remain;
+    # losing the client must not downgrade it to an uncorrelated browser form.
+    if (stored.get("producer_binding") or stored.get("producer_history")) and client is None:
+        raise WorkspaceProposalHandoffNotReadyError(
+            "This owner-bound handoff must use its authenticated browser review session."
+        )
+    if stored.get("status") not in {"eligible", "prepared"} or not stored.get("source_snapshot"):
+        raise WorkspaceProposalHandoffNotReadyError(
+            "Run the policy check again to bind this proposal to the portal handoff."
+        )
+
+    trip_prices = read_trip_prices_for_owner(
+        db_session,
+        user_id=user.user_id,
+        trip_id=trip_id,
+    )
+    if not trip_prices:
+        raise ValueError("Add at least one sourced trip price before preparing the handoff.")
+    currencies = {price.currency for price in trip_prices}
+    if currencies != {"USD"}:
+        raise ValueError(
+            "The approver portal currently accepts one USD price set; update the saved prices."
+        )
+
+    current_snapshot = _portal_handoff_snapshot(
+        record=record,
+        trip_record=trip_record,
+        user=user,
+        trip_prices=trip_prices,
+    )
+    if snapshot_hash(current_snapshot) != stored.get("source_snapshot_hash"):
+        raise WorkspaceProposalHandoffStaleError(
+            "Trip facts, prices, or the saved policy result changed. Run the policy check again."
+        )
+
+    _require_unchanged_portal_traveler(db_session, user=user)
+    action_url = portal_action_url()
+    # Preparation is complete only once the outgoing form can be built. A mapping
+    # failure must leave the saved verdict and any prior handoff state unchanged.
+    try:
+        fields: dict[str, str] = dict(
+            _PORTAL_PREFILL_FIELDS.validate_python(build_portal_fields(current_snapshot)).items()
+        )
+    except ValidationError:
+        # Reject mapper drift before either path can forward private facts or
+        # establish producer authority. Validation errors contain input values.
+        raise ValueError("The prepared portal form is invalid.") from None
+    if client is not None:
+        # Import here because preparation shares the saved-snapshot validation
+        # above and the receipt service uses this module's ownership helpers.
+        from trip_planner.app.services.portal_preparation import (
+            prepare_owner_portal_handoff,
+        )
+
+        return prepare_owner_portal_handoff(
+            db_session,
+            user=user,
+            record=record,
+            trip_record=trip_record,
+            snapshot=current_snapshot,
+            fields=fields,
+            client=client,
+            traveler_answers=traveler_answers,
+        )
+    if traveler_answers:
+        raise ValueError("Individual portal identity must be configured before completing answers.")
+    # Retrying the same bound snapshot regenerates the form without rewriting
+    # its preparation history. A changed saved verdict clears this timestamp.
+    prepared_at = stored.get("prepared_at") if stored.get("status") == "prepared" else None
+    handoff = {
+        **stored,
+        "status": "prepared",
+        "prepared_at": prepared_at or _now_iso(),
+        "manager_submission_status": "unknown",
+        "manager_decision": None,
+    }
+    # Validate the complete public form before persisting preparation. The route's
+    # response validation happens after this commit and cannot undo an invalid form.
+    try:
+        result = WorkspaceProposalHandoffResponse.model_validate(
+            {
+                "action_url": action_url,
+                "method": "POST",
+                "fields": fields,
+                "handoff": _public_portal_handoff(handoff),
+            }
+        ).model_dump()
+    except ValidationError:
+        # Pydantic errors include input values; keep traveler facts out of logs.
+        raise ValueError("The prepared portal form is invalid.") from None
+    # A second workspace request can edit trip or price rows without updating
+    # the proposal revision. Re-read those facts after mapping, just as the
+    # authenticated preparation path does after its producer requests.
+    db_session.expire_all()
+    _require_unchanged_portal_traveler(db_session, user=user)
+    trip_record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    latest_record = _get_latest_proposal_state(db_session, trip_id=trip_id, user_id=user.user_id)
+    if latest_record is None:
+        raise WorkspaceProposalHandoffStaleError(
+            "The saved proposal was cleared while preparing the handoff. Run the policy check again."
+        )
+    latest_snapshot = _portal_handoff_snapshot(
+        record=latest_record,
+        trip_record=trip_record,
+        user=user,
+        trip_prices=read_trip_prices_for_owner(db_session, user_id=user.user_id, trip_id=trip_id),
+    )
+    if snapshot_hash(latest_snapshot) != stored["source_snapshot_hash"]:
+        raise WorkspaceProposalHandoffStaleError(
+            "Trip facts changed while preparing the handoff. Run the policy check again."
+        )
+    # Form mapping may overlap another policy check or authenticated preparation.
+    # Commit only against the saved proposal we validated, so a delayed legacy
+    # preparation cannot overwrite newer verdict or producer receipt authority.
+    prepared = db_session.execute(
+        update(PersistedProposalState)
+        .where(PersistedProposalState.proposal_state_id == record_id)
+        .where(PersistedProposalState.updated_at == retained_revision)
+        .values(portal_handoff=handoff)
+        .returning(PersistedProposalState.proposal_state_id)
+        .execution_options(synchronize_session=False)
+    ).scalar_one_or_none()
+    if prepared is None:
+        db_session.rollback()
+        raise WorkspaceProposalHandoffStaleError(
+            "The saved proposal changed while preparing the handoff. Run the policy check again."
+        )
+    trip_record.updated_at = datetime.now(UTC)
+    db_session.commit()
+    db_session.refresh(record)
+    return result
 
 
 def save_workspace_proposal_follow_up(
@@ -1854,9 +2253,16 @@ def refresh_workspace_proposal_status(
     # happens in TPP's manager portal, which this workspace never reached. So the verdict is
     # fetched for every non-terminal state too; if TPP has none yet, nothing is recorded.
     polled_state = polled_response.execution_status.state
-    verdict_may_exist = polled_state in {"deferred", "running", "accepted"} and bool(
-        existing.execution_id
+    # A policy refusal also has a completed verdict, even though TPP marks the
+    # submission execution as failed. Save that result for Print / Export and
+    # the portal handoff; a transport failure still cannot authorize either.
+    policy_refused = polled_state == "failed" and (
+        polled_response.result_payload.get("queue_state") == "blocked_by_policy"
+        or (polled_response.error is not None and polled_response.error.category == "policy")
     )
+    verdict_may_exist = (
+        polled_state in {"deferred", "running", "accepted"} or policy_refused
+    ) and bool(existing.execution_id)
     if verdict_may_exist:
         early_request = _make_runtime_request(
             operation="fetch_evaluation_result",

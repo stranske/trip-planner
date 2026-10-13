@@ -37,6 +37,7 @@ class PersistedProposalState(Base):
     proposal_payload: Mapped[dict] = mapped_column(JSON, default=dict)
     submission_record: Mapped[dict] = mapped_column(JSON, default=dict)
     evaluation_record: Mapped[dict] = mapped_column(JSON, default=dict)
+    portal_handoff: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     summary: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(

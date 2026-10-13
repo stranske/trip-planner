@@ -1,0 +1,78 @@
+### Deliberate-break demonstration — PASS
+
+- gate: `python3 -m pytest tests/integration/test_authenticated_two_app_handoff.py -q -o addopts=`
+- base ref: `650d16386435ee3336ee31f95118ce4f4a54cf66`
+- worktree: `/Users/teacher/.codex/automations/imi-merge-verify-closer/worktrees/trip1872-acceptance-20261013T0222`
+- candidate tests overlaid onto the base: `tests/integration/test_authenticated_two_app_handoff.py`
+
+**RED — the gate against the base implementation** (`650d16386435ee3336ee31f95118ce4f4a54cf66` with only the candidate tests overlaid). Exit code `1`.
+
+```
+01, add persisted planning ledger entries
+INFO  [alembic.runtime.migration] Running upgrade 20260507_01 -> 20260510_01, add persisted planning ledger entries
+INFO  [alembic.runtime.migration] Running upgrade 20260510_01 -> 20260510_02, add persisted planning notebook items and session focus columns
+INFO  [alembic.runtime.migration] Running upgrade 20260510_01 -> 20260510_02, add persisted planning notebook items and session focus columns
+INFO  [alembic.runtime.migration] Running upgrade 20260510_02 -> 20260512_01, repair planning notebook schema for already-deployed databases
+INFO  [alembic.runtime.migration] Running upgrade 20260510_02 -> 20260512_01, repair planning notebook schema for already-deployed databases
+INFO  [alembic.runtime.migration] Running upgrade 20260512_01 -> 20260921_01, add the trip origin the planner needs to measure a journey
+INFO  [alembic.runtime.migration] Running upgrade 20260512_01 -> 20260921_01, add the trip origin the planner needs to measure a journey
+INFO  [alembic.runtime.migration] Running upgrade 20260921_01 -> 20260921_02, add human-entered trip prices
+INFO  [alembic.runtime.migration] Running upgrade 20260921_01 -> 20260921_02, add human-entered trip prices
+INFO  [alembic.runtime.migration] Running upgrade 20260921_02 -> 20260922_01, record the flight details TPP's fare and cabin rules read on a price
+INFO  [alembic.runtime.migration] Running upgrade 20260921_02 -> 20260922_01, record the flight details TPP's fare and cabin rules read on a price
+INFO  [alembic.runtime.migration] Running upgrade 20260922_01 -> 20260928_01, persist truthful TPP portal handoff preparation state
+INFO  [alembic.runtime.migration] Running upgrade 20260922_01 -> 20260928_01, persist truthful TPP portal handoff preparation state
+=============================== warnings summary ===============================
+../../../../../../../../opt/anaconda3/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /opt/anaconda3/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/integration/test_authenticated_two_app_handoff.py::test_authenticated_real_two_app_approval_status_roundtrip[approve-approved]
+tests/integration/test_authenticated_two_app_handoff.py::test_authenticated_real_two_app_approval_status_roundtrip[reject-rejected]
+  /opt/anaconda3/lib/python3.12/site-packages/alembic/config.py:612: DeprecationWarning: No path_separator found in configuration; falling back to legacy splitting on spaces, commas, and colons for prepend_sys_path.  Consider adding path_separator=os to Alembic config.
+    util.warn_deprecated(
+
+tests/integration/test_authenticated_two_app_handoff.py::test_authenticated_real_two_app_approval_status_roundtrip[approve-approved]
+  /opt/anaconda3/lib/python3.12/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions
+    warnings.warn(  # deprecated in 14.0 - 2024-11-09
+
+tests/integration/test_authenticated_two_app_handoff.py::test_authenticated_real_two_app_approval_status_roundtrip[approve-approved]
+  /opt/anaconda3/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:17: DeprecationWarning: websockets.server.WebSocketServerProtocol is deprecated
+    from websockets.server import WebSocketServerProtocol
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/integration/test_authenticated_two_app_handoff.py::test_authenticated_real_two_app_approval_status_roundtrip[approve-approved]
+FAILED tests/integration/test_authenticated_two_app_handoff.py::test_authenticated_real_two_app_approval_status_roundtrip[reject-rejected]
+2 failed, 5 warnings in 3.64s
+```
+
+**GREEN — the same gate in the worktree, with the implementation present.** Exit code `0`.
+
+```
+..                                                                       [100%]
+=============================== warnings summary ===============================
+../../../../../../../opt/anaconda3/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /opt/anaconda3/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/integration/test_authenticated_two_app_handoff.py::test_authenticated_real_two_app_approval_status_roundtrip[approve-approved]
+tests/integration/test_authenticated_two_app_handoff.py::test_authenticated_real_two_app_approval_status_roundtrip[reject-rejected]
+  /opt/anaconda3/lib/python3.12/site-packages/alembic/config.py:612: DeprecationWarning: No path_separator found in configuration; falling back to legacy splitting on spaces, commas, and colons for prepend_sys_path.  Consider adding path_separator=os to Alembic config.
+    util.warn_deprecated(
+
+tests/integration/test_authenticated_two_app_handoff.py::test_authenticated_real_two_app_approval_status_roundtrip[approve-approved]
+  /opt/anaconda3/lib/python3.12/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions
+    warnings.warn(  # deprecated in 14.0 - 2024-11-09
+
+tests/integration/test_authenticated_two_app_handoff.py::test_authenticated_real_two_app_approval_status_roundtrip[approve-approved]
+  /opt/anaconda3/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:17: DeprecationWarning: websockets.server.WebSocketServerProtocol is deprecated
+    from websockets.server import WebSocketServerProtocol
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2 passed, 5 warnings in 5.19s
+```
+
+**Per-node attribution: PASS.** All 2 candidate nodes fail against the base, so no tautology is riding along on another test's red.
+
+_Produced by `local_verify.py --transcript`; the live worktree was never mutated._

@@ -9,6 +9,8 @@ import {
   createNotebookItem,
   deleteNotebookItem,
   fetchPlannerSession,
+  prepareWorkspaceProposalHandoff,
+  submitWorkspacePortalHandoff,
   recordWorkspaceSpendEvent,
   refreshWorkspaceProposalStatus,
   saveWorkspaceBudget,
@@ -24,10 +26,14 @@ import {
   type PlanningLedgerEntry,
   type PlannerSessionResponse,
   type WorkspaceData,
+  type WorkspaceProposalHandoffResponse,
 } from "../api/workspace";
 import { TestMemoryRouter } from "../test/router";
 import type { TripRecord } from "../api/trips";
 import { WorkspacePage } from "./WorkspacePage";
+import { submitTppPortalHandoff } from "../lib/tppPortalHandoff";
+
+vi.mock("../lib/tppPortalHandoff", () => ({ submitTppPortalHandoff: vi.fn() }));
 
 vi.mock("../api/workspace", async () => {
   const actual = await vi.importActual<typeof import("../api/workspace")>("../api/workspace");
@@ -35,6 +41,8 @@ vi.mock("../api/workspace", async () => {
     ...actual,
     answerPlannerDecision: vi.fn(),
     fetchPlannerSession: vi.fn(),
+    prepareWorkspaceProposalHandoff: vi.fn(),
+    submitWorkspacePortalHandoff: vi.fn(),
     submitPlannerOptionFeedback: vi.fn(),
     submitRouteOptionAction: vi.fn(),
     submitPlannerTurn: vi.fn(),
@@ -63,6 +71,8 @@ vi.mock("react-router-dom", async () => {
 const mockedUseLoaderData = vi.mocked(useLoaderData);
 const mockedAnswerPlannerDecision = vi.mocked(answerPlannerDecision);
 const mockedFetchPlannerSession = vi.mocked(fetchPlannerSession);
+const mockedPrepareWorkspaceProposalHandoff = vi.mocked(prepareWorkspaceProposalHandoff);
+const mockedSubmitTppPortalHandoff = vi.mocked(submitTppPortalHandoff);
 const mockedSubmitPlannerOptionFeedback = vi.mocked(submitPlannerOptionFeedback);
 const mockedSubmitRouteOptionAction = vi.mocked(submitRouteOptionAction);
 const mockedSubmitPlannerTurn = vi.mocked(submitPlannerTurn);
@@ -952,6 +962,8 @@ describe("WorkspacePage", () => {
     mockedUpdateWorkspacePlanningMode.mockReset();
     mockedSaveWorkspaceBudget.mockReset();
     mockedRecordWorkspaceSpendEvent.mockReset();
+    mockedPrepareWorkspaceProposalHandoff.mockReset();
+    mockedSubmitTppPortalHandoff.mockReset();
     mockedRefreshWorkspaceProposalStatus.mockReset();
     mockedSubmitTripForApproval.mockReset();
     mockedCreateNotebookItem.mockReset();
@@ -3054,6 +3066,182 @@ describe("WorkspacePage", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("displays unknown manager state after preparing a handoff and after reloading", async () => {
+    const metadata = {
+      status: "prepared" as const,
+      prepared_at: "2026-10-03T12:00:00Z",
+      source_snapshot_hash: "sha256:saved-facts",
+      manager_submission_status: "unknown" as const,
+      manager_decision: null,
+    };
+    const handoff = {
+      action_url: "https://tpp.example/portal/handoff",
+      method: "POST" as const,
+      fields: { traveler_name: "Morgan Planner" },
+      handoff: metadata,
+    };
+    const workspace: WorkspaceData = {
+      ...workspacePayload,
+      proposal_state: {
+        ...workspacePayload.proposal_state!,
+        evaluation: { evaluation_result: null },
+        summary: { ...workspacePayload.proposal_state!.summary, has_saved_verdict: true },
+        portal_handoff: { ...metadata, status: "eligible", prepared_at: null },
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspace) });
+    mockedPrepareWorkspaceProposalHandoff.mockResolvedValue(handoff);
+    const page = renderWorkspacePage();
+    await selectWorkspaceTab("Policy");
+    expect(screen.queryByRole("status", { name: "Approver portal handoff status" })).toBeNull();
+    await completePortalAnswers();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Send to my approver" }));
+
+    function assertUnknownManagerState() {
+      const status = screen.getByRole("status", { name: "Approver portal handoff status" });
+      expect(within(status).getByText("Handoff prepared.")).toBeInTheDocument();
+      expect(within(status).getByText("Manager submission")).toBeInTheDocument();
+      expect(within(status).getByText("Manager decision")).toBeInTheDocument();
+      expect(within(status).getAllByText("Unknown")).toHaveLength(2);
+      expect(within(status).getByText(/Complete and submit the request there/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Open approval packet from Policy tab" })).toBeEnabled();
+      expect(screen.queryByText(/Submitted for approval:/)).toBeNull();
+    }
+
+    await waitFor(assertUnknownManagerState);
+    expect(mockedPrepareWorkspaceProposalHandoff).toHaveBeenCalledWith(workspace.trip_record.trip.trip_id, { destination_zip: "20001", booking_date: "2026-12-01" });
+    expect(mockedSubmitTppPortalHandoff).toHaveBeenCalledWith(handoff);
+    page.unmount();
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspace,
+        proposal_state: { ...workspace.proposal_state!, portal_handoff: metadata },
+      }),
+    });
+    renderWorkspacePage();
+    await selectWorkspaceTab("Policy");
+    assertUnknownManagerState();
+    expect(mockedPrepareWorkspaceProposalHandoff).toHaveBeenCalledTimes(1);
+  });
+
+  it("submits a reviewed request through the authenticated consumer route", async () => {
+    const handoff = {
+      status: "prepared" as const,
+      prepared_at: "2026-10-03T12:00:00Z",
+      source_snapshot_hash: "sha256:saved-facts",
+      receipt_status: "current" as const,
+      manager_submission_status: "unknown" as const,
+      manager_decision: null,
+    };
+    const proposal = { ...workspacePayload.proposal_state!, portal_handoff: handoff };
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve({
+      ...workspacePayload, proposal_state: proposal,
+    }) });
+    vi.mocked(submitWorkspacePortalHandoff).mockResolvedValue({
+      summary: workspacePayload.proposal_state!.summary,
+      proposal_state: { ...proposal, portal_handoff: {
+        ...handoff, manager_submission_status: "pending_review",
+      } },
+    } as Awaited<ReturnType<typeof submitWorkspacePortalHandoff>>);
+    renderWorkspacePage();
+    await selectWorkspaceTab("Policy");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Submit reviewed request" }));
+    expect(submitWorkspacePortalHandoff).toHaveBeenCalledWith(workspacePayload.trip_record.trip.trip_id);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Submit reviewed request" })).toBeNull());
+  });
+
+  it("does not post a delayed handoff after leaving the workspace", async () => {
+    const pending = deferred<WorkspaceProposalHandoffResponse>();
+    const workspace: WorkspaceData = {
+      ...workspacePayload,
+      proposal_state: {
+        ...workspacePayload.proposal_state!,
+        summary: { ...workspacePayload.proposal_state!.summary, has_saved_verdict: true },
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspace) });
+    mockedPrepareWorkspaceProposalHandoff.mockReturnValue(pending.promise);
+    const page = renderWorkspacePage();
+    await selectWorkspaceTab("Policy");
+    await completePortalAnswers();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Send to my approver" }));
+    expect(mockedPrepareWorkspaceProposalHandoff).toHaveBeenCalledOnce();
+
+    page.unmount();
+    await act(async () => {
+      pending.resolve({
+        action_url: "https://tpp.example/portal/handoff",
+        method: "POST",
+        fields: { traveler_name: "Morgan Planner" },
+        handoff: { status: "prepared", manager_submission_status: "unknown", manager_decision: null },
+      });
+    });
+
+    expect(mockedSubmitTppPortalHandoff).not.toHaveBeenCalled();
+  });
+
+  it.each(["resolved", "rejected"])(
+    "ignores a %s handoff response after the workspace reloads and allows a fresh attempt",
+    async (outcome) => {
+      const pending = deferred<WorkspaceProposalHandoffResponse>();
+      const workspace: WorkspaceData = {
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state!,
+          summary: { ...workspacePayload.proposal_state!.summary, has_saved_verdict: true },
+          portal_handoff: { status: "eligible" },
+        },
+      };
+      const handoff: WorkspaceProposalHandoffResponse = {
+        action_url: "https://tpp.example/portal/handoff",
+        method: "POST",
+        fields: { traveler_name: "Morgan Planner" },
+        handoff: { status: "prepared", manager_submission_status: "unknown", manager_decision: null },
+      };
+      mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspace) });
+      mockedPrepareWorkspaceProposalHandoff.mockReturnValueOnce(pending.promise);
+      const page = renderWorkspacePage();
+      await selectWorkspaceTab("Policy");
+      const user = userEvent.setup();
+      await completePortalAnswers();
+      await user.click(screen.getByRole("button", { name: "Send to my approver" }));
+      expect(screen.getByRole("button", { name: "Send to my approver" })).toBeDisabled();
+
+      mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve({ ...workspace }) });
+      page.rerender(
+        <TestMemoryRouter>
+          <WorkspacePage />
+        </TestMemoryRouter>
+      );
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "Send to my approver" })).toBeEnabled();
+      });
+      const fresh = deferred<WorkspaceProposalHandoffResponse>();
+      mockedPrepareWorkspaceProposalHandoff.mockReturnValueOnce(fresh.promise);
+      await completePortalAnswers();
+      await user.click(screen.getByRole("button", { name: "Send to my approver" }));
+      expect(mockedPrepareWorkspaceProposalHandoff).toHaveBeenCalledTimes(2);
+      await act(async () => {
+        if (outcome === "resolved") {
+          pending.resolve(handoff);
+        } else {
+          pending.reject(new Error("Old workspace preparation failed"));
+        }
+      });
+      expect(mockedSubmitTppPortalHandoff).not.toHaveBeenCalled();
+      expect(screen.queryByRole("status", { name: "Approver portal handoff status" })).toBeNull();
+      expect(screen.queryByText("Old workspace preparation failed")).toBeNull();
+      expect(screen.getByRole("button", { name: "Send to my approver" })).toBeDisabled();
+
+      await act(async () => {
+        fresh.resolve(handoff);
+      });
+      expect(mockedSubmitTppPortalHandoff).toHaveBeenCalledOnce();
+      expect(mockedSubmitTppPortalHandoff).toHaveBeenCalledWith(handoff);
+      expect(screen.getByRole("status", { name: "Approver portal handoff status" })).toBeInTheDocument();
+    }
+  );
+
   it("does not claim policy compliance on a sanitized proposal state without a saved verdict", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
@@ -3129,7 +3317,7 @@ describe("WorkspacePage", () => {
     expect(screen.queryByRole("button", { name: "Refresh live status" })).not.toBeInTheDocument();
   });
 
-  it("submits a business trip for approval and renders the verdict", async () => {
+  it("reports a completed policy check and keeps the verdict printable", async () => {
     const submittedProposalState = {
       ...workspacePayload.proposal_state!,
       submission_status: "succeeded",
@@ -3173,9 +3361,19 @@ describe("WorkspacePage", () => {
 
     await waitFor(() => {
       expect(mockedSubmitTripForApproval).toHaveBeenCalledTimes(1);
-      expect(screen.getByText(/Submitted for approval:/)).toBeInTheDocument();
+      expect(screen.getByText(/Policy check completed:/)).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Policy compliant" })).toBeInTheDocument();
     });
+    expect(screen.queryByText(/Submitted for approval:/)).toBeNull();
+    const print = vi.spyOn(window, "print").mockImplementation(() => {});
+    try {
+      await user.click(screen.getByRole("button", { name: "Open approval packet from Policy tab" }));
+      const packet = screen.getByTestId("approval-packet-document");
+      await user.click(within(packet).getByRole("button", { name: "Print / Export" }));
+      expect(print).toHaveBeenCalledOnce();
+    } finally {
+      print.mockRestore();
+    }
   });
 
   it("takes the server's readiness labels after submitting, without a reload", async () => {
@@ -3262,12 +3460,15 @@ describe("WorkspacePage", () => {
       ...workspacePayload.proposal_state!,
       submission_status: "deferred",
       evaluation_status: null,
+      follow_up: null,
       summary: {
         ...workspacePayload.proposal_state!.summary,
         submission_status: "deferred",
         submission_summary: "Proposal queued for evaluation",
         submission_requires_polling: true,
         evaluation_result_status: undefined,
+        follow_up_status: undefined,
+        follow_up_summary: undefined,
         approval_ready: false,
       },
     });
@@ -3299,7 +3500,8 @@ describe("WorkspacePage", () => {
         "scenario:trip-leisure-kyoto-draft:1"
       );
     });
-    expect(screen.getByText(/Submitted for approval:/)).toBeInTheDocument();
+    expect(screen.getByText(/Policy check pending:/)).toBeInTheDocument();
+    expect(screen.queryByText(/Policy check completed:|Submitted for approval:/)).toBeNull();
   });
 
   it("syncs the travel policy before submitting when the workspace has none", async () => {
@@ -4669,3 +4871,13 @@ describe("WorkspacePage", () => {
     expect(planTab).toHaveAttribute("tabindex", "-1");
   });
 });
+
+async function completePortalAnswers() {
+  const user = userEvent.setup();
+  const zip = screen.getByLabelText("Destination ZIP");
+  await user.clear(zip);
+  await user.type(zip, "20001");
+  const booking = screen.getByLabelText("Booking date");
+  await user.clear(booking);
+  await user.type(booking, "2026-12-01");
+}

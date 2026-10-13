@@ -121,8 +121,7 @@ def test_fallback_uses_saved_timing(client: TestClient) -> None:
     ]
     assert signals["date_hits"] == 0
     assert not any(
-        "date" in question.lower() or "when" in question.lower()
-        for question in questions
+        "date" in question.lower() or "when" in question.lower() for question in questions
     )
 
 

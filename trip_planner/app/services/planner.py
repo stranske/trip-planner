@@ -423,8 +423,7 @@ def _extract_destination_mentions(message: str) -> list[str]:
         if not words:
             continue
         if any(
-            word.lower() in _DATE_MARKERS or word.lower() in _MONTH_ABBREVIATIONS
-            for word in words
+            word.lower() in _DATE_MARKERS or word.lower() in _MONTH_ABBREVIATIONS for word in words
         ):
             continue
         if any(
@@ -445,9 +444,7 @@ def _extract_destination_mentions(message: str) -> list[str]:
 def _extract_date_mentions(message: str) -> list[str]:
     lowered = message.lower()
     date_mentions = [
-        marker
-        for marker in _DATE_MARKERS
-        if re.search(rf"\b{re.escape(marker)}\b", lowered)
+        marker for marker in _DATE_MARKERS if re.search(rf"\b{re.escape(marker)}\b", lowered)
     ]
     date_mentions.extend(
         match.group(0).rstrip(".")
@@ -2145,9 +2142,7 @@ def _invoke_planner_runtime(runtime: _PlannerTurnRuntime) -> PlannerConversation
             turn_index=len(runtime.activity_log),
             planning_mode=runtime.session.selected_planning_mode,
             intent_classifier=runtime.intent_classifier,
-            trip_frame=_trip_frame_from_panel(
-                runtime.workspace_payload["planner_panel_state"]
-            ),
+            trip_frame=_trip_frame_from_panel(runtime.workspace_payload["planner_panel_state"]),
         ),
     )
     try:
@@ -2200,9 +2195,7 @@ def _invoke_planner_runtime(runtime: _PlannerTurnRuntime) -> PlannerConversation
                 turn_index=len(runtime.activity_log),
                 planning_mode=runtime.session.selected_planning_mode,
                 intent_classifier=runtime.intent_classifier,
-                trip_frame=_trip_frame_from_panel(
-                    runtime.workspace_payload["planner_panel_state"]
-                ),
+                trip_frame=_trip_frame_from_panel(runtime.workspace_payload["planner_panel_state"]),
             ),
         )
     return reply

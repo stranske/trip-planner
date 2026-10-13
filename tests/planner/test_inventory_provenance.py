@@ -169,7 +169,9 @@ def test_generated_bundles_contain_all_four_option_domains() -> None:
     assert bundle.destinations, "bundle must have at least one destination"
     assert bundle.lodging_options, "bundle must have at least one lodging option"
     assert bundle.transport_options, "bundle must have at least one transport option"
-    assert bundle.activity_options == [], "no activity is invented: the traveller entered none and no source supplied one"
+    assert (
+        bundle.activity_options == []
+    ), "no activity is invented: the traveller entered none and no source supplied one"
 
 
 # ---------------------------------------------------------------------------

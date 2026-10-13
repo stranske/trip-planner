@@ -31,11 +31,7 @@ def _map_coordinate_for_route_index(index: int, route_length: int) -> dict[str, 
 
 def _stop_description(index: int, stop_count: int, *, labels_are_names: bool) -> str:
     if index == 0:
-        return (
-            "Where the journey starts."
-            if labels_are_names
-            else "First stop on this route."
-        )
+        return "Where the journey starts." if labels_are_names else "First stop on this route."
     if index == stop_count - 1:
         return "Final destination."
     return f"Stop {index + 1} of {stop_count}."

@@ -790,6 +790,19 @@ export type WorkspaceData = {
         guidance?: string[];
       };
     };
+    portal_handoff?: {
+      schema_version?: string;
+      source_snapshot_hash?: string;
+      prepared_at?: string | null;
+      status?: "awaiting_evaluation" | "eligible" | "prepared";
+      manager_submission_status?: "unknown" | "submitted" | "pending_review" | "decision_recorded";
+      manager_decision?: "approved" | "rejected" | "changes_requested" | null;
+      manager_decision_at?: string | null;
+      receipt_status?: "current" | "unavailable" | "stale" | "not_found" | "unauthorized";
+      receipt_observed_at?: string;
+      last_manager_submission_status?: string;
+      last_manager_decision?: "approved" | "rejected" | "changes_requested" | null;
+    } | null;
   } | null;
   view_model: WorkspaceViewModel | null;
 };
@@ -881,6 +894,47 @@ export type WorkspaceProposalApiResponse = {
   proposal_state: WorkspaceData["proposal_state"];
   summary: NonNullable<WorkspaceData["proposal_state"]>["summary"] | Record<string, never>;
 };
+
+export type WorkspaceProposalHandoffResponse = {
+  action_url: string;
+  method: "POST";
+  fields: Record<string, string>;
+  handoff: NonNullable<WorkspaceData["proposal_state"]>["portal_handoff"];
+};
+
+export async function prepareWorkspaceProposalHandoff(
+  tripId: string,
+  travelerAnswers?: Record<string, string>
+): Promise<WorkspaceProposalHandoffResponse> {
+  return fetchJson<WorkspaceProposalHandoffResponse>({
+    path: `/api/workspace/${encodeURIComponent(tripId)}/proposal/handoff`,
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(travelerAnswers ? { traveler_answers: travelerAnswers } : {}),
+  });
+}
+
+export async function submitWorkspacePortalHandoff(tripId: string): Promise<WorkspaceProposalApiResponse> {
+  return fetchJson<WorkspaceProposalApiResponse>({
+    path: `/api/workspace/${encodeURIComponent(tripId)}/proposal/handoff/submit`,
+    method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: "{}",
+  });
+}
+
+export async function refreshWorkspacePortalReceipt(
+  tripId: string
+): Promise<WorkspaceProposalApiResponse> {
+  return fetchJson<WorkspaceProposalApiResponse>({
+    path: `/api/workspace/${encodeURIComponent(tripId)}/proposal/handoff/status`,
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+}
 
 export async function submitWorkspaceProposal(
   tripId: string,
