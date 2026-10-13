@@ -1,8 +1,11 @@
 """Consumer preparation persistence; producer answer validation is not mocked acceptance."""
 
+import io
+import json
 from copy import deepcopy
 from dataclasses import replace
 from hashlib import sha256
+from urllib import error
 from uuid import uuid4
 
 import pytest
@@ -23,7 +26,11 @@ from trip_planner.app.services.proposal import (
 )
 from trip_planner.app.services.trips import update_trip
 from trip_planner.integrations.tpp.portal_receipt import PortalBrowserSession
-from trip_planner.integrations.tpp.portal_receipt_client import PortalPreparationError
+from trip_planner.integrations.tpp.portal_receipt_client import (
+    OwnerPortalReceiptClient,
+    PortalOwnerIdentity,
+    PortalPreparationError,
+)
 from trip_planner.persistence.db import get_db_session, get_session_factory
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
@@ -227,6 +234,83 @@ def test_production_route_preserves_validation_refusal_and_can_retry(
     assert accepted.json()["handoff"]["manager_decision"] is None
     assert client.preparations[0] == client.preparations[1]
     assert client.preparations[0][2] == original["fields"]
+
+
+@pytest.mark.parametrize(
+    ("producer_status", "expected_status"),
+    [(400, 400), (422, 422), (None, 502)],
+    ids=["incomplete-draft", "invalid-draft", "transport-unavailable"],
+)
+def test_real_preparation_transport_refusal_never_creates_a_browser_handoff(
+    saved_portal_handoff, monkeypatch, producer_status, expected_status
+):
+    session, user, trip_id, original = saved_portal_handoff
+    record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+    trip = session.get(PersistedTrip, trip_id)
+    # The fixture has already tested the legacy form; begin authenticated
+    # preparation from an eligible saved verdict without any producer binding.
+    record.portal_handoff = {**record.portal_handoff, "status": "eligible", "prepared_at": None}
+    session.commit()
+    session.expire_all()
+    before = deepcopy(record.portal_handoff)
+    verdict = deepcopy(record.evaluation_record)
+    revision, trip_revision = record.updated_at, trip.updated_at
+    public_before = get_workspace_proposal_payload(session, user=user, trip_id=trip_id)
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    identity = PortalOwnerIdentity("oidc:tenant-a", "traveler-a", "Bearer " + uuid4().hex)
+    resolved_users, requests, closed_bodies = [], [], []
+
+    def resolve_owner(user_id):
+        resolved_users.append(user_id)
+        return identity
+
+    client = OwnerPortalReceiptClient(resolve_owner)
+
+    def refused_preparation(outgoing, *, timeout):
+        requests.append(outgoing)
+        assert timeout == 15
+        assert outgoing.full_url == "https://tpp.example/api/planner/portal-handoffs"
+        assert outgoing.get_method() == "POST"
+        assert outgoing.get_header("Authorization") == identity.authorization
+        body = json.loads(outgoing.data)
+        assert body["answers"] == original["fields"]
+        assert body["snapshot_version"] == before["source_snapshot_hash"]
+        assert (
+            body["handoff_id"]
+            == "planner:"
+            + sha256(f"{trip_id}:{before['source_snapshot_hash']}".encode()).hexdigest()
+        )
+        assert "destination_zip" not in body["answers"]
+        if producer_status is None:
+            raise error.URLError("Private transport diagnostic")
+        private_body = io.BytesIO(b"Private producer validation diagnostic")
+        closed_bodies.append(private_body)
+        raise error.HTTPError(outgoing.full_url, producer_status, "Draft refused", {}, private_body)
+
+    # Keep the production HTTP client, serialization and error translation.
+    # Only replace the network boundary; this does not prove producer acceptance.
+    monkeypatch.setattr(client._opener, "open", refused_preparation)
+    app = create_app(portal_receipt_client=client)
+    app.dependency_overrides[require_authenticated_user] = lambda: user
+    app.dependency_overrides[get_db_session] = lambda: session
+    with TestClient(app) as browser:
+        rejected = browser.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+
+    assert rejected.status_code == expected_status
+    assert set(rejected.json()) == {"detail"}
+    assert "Private" not in rejected.text
+    assert user.display_name not in rejected.text
+    assert identity.authorization not in rejected.text
+    assert resolved_users == [user.user_id]
+    # No browser-session POST or receipt read may follow a refusal.
+    assert len(requests) == 1
+    assert all(body.closed for body in closed_bodies)
+    session.expire_all()
+    assert record.portal_handoff == before
+    assert record.evaluation_record == verdict
+    assert record.updated_at == revision
+    assert trip.updated_at == trip_revision
+    assert get_workspace_proposal_payload(session, user=user, trip_id=trip_id) == public_before
 
 
 @pytest.mark.parametrize("already_bound", [False, True], ids=["first-preparation", "bound-retry"])
