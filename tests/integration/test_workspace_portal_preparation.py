@@ -589,7 +589,7 @@ def test_bound_retry_does_not_transport_to_another_owner_or_origin(
     assert record.portal_handoff["receipt_status"] == "unauthorized"
 
 
-@pytest.mark.parametrize("change", ["price", "proposal", "cleared-verdict"])
+@pytest.mark.parametrize("change", ["price", "proposal", "cleared-verdict", "traveler-name"])
 def test_slow_preparation_cannot_overwrite_a_concurrent_edit(
     saved_portal_handoff, monkeypatch, change
 ):
@@ -604,6 +604,9 @@ def test_slow_preparation_cannot_overwrite_a_concurrent_edit(
             if change == "price":
                 price = other.get(PersistedTripPrice, f"trip-price:{trip_id}:transport")
                 price.amount += 1
+            elif change == "traveler-name":
+                account = other.get(UserAccount, user.user_id)
+                account.display_name = "Renamed during authenticated preparation"
             elif change == "cleared-verdict":
                 assert (
                     update_trip(

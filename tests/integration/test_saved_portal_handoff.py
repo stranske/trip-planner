@@ -15,13 +15,16 @@ from trip_planner.app.services.proposal import (
 from trip_planner.app.services.trip_prices import save_trip_price
 from trip_planner.app.services.trips import update_trip
 from trip_planner.persistence.db import get_session_factory
+from trip_planner.persistence.models.account import UserAccount
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.persistence.models.trip_price import PersistedTripPrice
 
 
 @pytest.mark.parametrize("already_prepared", [False, True], ids=["first-handoff", "retry"])
-@pytest.mark.parametrize("concurrent_change", ["trip", "price", "removed-price", "cleared-verdict"])
+@pytest.mark.parametrize(
+    "concurrent_change", ["trip", "price", "removed-price", "cleared-verdict", "traveler-name"]
+)
 def test_form_preparation_rechecks_facts_changed_while_building_the_form(
     saved_portal_handoff, monkeypatch, already_prepared: bool, concurrent_change: str
 ) -> None:
@@ -53,6 +56,10 @@ def test_form_preparation_rechecks_facts_changed_while_building_the_form(
                 edited_trip = another_session.get(PersistedTrip, trip_id)
                 assert edited_trip is not None
                 edited_trip.title = "Changed during form preparation"
+            elif concurrent_change == "traveler-name":
+                account = another_session.get(UserAccount, user.user_id)
+                assert account is not None
+                account.display_name = "Renamed during form preparation"
             elif concurrent_change == "cleared-verdict":
                 # The production edit service deletes the saved verdict when
                 # a policy determinant such as the trip purpose changes.
@@ -101,6 +108,12 @@ def test_form_preparation_rechecks_facts_changed_while_building_the_form(
     if concurrent_change == "trip":
         assert trip.title == "Changed during form preparation"
         assert trip.updated_at != trip_updated_at
+    elif concurrent_change == "traveler-name":
+        account = session.get(UserAccount, user.user_id)
+        assert account is not None
+        assert account.display_name == "Renamed during form preparation"
+        assert trip.updated_at == trip_updated_at
+        assert price.amount == original_amount
     else:
         assert trip.updated_at == trip_updated_at
         edited_price = session.get(PersistedTripPrice, price_id)

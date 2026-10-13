@@ -18,6 +18,7 @@ from trip_planner.app.services.proposal import (
     _get_owned_trip_record,
     _portal_handoff_snapshot,
     _public_portal_handoff,
+    _require_unchanged_portal_traveler,
 )
 from trip_planner.app.services.trip_prices import read_trip_prices_for_owner
 from trip_planner.integrations.tpp.client import TPPContractError
@@ -133,6 +134,7 @@ def prepare_owner_portal_handoff(
     # Network requests can overlap edits to trip facts or another preparation.
     # Reload before persisting so a capability for obsolete facts is never returned.
     db_session.expire_all()
+    _require_unchanged_portal_traveler(db_session, user=user)
     current_trip = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     current_record = _get_latest_proposal_state(db_session, trip_id=trip_id, user_id=user.user_id)
     if current_record is None or current_record.proposal_state_id != record_id:

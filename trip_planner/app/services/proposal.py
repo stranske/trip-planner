@@ -57,6 +57,7 @@ from trip_planner.integrations.tpp.portal_handoff import (
     snapshot_hash,
 )
 from trip_planner.integrations.tpp.portal_receipt_client import OwnerPortalReceiptClient
+from trip_planner.persistence.models.account import UserAccount
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.persistence.models.trip_price import PersistedTripPrice
@@ -80,6 +81,17 @@ class WorkspaceProposalHandoffNotReadyError(ValueError):
 
 class WorkspaceProposalHandoffStaleError(ValueError):
     """Trip facts changed after the saved verdict that authorized the handoff."""
+
+
+def _require_unchanged_portal_traveler(db_session: Session, *, user: AuthenticatedUser) -> None:
+    """Re-read the persisted name rather than trusting the request's identity snapshot."""
+    current_name = db_session.scalar(
+        select(UserAccount.display_name).where(UserAccount.user_id == user.user_id)
+    )
+    if current_name != user.display_name:
+        raise WorkspaceProposalHandoffStaleError(
+            "Traveler facts changed during portal preparation. Run the policy check again."
+        )
 
 
 def _owner_profile_id(record: PersistedTrip) -> str:
@@ -1950,6 +1962,7 @@ def prepare_workspace_proposal_handoff(
             "Trip facts, prices, or the saved policy result changed. Run the policy check again."
         )
 
+    _require_unchanged_portal_traveler(db_session, user=user)
     action_url = portal_action_url()
     # Preparation is complete only once the outgoing form can be built. A mapping
     # failure must leave the saved verdict and any prior handoff state unchanged.
@@ -2003,6 +2016,7 @@ def prepare_workspace_proposal_handoff(
     # the proposal revision. Re-read those facts after mapping, just as the
     # authenticated preparation path does after its producer requests.
     db_session.expire_all()
+    _require_unchanged_portal_traveler(db_session, user=user)
     trip_record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     latest_record = _get_latest_proposal_state(db_session, trip_id=trip_id, user_id=user.user_id)
     if latest_record is None:
