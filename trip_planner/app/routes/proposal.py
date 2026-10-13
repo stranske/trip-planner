@@ -186,6 +186,40 @@ def refresh_workspace_proposal_portal_receipt(
     return WorkspaceProposalResponse.model_validate(result)
 
 
+@router.post(
+    "/workspace/{trip_id}/proposal/handoff/submit",
+    response_model=WorkspaceProposalResponse,
+    dependencies=[Depends(_require_json_handoff)],
+)
+def submit_reviewed_workspace_portal_handoff(
+    trip_id: str,
+    request: Request,
+    response: Response,
+    _payload: WorkspaceProposalHandoffRequest,
+    user: Annotated[AuthenticatedUser, Depends(require_authenticated_user)],
+    db_session: Annotated[Session, Depends(get_db_session)],
+) -> WorkspaceProposalResponse:
+    """Submit only the authenticated owner's saved binding, never a browser draft ID."""
+    try:
+        result = refresh_workspace_portal_receipt(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            client=getattr(request.app.state, "portal_receipt_client", None),
+            submit=True,
+        )
+    except WorkspaceProposalNotFoundError as error:
+        raise public_http_error(
+            error, status_code=404, message="The requested workspace proposal was not found."
+        ) from error
+    except WorkspaceProposalHandoffNotReadyError as error:
+        raise public_http_error(
+            error, status_code=409, message="Prepare an owner-bound portal handoff first."
+        ) from error
+    response.headers["Cache-Control"] = "no-store"
+    return WorkspaceProposalResponse.model_validate(result)
+
+
 @router.put("/workspace/{trip_id}/proposal", response_model=WorkspaceProposalResponse)
 def save_workspace_proposal(
     trip_id: str,

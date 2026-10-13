@@ -32,7 +32,9 @@ them. Tokens stay out of URLs, public workspace state and persisted consumer met
 
 The real cross-repo test starts the pinned producer on a loopback HTTP socket and uses
 the production consumer factory with its configured file bridge and a real consumer
-session. It proves approval and rejection, traveler-only submission, manager-only
+session. An explicit “Submit reviewed request” action uses that session and the
+server-held traveler credential to submit the bound draft; the view capability
+remains read-only and the browser receives no bearer token. It proves approval and rejection, traveler-only submission, manager-only
 decision, correlated workspace status, consumer restart and idempotent replay. The
 browser view capability alone fails submission. No auth dependency or producer
 response is replaced. The preexisting saved planner policy verdict is a fixture; the

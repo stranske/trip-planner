@@ -119,7 +119,7 @@ def test_session_rejection_precedes_authenticated_producer_calls_and_preserves_s
         evaluation = deepcopy(record.evaluation_record)
         revisions = record.updated_at, trip.updated_at
         calls = (list(client.users), deepcopy(client.preparations), list(client.browser_bindings))
-        for endpoint in (path, f"{path}/status"):
+        for endpoint in (path, f"{path}/status", f"{path}/submit"):
             denied = browser.post(endpoint, json={}, headers={"X-User-Id": user.user_id})
             assert denied.status_code == (404 if session_state == "another-owner" else 401)
             assert user.display_name not in denied.text

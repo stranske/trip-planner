@@ -39,6 +39,7 @@ def refresh_workspace_portal_receipt(
     user: AuthenticatedUser,
     trip_id: str,
     client: OwnerPortalReceiptClient | None,
+    submit: bool = False,
 ) -> dict[str, Any]:
     """Observe only the exact preparation retained for this traveler and trip.
 
@@ -78,6 +79,8 @@ def refresh_workspace_portal_receipt(
                     if stored.get("receipt") is not None
                     else None
                 )
+                if submit and (previous is None or previous.state == "prepared"):
+                    client.submit_request(identity=identity, binding=binding)
                 receipt = validate_portal_receipt(
                     client.read_receipt(identity=identity, binding=binding),
                     binding=binding,

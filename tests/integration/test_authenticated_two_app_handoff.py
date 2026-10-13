@@ -102,10 +102,7 @@ def test_authenticated_real_two_app_approval_status_roundtrip(
             assert not store.list_manager_reviews()
             # The view capability is not submission authority.
             assert traveler.post(f"/portal/review/{draft.draft_id}/submit").status_code == 401
-            submitted = traveler.post(
-                f"/portal/review/{draft.draft_id}/submit",
-                headers={"Authorization": f"Bearer {token}"},
-            )
+            submitted = consumer.post(path + "/submit", json={})
             assert submitted.status_code == 200, submitted.text
             pending = consumer.post(path + "/status", json={})
             assert pending.status_code == 200, pending.text

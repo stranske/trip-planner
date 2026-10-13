@@ -917,6 +917,13 @@ export async function prepareWorkspaceProposalHandoff(
   });
 }
 
+export async function submitWorkspacePortalHandoff(tripId: string): Promise<WorkspaceProposalApiResponse> {
+  return fetchJson<WorkspaceProposalApiResponse>({
+    path: `/api/workspace/${encodeURIComponent(tripId)}/proposal/handoff/submit`,
+    method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: "{}",
+  });
+}
+
 export async function refreshWorkspacePortalReceipt(
   tripId: string
 ): Promise<WorkspaceProposalApiResponse> {

@@ -148,6 +148,30 @@ class OwnerPortalReceiptClient:
 
         return self._exchange_json(outgoing, failure_factory=failed_read)
 
+    def submit_request(
+        self, *, identity: PortalOwnerIdentity, binding: PortalReceiptBinding
+    ) -> None:
+        """Explicit owner-authorized submission; a browser view capability is insufficient."""
+        origin = portal_action_url().removesuffix("/portal/handoff")
+        draft = parse.quote(binding.draft_id, safe="")
+        outgoing = request.Request(
+            f"{origin}/portal/review/{draft}/submit",
+            data=b"",
+            headers={"Authorization": identity.authorization},
+            method="POST",
+        )
+        try:
+            with self._opener.open(outgoing, timeout=15) as response:
+                if response.status != 200:
+                    raise PortalPreparationError(response.status)
+                # Submission returns HTML; only a subsequent validated receipt proves its state.
+                response.read(65_536)
+        except error.HTTPError as failure:
+            failure.close()
+            raise PortalPreparationError(failure.code) from None
+        except (OSError, error.URLError):
+            raise PortalPreparationError(None) from None
+
     def create_browser_session(
         self, *, identity: PortalOwnerIdentity, binding: PortalReceiptBinding
     ) -> PortalBrowserSession:

@@ -13,6 +13,7 @@ import {
   fetchTripPrices,
   fetchWorkspace,
   prepareWorkspaceProposalHandoff,
+  submitWorkspacePortalHandoff,
   refreshWorkspacePortalReceipt,
   recordWorkspaceSpendEvent,
   refreshWorkspaceProposalStatus,
@@ -2021,14 +2022,14 @@ function WorkspacePageContent({
     }
   }
 
-  async function handlePortalReceiptRefresh() {
+  async function handlePortalReceiptRefresh(submit = false) {
     if (portalHandoffAttempt.current !== null) portalHandoffAttempt.current.cancelled = true;
     const attempt = { cancelled: false };
     portalHandoffAttempt.current = attempt;
-    setProposalBusyLabel("Refreshing approver status…");
+    setProposalBusyLabel(submit ? "Submitting reviewed request…" : "Refreshing approver status…");
     setProposalError(null);
     try {
-      const result = await refreshWorkspacePortalReceipt(trip.trip_id);
+      const result = await (submit ? submitWorkspacePortalHandoff(trip.trip_id) : refreshWorkspacePortalReceipt(trip.trip_id));
       if (!attempt.cancelled) {
         setCurrentWorkspace((current) => ({ ...current, proposal_state: result.proposal_state }));
       }
@@ -3035,6 +3036,13 @@ function WorkspacePageContent({
                     Continue in Travel-Plan-Permission to complete the request. Preparing this
                     handoff does not submit it.
                   </p>
+                  {currentWorkspace.proposal_state.portal_handoff?.receipt_status === "current" &&
+                    currentWorkspace.proposal_state.portal_handoff.manager_submission_status === "unknown" ? (
+                    <button type="button" className="primary-button" disabled={Boolean(proposalBusyLabel)}
+                      onClick={() => void handlePortalReceiptRefresh(true)}>
+                      Submit reviewed request
+                    </button>
+                  ) : null}
                   <PortalHandoffStatus
                     handoff={currentWorkspace.proposal_state.portal_handoff}
                     busy={Boolean(proposalBusyLabel)}

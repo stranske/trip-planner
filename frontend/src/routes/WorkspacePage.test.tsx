@@ -10,6 +10,7 @@ import {
   deleteNotebookItem,
   fetchPlannerSession,
   prepareWorkspaceProposalHandoff,
+  submitWorkspacePortalHandoff,
   recordWorkspaceSpendEvent,
   refreshWorkspaceProposalStatus,
   saveWorkspaceBudget,
@@ -41,6 +42,7 @@ vi.mock("../api/workspace", async () => {
     answerPlannerDecision: vi.fn(),
     fetchPlannerSession: vi.fn(),
     prepareWorkspaceProposalHandoff: vi.fn(),
+    submitWorkspacePortalHandoff: vi.fn(),
     submitPlannerOptionFeedback: vi.fn(),
     submitRouteOptionAction: vi.fn(),
     submitPlannerTurn: vi.fn(),
@@ -3120,6 +3122,32 @@ describe("WorkspacePage", () => {
     await selectWorkspaceTab("Policy");
     assertUnknownManagerState();
     expect(mockedPrepareWorkspaceProposalHandoff).toHaveBeenCalledTimes(1);
+  });
+
+  it("submits a reviewed request through the authenticated consumer route", async () => {
+    const handoff = {
+      status: "prepared" as const,
+      prepared_at: "2026-10-03T12:00:00Z",
+      source_snapshot_hash: "sha256:saved-facts",
+      receipt_status: "current" as const,
+      manager_submission_status: "unknown" as const,
+      manager_decision: null,
+    };
+    const proposal = { ...workspacePayload.proposal_state!, portal_handoff: handoff };
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve({
+      ...workspacePayload, proposal_state: proposal,
+    }) });
+    vi.mocked(submitWorkspacePortalHandoff).mockResolvedValue({
+      summary: workspacePayload.proposal_state!.summary,
+      proposal_state: { ...proposal, portal_handoff: {
+        ...handoff, manager_submission_status: "pending_review",
+      } },
+    } as Awaited<ReturnType<typeof submitWorkspacePortalHandoff>>);
+    renderWorkspacePage();
+    await selectWorkspaceTab("Policy");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Submit reviewed request" }));
+    expect(submitWorkspacePortalHandoff).toHaveBeenCalledWith(workspacePayload.trip_record.trip.trip_id);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Submit reviewed request" })).toBeNull());
   });
 
   it("does not post a delayed handoff after leaving the workspace", async () => {
