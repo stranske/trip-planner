@@ -77,10 +77,24 @@ class WorkspaceProposalResponse(BaseModel):
     summary: dict[str, Any] = Field(default_factory=dict)
 
 
-class WorkspaceProposalHandoffRequest(BaseModel):
-    """A JSON-only same-origin request; all handoff facts are resolved server-side."""
+class PortalTravelerAnswers(BaseModel):
+    """Only missing traveler-owned portal facts; identity and saved facts are forbidden."""
 
     model_config = ConfigDict(extra="forbid")
+    destination_zip: str | None = Field(default=None, max_length=20)
+    booking_date: str | None = Field(default=None, max_length=10)
+    selected_fare: str | None = Field(default=None, max_length=30)
+    lowest_fare: str | None = Field(default=None, max_length=30)
+    fare_evidence_attached: Literal["true", "false"] | None = None
+    cabin_class: Literal["economy", "premium_economy", "business", "first"] | None = None
+    flight_duration_hours: str | None = Field(default=None, max_length=20)
+
+
+class WorkspaceProposalHandoffRequest(BaseModel):
+    """JSON-only completion of traveler facts, with server-owned routing and identity."""
+
+    model_config = ConfigDict(extra="forbid")
+    traveler_answers: PortalTravelerAnswers | None = None
 
 
 class WorkspaceProposalHandoffMetadata(BaseModel):

@@ -1908,6 +1908,7 @@ def prepare_workspace_proposal_handoff(
     user: AuthenticatedUser,
     trip_id: str,
     client: OwnerPortalReceiptClient | None = None,
+    traveler_answers: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Prepare a freshness-bound browser form without claiming it was submitted."""
 
@@ -1977,7 +1978,9 @@ def prepare_workspace_proposal_handoff(
     if client is not None:
         # Import here because preparation shares the saved-snapshot validation
         # above and the receipt service uses this module's ownership helpers.
-        from trip_planner.app.services.portal_preparation import prepare_owner_portal_handoff
+        from trip_planner.app.services.portal_preparation import (
+            prepare_owner_portal_handoff,
+        )
 
         return prepare_owner_portal_handoff(
             db_session,
@@ -1987,7 +1990,10 @@ def prepare_workspace_proposal_handoff(
             snapshot=current_snapshot,
             fields=fields,
             client=client,
+            traveler_answers=traveler_answers,
         )
+    if traveler_answers:
+        raise ValueError("Individual portal identity must be configured before completing answers.")
     # Retrying the same bound snapshot regenerates the form without rewriting
     # its preparation history. A changed saved verdict clears this timestamp.
     prepared_at = stored.get("prepared_at") if stored.get("status") == "prepared" else None

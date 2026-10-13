@@ -22,6 +22,7 @@ from trip_planner.app.routes.scenario_history import router as scenario_history_
 from trip_planner.app.routes.trip_prices import router as trip_prices_router
 from trip_planner.app.routes.trips import router as trips_router
 from trip_planner.app.routes.workspace import router as workspace_router
+from trip_planner.integrations.tpp.portal_identity import configured_portal_client
 from trip_planner.integrations.tpp.portal_receipt_client import OwnerPortalReceiptClient
 from trip_planner.persistence.db import ensure_database_ready
 
@@ -77,7 +78,9 @@ def create_app(*, portal_receipt_client: OwnerPortalReceiptClient | None = None)
         description="Initial FastAPI runtime for the Trip Planner full-stack application.",
         lifespan=lifespan,
     )
-    app.state.portal_receipt_client = portal_receipt_client
+    app.state.portal_receipt_client = (
+        portal_receipt_client if portal_receipt_client is not None else configured_portal_client()
+    )
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_error_response(

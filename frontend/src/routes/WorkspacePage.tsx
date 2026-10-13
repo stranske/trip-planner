@@ -55,6 +55,7 @@ import { PlannerSidePanelSurface } from "../components/planner/PlannerSidePanelS
 import { TripComparison } from "../components/trips/TripComparison";
 import { PlanningNotebookPanel } from "../components/workspace/PlanningNotebookPanel";
 import { ApprovalPacket } from "../components/workspace/ApprovalPacket";
+import { PortalTravelerAnswersForm, type PortalTravelerAnswers } from "../components/workspace/PortalTravelerAnswersForm";
 import { PortalHandoffStatus } from "../components/workspace/PortalHandoffStatus";
 import { PlannerPanel } from "../components/workspace/panels/PlannerPanel";
 import {
@@ -2064,7 +2065,7 @@ function WorkspacePageContent({
     }
   }
 
-  async function handlePortalHandoff() {
+  async function handlePortalHandoff(answers?: PortalTravelerAnswers) {
     if (portalHandoffAttempt.current !== null) {
       portalHandoffAttempt.current.cancelled = true;
     }
@@ -2074,7 +2075,7 @@ function WorkspacePageContent({
     setProposalError(null);
     setProposalStatusMessage(null);
     try {
-      const handoff = await prepareWorkspaceProposalHandoff(trip.trip_id);
+      const handoff = await prepareWorkspaceProposalHandoff(trip.trip_id, answers);
       if (attempt.cancelled) {
         return;
       }
@@ -3025,14 +3026,11 @@ function WorkspacePageContent({
                   >
                     Print / Export approval packet
                   </button>
-                  <button
-                    type="button"
-                    className="primary-button"
+                  <PortalTravelerAnswersForm
+                    prepared={Boolean(currentWorkspace.proposal_state.portal_handoff?.receipt_status)}
                     disabled={!hasSavedVerdict || Boolean(proposalBusyLabel)}
-                    onClick={() => void handlePortalHandoff()}
-                  >
-                    Send to my approver
-                  </button>
+                    onSubmit={(answers) => void handlePortalHandoff(answers)}
+                  />
                   <p className="muted-copy">
                     Continue in Travel-Plan-Permission to complete the request. Preparing this
                     handoff does not submit it.

@@ -11,6 +11,14 @@ import pytest
 from tests.integration.portal_contract_checkout import verify_portal_contract_imports
 
 
+@pytest.fixture(autouse=True)
+def isolate_synthetic_producer_namespace(monkeypatch: pytest.MonkeyPatch):
+    """These unit tests install synthetic modules; retain real app imports outside each test."""
+    for name in list(sys.modules):
+        if name == "travel_plan_permission" or name.startswith("travel_plan_permission."):
+            monkeypatch.delitem(sys.modules, name)
+
+
 def _module(name: str, path: Path) -> ModuleType:
     module = ModuleType(name)
     module.__file__ = str(path)

@@ -903,7 +903,8 @@ export type WorkspaceProposalHandoffResponse = {
 };
 
 export async function prepareWorkspaceProposalHandoff(
-  tripId: string
+  tripId: string,
+  travelerAnswers?: Record<string, string>
 ): Promise<WorkspaceProposalHandoffResponse> {
   return fetchJson<WorkspaceProposalHandoffResponse>({
     path: `/api/workspace/${encodeURIComponent(tripId)}/proposal/handoff`,
@@ -912,7 +913,7 @@ export async function prepareWorkspaceProposalHandoff(
     headers: {
       "Content-Type": "application/json",
     },
-    body: "{}",
+    body: JSON.stringify(travelerAnswers ? { traveler_answers: travelerAnswers } : {}),
   });
 }
 

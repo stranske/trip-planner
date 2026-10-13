@@ -3092,6 +3092,7 @@ describe("WorkspacePage", () => {
     const page = renderWorkspacePage();
     await selectWorkspaceTab("Policy");
     expect(screen.queryByRole("status", { name: "Approver portal handoff status" })).toBeNull();
+    await completePortalAnswers();
     await userEvent.setup().click(screen.getByRole("button", { name: "Send to my approver" }));
 
     function assertUnknownManagerState() {
@@ -3106,7 +3107,7 @@ describe("WorkspacePage", () => {
     }
 
     await waitFor(assertUnknownManagerState);
-    expect(mockedPrepareWorkspaceProposalHandoff).toHaveBeenCalledWith(workspace.trip_record.trip.trip_id);
+    expect(mockedPrepareWorkspaceProposalHandoff).toHaveBeenCalledWith(workspace.trip_record.trip.trip_id, { destination_zip: "20001", booking_date: "2026-12-01" });
     expect(mockedSubmitTppPortalHandoff).toHaveBeenCalledWith(handoff);
     page.unmount();
     mockedUseLoaderData.mockReturnValue({
@@ -3134,6 +3135,7 @@ describe("WorkspacePage", () => {
     mockedPrepareWorkspaceProposalHandoff.mockReturnValue(pending.promise);
     const page = renderWorkspacePage();
     await selectWorkspaceTab("Policy");
+    await completePortalAnswers();
     await userEvent.setup().click(screen.getByRole("button", { name: "Send to my approver" }));
     expect(mockedPrepareWorkspaceProposalHandoff).toHaveBeenCalledOnce();
 
@@ -3173,6 +3175,7 @@ describe("WorkspacePage", () => {
       const page = renderWorkspacePage();
       await selectWorkspaceTab("Policy");
       const user = userEvent.setup();
+      await completePortalAnswers();
       await user.click(screen.getByRole("button", { name: "Send to my approver" }));
       expect(screen.getByRole("button", { name: "Send to my approver" })).toBeDisabled();
 
@@ -3187,6 +3190,7 @@ describe("WorkspacePage", () => {
       });
       const fresh = deferred<WorkspaceProposalHandoffResponse>();
       mockedPrepareWorkspaceProposalHandoff.mockReturnValueOnce(fresh.promise);
+      await completePortalAnswers();
       await user.click(screen.getByRole("button", { name: "Send to my approver" }));
       expect(mockedPrepareWorkspaceProposalHandoff).toHaveBeenCalledTimes(2);
       await act(async () => {
@@ -4839,3 +4843,13 @@ describe("WorkspacePage", () => {
     expect(planTab).toHaveAttribute("tabindex", "-1");
   });
 });
+
+async function completePortalAnswers() {
+  const user = userEvent.setup();
+  const zip = screen.getByLabelText("Destination ZIP");
+  await user.clear(zip);
+  await user.type(zip, "20001");
+  const booking = screen.getByLabelText("Booking date");
+  await user.clear(booking);
+  await user.type(booking, "2026-12-01");
+}

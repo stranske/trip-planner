@@ -108,6 +108,11 @@ def prepare_workspace_proposal_portal_handoff(
             user=user,
             trip_id=trip_id,
             client=client,
+            traveler_answers=(
+                _payload.traveler_answers.model_dump(exclude_none=True)
+                if _payload.traveler_answers is not None
+                else None
+            ),
         )
     except WorkspaceProposalNotFoundError as error:
         raise public_http_error(

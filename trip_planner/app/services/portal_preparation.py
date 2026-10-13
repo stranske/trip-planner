@@ -49,6 +49,7 @@ def prepare_owner_portal_handoff(
     snapshot: dict[str, Any],
     fields: dict[str, str],
     client: OwnerPortalReceiptClient,
+    traveler_answers: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Use saved facts only; producer validation must reject incomplete answers.
 
@@ -59,6 +60,21 @@ def prepare_owner_portal_handoff(
     stored = dict(record.portal_handoff or {})
     revision, record_id, trip_id = record.updated_at, record.proposal_state_id, record.trip_id
     source_hash = snapshot_hash(snapshot)
+    retained_answers = stored.get("traveler_answers") or {}
+    answers = retained_answers if traveler_answers is None else traveler_answers
+    # Complete missing facts without changing a saved trip, quote or verdict.
+    if any(key in fields and fields[key] != value for key, value in answers.items()):
+        raise WorkspaceProposalHandoffStaleError("Traveler answers conflict with saved facts.")
+    if stored.get("producer_binding") and answers != retained_answers:
+        raise WorkspaceProposalHandoffStaleError(
+            "Run the policy check again before changing answers."
+        )
+    preparation_version = (
+        snapshot_hash({"source_snapshot_hash": source_hash, "traveler_answers": answers})
+        if answers
+        else source_hash
+    )
+    complete_fields = {**fields, **answers}
     identity = client.resolve_owner(user.user_id)
     owner = identity.owner_binding()
     origin = portal_action_url().removesuffix("/portal/handoff")
@@ -66,7 +82,7 @@ def prepare_owner_portal_handoff(
         if stored.get("producer_owner") != owner or stored.get("producer_origin") != origin:
             raise PortalPreparationError(403)
         binding = PortalReceiptBinding.model_validate(stored["producer_binding"])
-        if binding.snapshot_version != source_hash:
+        if binding.snapshot_version != preparation_version:
             raise WorkspaceProposalHandoffStaleError("The producer snapshot version changed.")
         previous = (
             validate_portal_receipt(stored["receipt"], binding=binding)
@@ -84,11 +100,11 @@ def prepare_owner_portal_handoff(
             client.prepare_handoff(
                 identity=identity,
                 handoff_id=handoff_id,
-                snapshot_version=source_hash,
-                answers=fields,
+                snapshot_version=preparation_version,
+                answers=complete_fields,
             ),
             handoff_id=handoff_id,
-            snapshot_version=source_hash,
+            snapshot_version=preparation_version,
         )
         binding = PortalReceiptBinding.model_validate(
             receipt.model_dump(include=set(PortalReceiptBinding.model_fields))
@@ -108,6 +124,7 @@ def prepare_owner_portal_handoff(
         "status": "prepared",
         "prepared_at": receipt.prepared_at.isoformat(),
         "producer_owner": owner,
+        "traveler_answers": answers,
         "producer_origin": origin,
         "producer_binding": binding.model_dump(),
         "receipt": receipt.model_dump(mode="json"),
