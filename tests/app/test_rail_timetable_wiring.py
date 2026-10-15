@@ -848,6 +848,53 @@ def test_a_two_day_train_arrives_at_the_city_and_displays_the_correct_day(
     assert not workspace_agrees(corrupted, status, expected, date(2026, 10, 13))
 
 
+def test_untimed_intermediate_stop_does_not_make_the_feed_unreadable(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stop_times = (
+        FEED["stop_times.txt"].splitlines()[0] + "\n"
+        "2150,06:00:00,06:00:00,BOS,1,0,1\n"
+        "2150,,,RTE,2,0,0\n"
+        "2150,06:35:00,06:37:00,PVD,3,0,0\n"
+        "2150,09:40:00,09:40:00,NYP,4,1,0\n"
+        + "\n".join(
+            line
+            for line in FEED["stop_times.txt"].splitlines()[1:]
+            if not line.startswith("2150,")
+        )
+        + "\n"
+    )
+    feed = _feed(tmp_path, extra_tables={"stop_times.txt": stop_times})
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(feed))
+    payload = _workspace(client, "Boston", "New York, NY", "2026-10-13")
+
+    assert payload["inventory_summary"]["rail_lookup"]["status"] == rail_schedule.FOUND
+    assert "Acela 2150" in _rail(payload)["summary"]
+    status, expected = _probe_answer(feed, "Boston", "New York, NY", "2026-10-13")
+    assert workspace_agrees(payload, status, expected, date(2026, 10, 13))
+
+
+def test_workspace_agrees_rejects_false_calendar_message_when_date_was_checked(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    feed = _feed(tmp_path)
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(feed))
+    payload = _workspace(client, "Boston", "New York, NY", "2026-10-13")
+    status, expected = _probe_answer(feed, "Boston", "New York, NY", "2026-10-13")
+    day = date(2026, 10, 13)
+    assert expected is not None
+    corrupted = deepcopy(payload)
+    calendar_only = (
+        "The timetable file has no service calendar, so the travel date was not checked."
+    )
+    scheduled = f"Scheduled to run on {day.isoformat()}."
+    corrupted["inventory_summary"]["rail_lookup"]["summary"] = corrupted[
+        "inventory_summary"
+    ]["rail_lookup"]["summary"].replace(scheduled, calendar_only)
+    _rail(corrupted)["summary"] = _rail(corrupted)["summary"].replace(scheduled, calendar_only)
+    assert not workspace_agrees(corrupted, status, expected, day)
+
+
 @pytest.mark.parametrize("restriction", ["pickup_type", "drop_off_type"])
 def test_a_pair_with_only_restricted_trains_has_no_direct_train(
     client: TestClient,

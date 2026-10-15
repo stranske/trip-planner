@@ -60,7 +60,7 @@ class TrainTrip:
     train_number: str
     headsign: str
     #: (stop_id, arrival minutes, departure minutes, can board, can alight), in order.
-    calls: tuple[tuple[str, int, int, bool, bool], ...]
+    calls: tuple[tuple[str, int | None, int | None, bool, bool], ...]
 
 
 @dataclass(frozen=True)
@@ -89,10 +89,12 @@ class RailLookup:
     notes: tuple[str, ...] = field(default_factory=tuple)
 
 
-def _minutes(value: str) -> int:
+def _minutes(value: str) -> int | None:
     """GTFS time "HH:MM:SS"; hours may exceed 23 for trips past midnight."""
 
-    hours, minutes, *_ = value.split(":")
+    if not value or not value.strip():
+        return None
+    hours, minutes, *_ = value.strip().split(":")
     return int(hours) * 60 + int(minutes)
 
 
@@ -315,7 +317,7 @@ def _direct_trains(
         boards = [
             (index, stop_id, departure)
             for index, (stop_id, _arrival, departure, can_board, _alight) in enumerate(trip.calls)
-            if stop_id in origin_km and can_board
+            if stop_id in origin_km and can_board and departure is not None
         ]
         if not boards:
             continue
@@ -323,7 +325,7 @@ def _direct_trains(
         alights = [
             (stop_id, arrival)
             for stop_id, arrival, _departure, _board, can_alight in trip.calls[b_index + 1 :]
-            if stop_id in destination_km and can_alight
+            if stop_id in destination_km and can_alight and arrival is not None
         ]
         if not alights:
             continue

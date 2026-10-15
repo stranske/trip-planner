@@ -241,11 +241,16 @@ def workspace_agrees(
     if not service.lower().startswith("amtrak"):
         service = f"Amtrak {service}"
     train_label = f"{service}{f' {expected.number}' if expected.number else ''}:"
-    date_summary = (
-        f"Scheduled to run on {day.isoformat()}."
-        if expected.runs_on_date is True
-        else "The timetable file has no service calendar, so the travel date was not checked."
-    )
+    if expected.runs_on_date is True:
+        date_summary = f"Scheduled to run on {day.isoformat()}."
+    elif expected.runs_on_date is None:
+        date_summary = (
+            "The timetable file has no service calendar, so the travel date was not checked."
+        )
+    else:
+        date_summary = (
+            f"Direct Amtrak trains run on this route, but the timetable shows none on {day.isoformat()}."
+        )
     return bool(
         rail[0]["metrics"]["travel_minutes"] == expected.duration_minutes
         and rail[0]["metrics"]["transfers"] == 0

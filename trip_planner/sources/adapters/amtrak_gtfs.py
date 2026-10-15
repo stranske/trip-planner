@@ -75,7 +75,15 @@ def _read_table(archive: ZipFile, table_name: str) -> list[dict[str, str]]:
                     "or route_long_name"
                 )
     for row_number, row in enumerate(rows, start=2):
-        empty = sorted(column for column in _REQUIRED_COLUMNS[table_name] if not row[column])
+        if table_name == "stop_times.txt":
+            # GTFS allows blank arrival_time and/or departure_time on untimed intermediate stops.
+            empty = sorted(
+                column
+                for column in _REQUIRED_COLUMNS[table_name]
+                if column not in {"arrival_time", "departure_time"} and not row[column]
+            )
+        else:
+            empty = sorted(column for column in _REQUIRED_COLUMNS[table_name] if not row[column])
         if empty:
             raise ValueError(
                 f"GTFS table {table_name!r} row {row_number} has empty required values: {empty!r}"

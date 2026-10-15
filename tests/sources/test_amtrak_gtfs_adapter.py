@@ -99,6 +99,25 @@ def test_corrupt_stop_times_rejected(tmp_path: Path) -> None:
         AmtrakGtfsAdapter(feed_path).fetch_snapshot(_query())
 
 
+def test_accepts_untimed_intermediate_stop_times(tmp_path: Path) -> None:
+    feed_path = _fixture_zip(
+        tmp_path,
+        overrides={
+            "stop_times.txt": (
+                "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
+                "NEC-171,07:00:00,07:00:00,NYP,1\n"
+                "NEC-171,,,PHL,2\n"
+                "NEC-171,10:25:00,10:25:00,WAS,3\n"
+            )
+        },
+    )
+
+    stops = AmtrakGtfsAdapter(feed_path).fetch_snapshot(_query()).records[0].payload["stops"]
+
+    assert stops[1]["arrival_time"] == ""
+    assert stops[1]["departure_time"] == ""
+
+
 def test_orders_stops_by_sequence(tmp_path: Path) -> None:
     feed_path = _fixture_zip(
         tmp_path,
