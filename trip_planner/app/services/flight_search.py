@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+from http.client import HTTPException
 from typing import Any
 
 from trip_planner.persistence.models.trip import PersistedTrip
@@ -81,7 +82,7 @@ def search_trip_flights(record: PersistedTrip, *, token: str | None = None) -> F
     try:
         origin_code = adapter.suggest_iata_code(record.origin)
         destination_code = adapter.suggest_iata_code(regions[0])
-    except (OSError, ValueError, TypeError) as error:
+    except (OSError, ValueError, TypeError, HTTPException) as error:
         return FlightSearchResult(
             PROVIDER_ERROR, f"Duffel's place search failed ({type(error).__name__}). {_ENTER_IT}"
         )

@@ -248,7 +248,7 @@ class DuffelFlightAdapter(SourceAdapter):
         if self.api_token is None:
             raise ValueError("place suggestions need an api_token")
         request = Request(
-            f"{self.api_base_url}/places/suggestions?query={quote(place_name.split(',')[0])}",
+            f"{self.api_base_url}/places/suggestions?query={quote(place_name.strip(), safe='')}",
             headers={
                 "Accept": "application/json",
                 "Duffel-Version": "v2",

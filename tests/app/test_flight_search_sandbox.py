@@ -8,6 +8,7 @@ reaches the response, the trip's prices or the workspace.
 
 import json
 from collections.abc import Iterator
+from http.client import IncompleteRead
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
@@ -25,7 +26,7 @@ OFFERS = Path(__file__).resolve().parents[1] / "fixtures/sources/raw/duffel_offe
 OFFER_AMOUNTS = [
     offer["total_amount"] for offer in json.loads(OFFERS.read_text())["data"]["offers"]
 ]
-CODES = {"Chicago": "CHI", "New York": "NYC"}
+CODES = {"Chicago": "CHI", "New York, NY": "NYC", "Portland, ME": "PWM", "Portland, OR": "PDX"}
 
 
 class RecordedDuffel:
@@ -61,7 +62,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     reset_database_state()
 
 
-def _trip(client: TestClient) -> str:
+def _trip(client: TestClient, *, origin: str = "Chicago") -> str:
     created = client.post(
         "/api/trips",
         json={
@@ -69,7 +70,7 @@ def _trip(client: TestClient) -> str:
             "summary": "Quarterly review.",
             "mode": "business",
             "trip_frame": {
-                "origin": "Chicago",
+                "origin": origin,
                 "start_date": "2026-11-10",
                 "end_date": "2026-11-11",
                 "duration_days": 2,
@@ -154,3 +155,51 @@ def test_a_provider_failure_is_reported_not_hidden(
 
     assert result["status"] == flight_search.PROVIDER_ERROR
     assert "HTTP 503" in result["summary"]
+
+
+@pytest.mark.parametrize("failed_place", ["Chicago", "New York, NY"])
+def test_a_truncated_places_response_is_reported_as_provider_error(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, failed_place: str
+) -> None:
+    monkeypatch.setenv(flight_search.TOKEN_ENV, "duffel_test_fixture")
+    duffel = RecordedDuffel()
+
+    def truncated_places(request: Request, timeout: float) -> bytes:
+        url = urlparse(request.full_url)
+        if url.path.endswith("/places/suggestions"):
+            if parse_qs(url.query)["query"][0] == failed_place:
+                raise IncompleteRead(b'{"data":', 20)
+        return duffel(request, timeout)
+
+    monkeypatch.setattr(flight_search, "transport", truncated_places)
+    trip_id = _trip(client)
+
+    result = _search(client, trip_id)
+
+    assert result["status"] == flight_search.PROVIDER_ERROR
+    assert "IncompleteRead" in result["summary"]
+    assert result["prices_shown"] is False
+    assert not any("/air/offer_requests" in call for call in duffel.calls)
+    assert client.get(f"/api/workspace/{trip_id}/prices").json()["priced_component_count"] == 0
+
+
+@pytest.mark.parametrize("origin, code", [("Portland, ME", "PWM"), ("Portland, OR", "PDX")])
+def test_places_search_keeps_the_region_for_same_named_cities(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, origin: str, code: str
+) -> None:
+    monkeypatch.setenv(flight_search.TOKEN_ENV, "duffel_test_fixture")
+    duffel = RecordedDuffel()
+    monkeypatch.setattr(flight_search, "transport", duffel)
+
+    result = _search(client, _trip(client, origin=origin))
+
+    assert result["status"] == flight_search.TEST_MODE
+    assert result["origin_code"] == code
+    assert result["destination_code"] == "NYC"
+    assert result["prices_shown"] is False
+    place_queries = [
+        parse_qs(urlparse(call).query)["query"][0]
+        for call in duffel.calls
+        if urlparse(call).path.endswith("/places/suggestions")
+    ]
+    assert place_queries == [origin, "New York, NY"]
