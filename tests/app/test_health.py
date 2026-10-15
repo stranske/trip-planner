@@ -1,3 +1,7 @@
+import csv
+
+import pytest
+
 from fastapi.testclient import TestClient
 
 from trip_planner.app import database_status
@@ -131,4 +135,64 @@ def test_health_reports_the_rail_timetable_in_three_distinct_states(monkeypatch,
         "reason": None,
         "stations": 2,
         "trips": 1,
+    }
+
+
+@pytest.mark.parametrize("table_name", ["calendar.txt", "calendar_dates.txt"])
+@pytest.mark.parametrize("location", ["header", "row"])
+def test_health_classifies_malformed_optional_calendar_csv(
+    monkeypatch, tmp_path, table_name, location
+) -> None:
+    from zipfile import ZipFile
+
+    from trip_planner.persistence.db import reset_database_state
+    from trip_planner.sources import rail_schedule
+
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'health.db'}")
+    reset_database_state()
+    feed = tmp_path / "GTFS.zip"
+    if table_name == "calendar.txt":
+        header = "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date"
+        tail = ",1,1,1,1,1,1,1,20261001,20261231"
+    else:
+        header = "service_id,date,exception_type"
+        tail = ",20261110,1"
+    oversized = "x" * (csv.field_size_limit() + 1)
+    calendar = (
+        header + "," + oversized + "\nDAILY" + tail + "\n"
+        if location == "header"
+        else header + "\n" + oversized + tail + "\n"
+    )
+    with ZipFile(feed, "w") as archive:
+        archive.writestr(
+            "stops.txt",
+            "stop_id,stop_name,stop_lat,stop_lon\nNYP,New York,40.75,-73.99\nPHL,Philadelphia,39.95,-75.18\n",
+        )
+        archive.writestr(
+            "routes.txt",
+            "route_id,route_short_name,route_long_name,route_type\nNER,,Northeast Regional,2\n",
+        )
+        archive.writestr(
+            "trips.txt", "route_id,service_id,trip_id,trip_headsign\nNER,DAILY,171,Washington\n"
+        )
+        archive.writestr(
+            "stop_times.txt",
+            "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
+            "171,07:00:00,07:00:00,NYP,1\n171,08:20:00,08:22:00,PHL,2\n",
+        )
+        archive.writestr(table_name, calendar)
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(feed))
+    with TestClient(create_app(), raise_server_exceptions=False) as client:
+        response = client.get("/api/health")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["database"]["ready"] is True
+    assert body["rail_timetable"] == {
+        "status": "feed_unreadable",
+        "feed_name": "GTFS.zip",
+        "reason": "ValueError",
+        "stations": 0,
+        "trips": 0,
     }
