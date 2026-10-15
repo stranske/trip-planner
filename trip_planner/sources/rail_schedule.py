@@ -120,16 +120,21 @@ def service_name(route_name: str) -> str:
     return route_name if route_name.lower().startswith("amtrak") else f"Amtrak {route_name}"
 
 
-def _optional_table(archive: ZipFile, name: str) -> list[dict[str, str]] | None:
+def _optional_table(
+    archive: ZipFile, name: str, *, required_columns: set[str] | None = None
+) -> list[dict[str, str]] | None:
     try:
         member = archive.open(name)
     except KeyError:
         return None
     with member, TextIOWrapper(member, encoding="utf-8-sig", newline="") as stream:
-        return [
-            {key: (value or "").strip() for key, value in row.items() if key}
-            for row in csv.DictReader(stream)
-        ]
+        reader = csv.DictReader(stream)
+        missing = (required_columns or set()) - set(reader.fieldnames or ())
+        if missing:
+            raise ValueError(
+                f"GTFS table {name!r} is missing required columns: {sorted(missing)!r}"
+            )
+        return [{key: (value or "").strip() for key, value in row.items() if key} for row in reader]
 
 
 @dataclass(frozen=True)
@@ -210,6 +215,7 @@ def _load(path: Path) -> RailSchedule:
                 ),
             )
         )
+    days = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
     with ZipFile(path) as archive:
         stations = {}
         for row in _optional_table(archive, "stops.txt") or []:
@@ -225,9 +231,19 @@ def _load(path: Path) -> RailSchedule:
                 latitude=latitude,
                 longitude=longitude,
             )
-        calendar_rows = _optional_table(archive, "calendar.txt")
-        exception_rows = _optional_table(archive, "calendar_dates.txt") or []
-    days = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+        calendar_rows = _optional_table(
+            archive,
+            "calendar.txt",
+            required_columns={"service_id", "start_date", "end_date", *days},
+        )
+        exception_rows = (
+            _optional_table(
+                archive,
+                "calendar_dates.txt",
+                required_columns={"service_id", "date", "exception_type"},
+            )
+            or []
+        )
     calendar = (
         {
             row["service_id"]: (

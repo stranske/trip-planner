@@ -193,6 +193,78 @@ def test_a_saturday_trip_does_not_get_a_weekday_only_train(
     assert "Scheduled to run on 2026-10-17." in rail["summary"]
 
 
+def test_changing_the_travel_date_refreshes_the_train_in_the_same_workspace(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    feed = _feed(tmp_path)
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(feed))
+    payload = _workspace(client, "Boston", "New York, NY", "2026-10-13")
+    trip_id = payload["trip_record"]["trip"]["trip_id"]
+    assert "Acela 2150" in _rail(payload)["summary"]
+
+    for day, number in (
+        ("2026-10-17", "171"),
+        ("2028-10-17", None),
+        ("2026-10-13", "2150"),
+    ):
+        updated = client.patch(
+            f"/api/trips/{trip_id}",
+            json={"trip_frame": {"start_date": day, "end_date": day}},
+        )
+        assert updated.status_code == 200, updated.text
+        response = client.get(f"/api/workspace/{trip_id}")
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        status, expected = _probe_answer(feed, "Boston", "New York, NY", day)
+        if number is None:
+            assert status == rail_schedule.NO_TRAIN_ON_DATE
+            assert len(_rows(payload)) == 1
+        else:
+            assert expected is not None
+            assert expected.number == number
+            assert len(_rows(payload)) == 2
+            assert f"Scheduled to run on {day}." in _rail(payload)["summary"]
+        assert workspace_agrees(payload, status, expected, date.fromisoformat(day))
+
+
+@pytest.mark.parametrize(
+    "failure", ["missing", "not-a-zip", "calendar-header", "weekday-header", "exception-header"]
+)
+def test_an_unreadable_feed_reports_a_lookup_failure_instead_of_no_trains(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
+    feed = tmp_path / "GTFS.zip"
+    if failure == "not-a-zip":
+        feed.write_text("not a GTFS ZIP", encoding="utf-8")
+    elif failure in {"calendar-header", "weekday-header"}:
+        column = "service_id" if failure == "calendar-header" else "monday"
+        feed = _feed(
+            tmp_path,
+            extra_tables={
+                "calendar.txt": FEED["calendar.txt"].replace(f"{column},", "wrong_column,", 1)
+            },
+        )
+    elif failure == "exception-header":
+        feed = _feed(
+            tmp_path,
+            extra_tables={
+                "calendar_dates.txt": "service_id,wrong_column,exception_type\nWEEKDAY,20261013,2\n"
+            },
+        )
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(feed))
+
+    payload = _workspace(client, "Boston", "New York, NY", "2026-10-13")
+
+    lookup = payload["inventory_summary"]["rail_lookup"]
+    assert lookup["status"] == rail_schedule.FEED_UNREADABLE
+    assert "could not be read" in lookup["summary"]
+    assert "No direct" not in lookup["summary"]
+    assert len(_rows(payload)) == 1
+
+
 @pytest.mark.parametrize(
     ("day", "expected_status"),
     [
