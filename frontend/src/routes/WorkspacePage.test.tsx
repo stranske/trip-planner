@@ -9,6 +9,7 @@ import {
   createNotebookItem,
   deleteNotebookItem,
   fetchPlannerSession,
+  searchTripFlights,
   prepareWorkspaceProposalHandoff,
   submitWorkspacePortalHandoff,
   recordWorkspaceSpendEvent,
@@ -57,6 +58,7 @@ vi.mock("../api/workspace", async () => {
     updateNotebookItem: vi.fn(),
     deleteNotebookItem: vi.fn(),
     setNotebookFocus: vi.fn(),
+    searchTripFlights: vi.fn(),
   };
 });
 
@@ -1084,6 +1086,32 @@ describe("WorkspacePage", () => {
     expect(text).not.toMatch(/Dest[- ]Gateway|dest-city|runtime bundle|persisted/i);
     const stops = screen.getAllByText(/^(Seattle|Chicago, IL)$/);
     expect(stops[0]).toHaveTextContent("Seattle");
+  });
+
+  it("runs a flight search on request and shows what it found, with no fare", async () => {
+    vi.mocked(searchTripFlights).mockResolvedValue({
+      status: "test_mode",
+      summary:
+        "Flight search is connected to Duffel in test mode: 1 offer(s) for CHI → NYC on 2026-11-10. Test-mode offers come from a fictional airline, so none is shown as a price.",
+      offer_count: 1,
+      origin_code: "CHI",
+      destination_code: "NYC",
+      prices_shown: false,
+    });
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+    renderWorkspacePage();
+    await selectWorkspaceTab("Compare");
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Search flights" }));
+
+    const result = await screen.findByTestId("flight-search-result");
+    expect(result).toHaveTextContent("Duffel in test mode");
+    expect(result.textContent ?? "").not.toMatch(/\$\d/);
+    expect(vi.mocked(searchTripFlights)).toHaveBeenCalledWith(workspacePayload.trip_record.trip.trip_id);
   });
 
   it("says on Compare what the train timetable found for this journey", async () => {

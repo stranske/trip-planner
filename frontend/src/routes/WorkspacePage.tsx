@@ -21,6 +21,7 @@ import {
   retryPolicyServiceCheck,
   saveTripPrice,
   saveWorkspaceBudget,
+  searchTripFlights,
   setNotebookFocus,
   submitPlannerTurn,
   submitRouteOptionAction,
@@ -28,6 +29,7 @@ import {
   updateNotebookItem,
   updateWorkspacePlanningMode,
   type ActualSpendEventUpsertPayload,
+  type FlightSearchResult,
   type BudgetPlanUpsertPayload,
   type BudgetWorkspaceState,
   type NotebookCategory,
@@ -1256,6 +1258,9 @@ function WorkspacePageContent({
   trips: TripRecord[];
 }) {
   const navigate = useNavigate();
+  const [flightSearch, setFlightSearch] = useState<FlightSearchResult | null>(null);
+  const [flightSearchBusy, setFlightSearchBusy] = useState(false);
+  const [flightSearchError, setFlightSearchError] = useState<string | null>(null);
   // Set by the trip setup form after an edit, e.g. to say a policy verdict was removed.
   const setupNotice = (useLocation().state as { setupNotice?: string } | null)?.setupNotice ?? null;
   const [currentWorkspace, setCurrentWorkspace] = useState(workspace);
@@ -1506,6 +1511,18 @@ function WorkspacePageContent({
         : null,
     };
   });
+  async function handleFlightSearch() {
+    setFlightSearchBusy(true);
+    setFlightSearchError(null);
+    try {
+      setFlightSearch(await searchTripFlights(trip.trip_id));
+    } catch (error) {
+      setFlightSearchError(error instanceof Error ? error.message : "The flight search failed.");
+    } finally {
+      setFlightSearchBusy(false);
+    }
+  }
+
   function handleViewRoute(scenarioId: string) {
     handleScenarioSelection(scenarioId);
     setActiveTab("map");
@@ -2697,6 +2714,21 @@ function WorkspacePageContent({
                   : ""}
               </p>
             ) : null}
+            {/* Runs only when asked: a provider search takes 10-25 s. In Duffel test mode it
+                reports what came back and never shows a fare (provider plan §5). */}
+            <div className="flight-search" data-testid="flight-search">
+              <button type="button" onClick={handleFlightSearch} disabled={flightSearchBusy}>
+                {flightSearchBusy ? "Searching flights…" : "Search flights"}
+              </button>
+              {flightSearch ? (
+                <p className="field-hint" role="status" data-testid="flight-search-result">
+                  Flights: {flightSearch.summary}
+                </p>
+              ) : null}
+              {flightSearchError ? (
+                <p className="planner-inline-error">{flightSearchError}</p>
+              ) : null}
+            </div>
             <RouteTradeoffsPanel
               compactLayout={isCompactLayout}
               showPolicyPosture={panelVisibility.showPolicyPosture}

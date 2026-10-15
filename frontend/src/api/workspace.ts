@@ -1067,6 +1067,24 @@ export async function retryPolicyServiceCheck(
   return refreshWorkspaceProposalStatus(tripId);
 }
 
+/** What a flight search returned. In Duffel test mode no fare is ever included. */
+export type FlightSearchResult = {
+  status: string;
+  summary: string;
+  offer_count: number;
+  origin_code: string;
+  destination_code: string;
+  prices_shown: boolean;
+};
+
+export async function searchTripFlights(tripId: string): Promise<FlightSearchResult> {
+  return fetchJson<FlightSearchResult>({
+    path: `/api/workspace/${tripId}/flights/search`,
+    method: "POST",
+    credentials: "include",
+  });
+}
+
 export async function answerPlannerDecision(
   tripId: string,
   decisionId: string,
