@@ -5,7 +5,8 @@ import json
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from copy import deepcopy
+from datetime import UTC, date, datetime, timedelta
 from importlib import resources
 from typing import Any
 
@@ -16,6 +17,7 @@ from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.geo import ResolvedPlace, distance_km, resolve_place
 from trip_planner.options import InventoryBundle, MixedOption
 from trip_planner.persistence.models.trip import PersistedTrip
+from trip_planner.sources import rail_schedule
 from trip_planner.sources import (
     AdapterIssue,
     NormalizationHandoff,
@@ -143,6 +145,35 @@ def is_runtime_measured_bundle(bundle_id: object) -> bool:
     """True when a bundle came from the distance-and-time adapter, not a provider."""
 
     return isinstance(bundle_id, str) and RUNTIME_BUNDLE_MARKER in bundle_id
+
+
+#: Marks a bundle whose transport is a timetabled train from the rail schedule feed. The
+#: timetable states whether a train is direct (so its connections ARE measured) but holds no
+#: fares and no seat availability.
+RAIL_TIMETABLE_BUNDLE_MARKER = "-rail-timetable-"
+
+
+def is_rail_timetable_bundle(bundle_id: object) -> bool:
+    return isinstance(bundle_id, str) and RAIL_TIMETABLE_BUNDLE_MARKER in bundle_id
+
+
+def is_trip_measured_bundle(bundle_id: object) -> bool:
+    """Built from this trip's own places: measured route or timetabled train."""
+
+    return is_runtime_measured_bundle(bundle_id) or is_rail_timetable_bundle(bundle_id)
+
+
+def availability_checked_with_provider(bundle_id: object) -> bool:
+    """Neither the distance model nor a timetable asks anyone whether seats exist."""
+
+    return not is_trip_measured_bundle(bundle_id)
+
+
+def _clock_minutes(clock: str) -> int:
+    """ "06:05" or "00:40 (+1 day)" from the rail timetable, as minutes after midnight."""
+
+    hours, minutes = clock[:5].split(":")
+    return int(hours) * 60 + int(minutes) + (24 * 60 if "+1 day" in clock else 0)
 
 
 def _unpriced_total(amount: float | None) -> dict[str, Any]:
@@ -668,6 +699,114 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
             assumptions=tuple(assumptions),
         )
 
+    def _rail_lookup(self) -> rail_schedule.RailLookup | None:
+        """The timetabled direct train for a one-destination trip, or why there is none.
+
+        None when the question does not apply: no origin, or several destinations (a train
+        for the first leg alone is not comparable with a route for the whole trip).
+        """
+
+        if not self.origin or len(self.primary_regions) != 1:
+            return None
+        origin, destination = resolve_place(self.origin), resolve_place(self.primary_regions[0])
+        if origin is None or destination is None:
+            return None
+        try:
+            travel_date = date.fromisoformat(self.start_date) if self.start_date else None
+        except ValueError:
+            travel_date = None
+        return rail_schedule.find_direct_train(origin, destination, travel_date=travel_date)
+
+    def _rail_bundle_payload(
+        self, measured: dict[str, Any], lookup: rail_schedule.RailLookup
+    ) -> dict[str, Any]:
+        """The measured trip with its transport replaced by the timetabled train."""
+
+        train = lookup.train
+        assert train is not None
+        payload = deepcopy(measured)
+        gateway_id = payload["transport_options"][0]["origin_id"]
+        destination_id = payload["transport_options"][0]["destination_id"]
+        option_id = f"transport:{self.trip_id}:rail-{train.trip_id}"
+        provenance_id = f"prov:{self.trip_id}:rail-timetable:{train.trip_id}"
+        departs = self._trip_timestamp(hour=0, add_minutes=_clock_minutes(train.departs))
+        captured_at = self._trip_timestamp(hour=0)
+        amtrak = rail_schedule.AmtrakGtfsAdapter(lookup.feed_name or "GTFS.zip").source_record
+        summary = (
+            f"{lookup.summary} Station to station; scheduled, from the Amtrak timetable. "
+            "No fare and no seat availability come with a timetable."
+        )
+        if train.runs_on_date is None:
+            summary += " The timetable file has no service calendar, so the date was not checked."
+        payload.update(
+            {
+                "bundle_id": f"bundle-{self.trip_id}{RAIL_TIMETABLE_BUNDLE_MARKER}1-1",
+                "title": f"{self.origin} → {self.primary_regions[0]} by Amtrak ({train.route_name})",
+                "summary": summary,
+                "source_records": [*payload["source_records"], amtrak.to_dict()],
+            }
+        )
+        payload["explanation"] = {
+            "headline": summary,
+            "strengths": [
+                f"Direct train: {train.origin_station.name} to {train.destination_station.name}.",
+                f"{lookup.direct_train_count} direct train(s) in the timetable for this journey.",
+            ],
+            "tradeoffs": ["Fare not available from a timetable: enter it if you hold one."],
+        }
+        payload["transport_options"] = [
+            {
+                **payload["transport_options"][0],
+                "option_id": option_id,
+                "name": f"Amtrak {train.route_name} to {train.headsign or train.destination_station.name}",
+                "transport_kind": "rail",
+                "origin_id": gateway_id,
+                "destination_id": destination_id,
+                "timing_summary": {
+                    "duration_minutes": train.duration_minutes,
+                    "departure_local": departs,
+                    "arrival_local": self._trip_timestamp(
+                        hour=0,
+                        add_minutes=_clock_minutes(train.departs) + train.duration_minutes,
+                    ),
+                },
+                "segments": [
+                    {
+                        "segment_id": f"segment:{self.trip_id}:rail-{train.trip_id}",
+                        "mode": "rail",
+                        "origin_label": train.origin_station.name,
+                        "destination_label": train.destination_station.name,
+                    }
+                ],
+                "source_refs": [
+                    {
+                        "provenance_id": provenance_id,
+                        "source_id": amtrak.source_id,
+                        "source_category": amtrak.category,
+                        "subject_kind": "option",
+                        "subject_id": option_id,
+                        "contribution_kind": "operational",
+                        "summary": "Amtrak static GTFS supplied the train, its stops and times.",
+                        "captured_at": captured_at,
+                    }
+                ],
+            }
+        ]
+        lodging_ids = [option["option_id"] for option in payload["lodging_options"]]
+        payload["composition_summary"] = {
+            **payload["composition_summary"],
+            "component_option_ids": [*lodging_ids, option_id],
+        }
+        payload["provenance_summary"] = {
+            "source_refs": [
+                ref
+                for ref in payload["provenance_summary"]["source_refs"]
+                if not ref.endswith(":transport")
+            ]
+            + [provenance_id]
+        }
+        return payload
+
     def _build_runtime_bundle_payload(self) -> dict[str, Any]:
         source_id = self.stable_source_id
         source_category = self.source_record.category
@@ -991,7 +1130,11 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                         },
                     )
                 )
+        rail_lookup = self._rail_lookup() if bundle_payload is not None else None
         if bundle_payload is not None:
+            bundle_payloads = [bundle_payload]
+            if rail_lookup is not None and rail_lookup.train is not None:
+                bundle_payloads.append(self._rail_bundle_payload(bundle_payload, rail_lookup))
             records.append(
                 RawSourceRecord(
                     record_id=f"{query.query_id}:1",
@@ -999,7 +1142,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                     provider_entity_id=f"{self.trip_id}:runtime-bundle-seed",
                     payload_type="runtime_bundle_seed",
                     payload={
-                        "bundle_payloads": [bundle_payload],
+                        "bundle_payloads": bundle_payloads,
                     },
                     captured_at=self._trip_timestamp(hour=0) or "",
                     metadata={"source_seed": "persisted_trip_runtime"},
@@ -1024,6 +1167,14 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                 "trip_mode": self.trip_mode,
                 "region_count": str(len(self.primary_regions)),
                 "duration_days": "" if self.duration_days is None else str(self.duration_days),
+                **(
+                    {
+                        "rail_lookup_status": rail_lookup.status,
+                        "rail_lookup_summary": rail_lookup.summary,
+                    }
+                    if rail_lookup is not None
+                    else {}
+                ),
             },
         )
 
@@ -1204,6 +1355,16 @@ def assemble_inventory_bundles_for_trip(
     return bundles
 
 
+def _rail_lookup_state(assembly_input: InventoryAssemblyInput | None) -> dict[str, str] | None:
+    metadata = assembly_input.snapshot.payload_metadata if assembly_input is not None else {}
+    if not metadata.get("rail_lookup_status"):
+        return None
+    return {
+        "status": metadata["rail_lookup_status"],
+        "summary": metadata.get("rail_lookup_summary", ""),
+    }
+
+
 def build_inventory_summary_payload(
     bundles: list[InventoryBundle],
     *,
@@ -1338,8 +1499,13 @@ def build_inventory_summary_payload(
             "issues": [],
         }
 
+    rail_lookup = _rail_lookup_state(assembly_input)
     return {
         "bundle_count": len(bundles),
+        # Whether a timetabled train was looked for, and what was found. "not_configured"
+        # (no timetable on this server) and "no_direct_train" (the railway has none) are
+        # distinct statuses; they must never read alike.
+        "rail_lookup": rail_lookup,
         "bundles": [
             {
                 "bundle_id": bundle.bundle_id,

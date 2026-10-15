@@ -1086,6 +1086,28 @@ describe("WorkspacePage", () => {
     expect(stops[0]).toHaveTextContent("Seattle");
   });
 
+  it("says on Compare what the train timetable found for this journey", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        inventory_summary: {
+          ...workspacePayload.inventory_summary,
+          rail_lookup: {
+            status: "found",
+            summary: "Amtrak Acela: Boston South Station 06:00 → New York Penn Station 09:40, 3 h 40 min, direct.",
+          },
+        },
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+    renderWorkspacePage();
+    await selectWorkspaceTab("Compare");
+
+    const note = await screen.findByTestId("rail-lookup-note");
+    expect(note).toHaveTextContent("Trains: Amtrak Acela");
+    expect(note).toHaveTextContent("Fares are not in the timetable");
+  });
+
   it("offers to edit the trip setup from the workspace header (issue 1841)", async () => {
     mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
     renderWorkspacePage();

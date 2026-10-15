@@ -23,8 +23,10 @@ from trip_planner.app.services.feasibility import (
 from trip_planner.app.services.inventory import (
     _build_inventory_assembly_input,
     assemble_inventory_bundles_for_trip,
+    availability_checked_with_provider,
     build_inventory_summary_payload,
     is_runtime_measured_bundle,
+    is_trip_measured_bundle,
 )
 from trip_planner.app.services.planner_memory import build_planner_memory_payload
 from trip_planner.app.services.planner_runtime_config import get_planner_runtime_config
@@ -299,7 +301,7 @@ def _journey_stops(record: PersistedTrip) -> list[str]:
 
 
 def _display_route_stops(scenario: dict[str, Any], route_stops: list[str] | None) -> list[str]:
-    if route_stops and is_runtime_measured_bundle(scenario.get("bundle_id")):
+    if route_stops and is_trip_measured_bundle(scenario.get("bundle_id")):
         return list(route_stops)
     return []
 
@@ -699,7 +701,7 @@ def _build_runtime_scenario_comparison(
             },
             # No provider has been asked whether seats or rooms exist. Say so rather than
             # labelling every option "Ready to review" (issue 1839).
-            "availability_checked": not is_runtime_measured_bundle(scenario.get("bundle_id")),
+            "availability_checked": availability_checked_with_provider(scenario.get("bundle_id")),
             "delta": {
                 "score_delta": round(float(scenario["score"]) - float(lead["score"]), 2),
                 "travel_minutes_delta": (
