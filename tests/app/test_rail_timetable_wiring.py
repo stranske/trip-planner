@@ -228,6 +228,81 @@ def test_changing_the_travel_date_refreshes_the_train_in_the_same_workspace(
 
 
 @pytest.mark.parametrize(
+    ("origin", "destination", "minutes", "journey", "train_number"),
+    [
+        (
+            "Providence, RI",
+            "New York, NY",
+            88,
+            "Providence 07:37 → New York Penn Station 09:05",
+            "2190",
+        ),
+        ("Boston", "Providence, RI", 35, "Boston South Station 06:00 → Providence 06:35", "2150"),
+    ],
+)
+def test_changing_an_endpoint_refreshes_the_train_in_the_same_workspace(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    origin: str,
+    destination: str,
+    minutes: int,
+    journey: str,
+    train_number: str,
+) -> None:
+    feed = _feed(tmp_path)
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(feed))
+    original = _workspace(client, "Boston", "New York, NY", "2026-10-13")
+    trip_id = original["trip_record"]["trip"]["trip_id"]
+    assert _rail(original)["metrics"]["travel_minutes"] == 220
+
+    updated = client.patch(
+        f"/api/trips/{trip_id}",
+        json={"trip_frame": {"origin": origin, "primary_regions": [destination]}},
+    )
+    assert updated.status_code == 200, updated.text
+    response = client.get(f"/api/workspace/{trip_id}")
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert len(_rows(payload)) == 2
+    rail = _rail(payload)
+    assert rail["route_stops"] == [origin, destination]
+    assert rail["metrics"]["travel_minutes"] == minutes
+    assert f"Acela {train_number}" in rail["summary"]
+    assert journey in rail["summary"]
+    assert journey in payload["inventory_summary"]["rail_lookup"]["summary"]
+    status, expected = _probe_answer(feed, origin, destination, "2026-10-13")
+    assert workspace_agrees(payload, status, expected, date(2026, 10, 13))
+
+
+def test_adding_a_destination_removes_the_first_leg_train_until_the_trip_is_eligible_again(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(_feed(tmp_path)))
+    original = _workspace(client, "Boston", "New York, NY", "2026-10-13")
+    trip_id = original["trip_record"]["trip"]["trip_id"]
+    assert len(_rows(original)) == 2
+
+    for destinations in (["New York, NY", "Washington, DC"], ["New York, NY"]):
+        updated = client.patch(
+            f"/api/trips/{trip_id}", json={"trip_frame": {"primary_regions": destinations}}
+        )
+        assert updated.status_code == 200, updated.text
+        response = client.get(f"/api/workspace/{trip_id}")
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        if len(destinations) > 1:
+            assert payload["inventory_summary"]["rail_lookup"] is None
+            assert len(_rows(payload)) == 1
+            assert _rows(payload)[0]["route_stops"] == ["Boston", *destinations]
+            assert all("Amtrak" not in row["title"] for row in _rows(payload))
+        else:
+            assert len(_rows(payload)) == 2
+            assert payload["inventory_summary"]["rail_lookup"]["status"] == rail_schedule.FOUND
+            assert _rail(payload)["metrics"]["travel_minutes"] == 220
+
+
+@pytest.mark.parametrize(
     "failure", ["missing", "not-a-zip", "calendar-header", "weekday-header", "exception-header"]
 )
 def test_an_unreadable_feed_reports_a_lookup_failure_instead_of_no_trains(
