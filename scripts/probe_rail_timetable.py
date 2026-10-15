@@ -1,17 +1,22 @@
 """Real-situation check for the rail wiring: served workspace vs an independent timetable query.
 
     python scripts/probe_rail_timetable.py data/amtrak/GTFS.zip
+    python scripts/probe_rail_timetable.py data/amtrak/GTFS.zip --date 2026-10-20 --report rail.json
 
 Creates trips for fixed city pairs on a Tuesday and a Saturday, reads the train each served
 workspace shows (or the reason it shows none), and compares it with a query of the same GTFS
 ZIP written with the plain csv module, which does not import the lookup it checks. Shared
 with the lookup: the geo resolver for city coordinates. The last line printed is
 "PASS NUMBER: <agree>/<total>". Uses a throwaway SQLite database.
+Use --date repeatedly to choose travel dates covered by the feed. --report saves the
+feed's SHA-256, independent train details, displayed journeys, and pass counts as JSON.
 """
 
 from __future__ import annotations
 
+import argparse
 import csv
+import hashlib
 import io
 import json
 import math
@@ -19,8 +24,9 @@ import os
 import sys
 import tempfile
 import zipfile
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Any
 
 PAIRS = [
@@ -234,7 +240,25 @@ def workspace_agrees(
 
 
 def main(argv: list[str]) -> int:
-    feed = argv[1]
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("feed", type=Path, help="Amtrak GTFS ZIP to check")
+    parser.add_argument(
+        "--date",
+        dest="days",
+        action="append",
+        type=date.fromisoformat,
+        help="travel date (YYYY-MM-DD); repeat for multiple dates",
+    )
+    parser.add_argument("--report", type=Path, help="save the trial evidence as JSON")
+    args = parser.parse_args(argv[1:])
+    days = args.days if args.days is not None else DAYS
+    if not PAIRS or not days:
+        parser.error("the probe requires at least one city pair and travel date")
+    feed = str(args.feed)
+    feed_sha256 = None
+    if args.report is not None:
+        with args.feed.open("rb") as stream:
+            feed_sha256 = hashlib.file_digest(stream, "sha256").hexdigest()
     os.environ["TRIP_PLANNER_DATABASE_URL"] = f"sqlite:///{tempfile.mkdtemp()}/probe.db"
     os.environ["TRIP_PLANNER_AMTRAK_GTFS_PATH"] = feed
     from fastapi.testclient import TestClient
@@ -253,7 +277,7 @@ def main(argv: list[str]) -> int:
             json={"email": "probe@example.com", "password": "password123", "display_name": "Probe"},
         )
         for origin, destination in PAIRS:
-            for day in DAYS:
+            for day in days:
                 created = client.post(
                     "/api/trips",
                     json={
@@ -283,10 +307,30 @@ def main(argv: list[str]) -> int:
                         "independent": status,
                         "agree": agree,
                         "summary": lookup["summary"],
+                        "independent_train": asdict(expected) if expected is not None else None,
+                        "displayed_trains": [
+                            {
+                                "title": row["title"],
+                                "summary": row["summary"],
+                                "metrics": row["metrics"],
+                                "availability_checked": row["availability_checked"],
+                            }
+                            for row in workspace["runtime_scenario_comparison"]["scenarios"]
+                            if "Amtrak" in row["title"]
+                        ],
                     }
                 )
-    print(json.dumps(results, indent=1))
     agreed = sum(1 for row in results if row["agree"])
+    if args.report is not None:
+        report = {
+            "feed": {"name": args.feed.name, "sha256": feed_sha256},
+            "results": results,
+            "passed": agreed,
+            "total": len(results),
+            "all_agree": agreed == len(results),
+        }
+        args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(results, indent=1))
     print(
         f"PASS NUMBER: {agreed}/{len(results)} probe cases agree with the independent timetable query"
     )

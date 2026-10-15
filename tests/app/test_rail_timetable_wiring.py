@@ -6,6 +6,7 @@ an Acela on weekdays only, a Northeast Regional every day, and a train the other
 """
 
 import csv
+import hashlib
 import io
 import json
 from collections.abc import Iterator
@@ -543,8 +544,10 @@ def test_probe_reports_all_cases_and_fails_if_a_workspace_disagrees(
         [("Boston", "New York, NY"), ("Seattle", "Chicago, IL")],
     )
     monkeypatch.setattr(probe_rail_timetable, "DAYS", [date(2026, 10, 20), date(2026, 10, 24)])
+    report_path = tmp_path / "rail-report.json"
+    argv = ["probe", str(feed), "--report", str(report_path)]
     try:
-        assert probe_rail_timetable.main(["probe", str(feed)]) == 0
+        assert probe_rail_timetable.main(argv) == 0
         output = capsys.readouterr().out
         cases, pass_number = output.split("PASS NUMBER:")
         results = json.loads(cases)
@@ -552,9 +555,73 @@ def test_probe_reports_all_cases_and_fails_if_a_workspace_disagrees(
         assert all(row["agree"] for row in results)
         assert {row["served"] for row in results} == {"found", "no_station_near_origin"}
         assert pass_number.strip().startswith("4/4 ")
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        assert report["feed"] == {
+            "name": feed.name,
+            "sha256": hashlib.sha256(feed.read_bytes()).hexdigest(),
+        }
+        assert report["results"] == results
+        assert report["passed"] == report["total"] == 4
+        assert report["all_agree"] is True
+        train = results[0]["independent_train"]
+        assert train["number"] == "2150"
+        assert train["origin"] == "Boston South Station"
+        assert train["destination"] == "New York Penn Station"
+        assert train["departure_minutes"] == 360
+        assert train["arrival_minutes"] == 580
+        assert train["runs_on_date"] is True
+        (displayed,) = results[0]["displayed_trains"]
+        assert "Boston South Station 06:00 → New York Penn Station 09:40" in displayed["summary"]
+        assert displayed["metrics"]["estimated_total"] is None
+        assert displayed["availability_checked"] is False
+        assert results[2]["independent_train"] is None
+        assert results[2]["displayed_trains"] == []
 
         monkeypatch.setattr(probe_rail_timetable, "workspace_agrees", lambda *args: False)
-        assert probe_rail_timetable.main(["probe", str(feed)]) == 1
+        assert probe_rail_timetable.main(argv) == 1
         assert "PASS NUMBER: 0/4 " in capsys.readouterr().out
+        failed_report = json.loads(report_path.read_text(encoding="utf-8"))
+        assert failed_report["passed"] == 0
+        assert failed_report["total"] == 4
+        assert failed_report["all_agree"] is False
     finally:
         reset_database_state()
+
+
+def test_probe_can_select_travel_dates_covered_by_the_feed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    feed = _feed(tmp_path)
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'probe.db'}")
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(feed))
+    monkeypatch.setattr(probe_rail_timetable, "PAIRS", [("Boston", "New York, NY")])
+    try:
+        assert (
+            probe_rail_timetable.main(
+                ["probe", str(feed), "--date", "2026-10-24", "--date", "2026-10-27"]
+            )
+            == 0
+        )
+        cases, pass_number = capsys.readouterr().out.split("PASS NUMBER:")
+        results = json.loads(cases)
+        assert [row["day"] for row in results] == ["2026-10-24", "2026-10-27"]
+        assert [row["independent_train"]["number"] for row in results] == ["171", "2150"]
+        assert pass_number.strip().startswith("2/2 ")
+    finally:
+        reset_database_state()
+
+
+@pytest.mark.parametrize("empty_setting", ["PAIRS", "DAYS"])
+def test_probe_rejects_empty_trials_instead_of_passing_zero_cases(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    empty_setting: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(probe_rail_timetable, empty_setting, [])
+    with pytest.raises(SystemExit) as error:
+        probe_rail_timetable.main(["probe", str(tmp_path / "unused.zip")])
+    assert error.value.code == 2
+    output = capsys.readouterr()
+    assert "at least one city pair and travel date" in output.err
+    assert "PASS NUMBER:" not in output.out
