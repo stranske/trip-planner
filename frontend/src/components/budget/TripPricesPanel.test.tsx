@@ -211,4 +211,3 @@ describe("TripPricesPanel", () => {
     expect(screen.queryByTestId("fare-search-link")).toBeNull();
   });
 });
-
