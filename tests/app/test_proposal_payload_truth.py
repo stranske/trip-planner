@@ -179,3 +179,65 @@ def test_a_trip_the_planner_could_not_map_can_still_go_to_the_policy_check(
 
     assert submitted.status_code == 200, submitted.text
     assert len(_SENT) == 1
+
+
+GOOGLE_FARE = "https://www.google.com/travel/flights/booking?tfs=CBwQAhoeEgoyMDI2LTEwLTA1"
+
+
+def test_the_fare_link_is_kept_and_sent_with_the_airfare(client: TestClient) -> None:
+    """Deep link plus paste: the traveller finds the fare on Google Flights through the link
+    the Budget tab builds, and pastes back the fare and the page's link as evidence."""
+
+    trip_id = _business_trip(client)
+    _seed_policy(client, trip_id)
+    saved = client.put(
+        f"/api/workspace/{trip_id}/prices",
+        json={
+            "component": "transport",
+            "amount": 486.0,
+            "note": "Google Flights, United economy",
+            "lowest_amount": 470.0,
+            "evidence_attested": True,
+            "evidence_url": GOOGLE_FARE,
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    transport = next(c for c in saved.json()["components"] if c["component"] == "transport")
+    assert transport["evidence_url"] == GOOGLE_FARE
+
+    assert _submit(client, trip_id).status_code == 200
+    airfare = next(item for item in _SENT[-1]["expenses"] if item["category"] == "airfare")
+    assert airfare["receipt_url"] == GOOGLE_FARE
+    assert airfare.get("receipt_attached") is None
+
+    proposal = client.get(f"/api/workspace/{trip_id}/proposal").json()["proposal_state"]["proposal"]
+    lowest = next(
+        item
+        for item in proposal["comparables"]
+        if item["label"] == "Lowest available fare (for comparison)"
+    )
+    assert all(GOOGLE_FARE not in note for note in lowest["notes"])
+    chosen = next(item for item in proposal["selected_options"] if item["category"] == "airfare")
+    assert GOOGLE_FARE in chosen["justification_refs"]
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "javascript:alert(1)",
+        "http://example.com/fare",
+        "not a link",
+        "https://[broken",
+        "https://@",
+    ],
+)
+def test_a_fare_link_must_be_a_web_address(client: TestClient, bad: str) -> None:
+    trip_id = _business_trip(client)
+    response = client.put(
+        f"/api/workspace/{trip_id}/prices",
+        json={"component": "transport", "amount": 486.0, "evidence_url": bad},
+    )
+    assert response.status_code in {400, 422}, bad
+    prices = client.get(f"/api/workspace/{trip_id}/prices").json()
+    transport = next(item for item in prices["components"] if item["component"] == "transport")
+    assert transport["evidence_url"] is None

@@ -18,6 +18,7 @@ class TripPriceComponent(BaseModel):
     evidence_attested: bool = False
     cabin_class: str | None = None
     flight_hours: float | None = None
+    evidence_url: str | None = None
     price_source: dict[str, str] | None = None
 
 
@@ -54,3 +55,5 @@ class TripPriceUpsertRequest(BaseModel):
     cabin_class: str | None = None
     #: Longest flight's duration in hours, from the traveller's itinerary.
     flight_hours: float | None = None
+    #: https link to the fare chosen (Google Flights or the airline), as fare evidence.
+    evidence_url: str | None = Field(default=None, max_length=500)

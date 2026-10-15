@@ -2120,3 +2120,8 @@ a {
   font-weight: 600;
   margin: var(--space-4) 0 var(--space-2);
 }
+
+/* A pasted fare link is long; it must wrap on the printed packet, not run off the page. */
+.approval-packet-url {
+  overflow-wrap: anywhere;
+}

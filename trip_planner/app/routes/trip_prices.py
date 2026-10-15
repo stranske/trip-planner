@@ -56,6 +56,7 @@ def save_price(
             evidence_attested=payload.evidence_attested,
             cabin_class=payload.cabin_class,
             flight_hours=payload.flight_hours,
+            evidence_url=payload.evidence_url,
         )
     except TripPriceNotFoundError as error:
         raise public_http_error(

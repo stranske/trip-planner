@@ -35,6 +35,7 @@ const PRICED: TripPricesState = {
       evidence_attested: true,
       cabin_class: "economy",
       flight_hours: 4.25,
+      evidence_url: "https://www.google.com/travel/flights/booking?tfs=abc",
       price_source: SOURCE,
     },
     {
@@ -126,6 +127,10 @@ describe("ApprovalPacket", () => {
     expect(fare).toHaveTextContent("Lowest fare found for the same journey: $470");
     expect(fare).toHaveTextContent("Cabin: economy");
     expect(fare).toHaveTextContent("the traveller holds a screenshot or quote");
+    // The fare link prints as text, so it survives on paper.
+    expect(screen.getByTestId("approval-packet-fare-link")).toHaveTextContent(
+      "Fare link: https://www.google.com/travel/flights/booking?tfs=abc"
+    );
   });
 
   it("does not invent a budget cap when none was set", () => {

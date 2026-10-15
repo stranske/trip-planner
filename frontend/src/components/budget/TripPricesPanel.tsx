@@ -8,6 +8,8 @@ export type TripPricesPanelProps = {
   prices: TripPricesState | null;
   busy: boolean;
   errorMessage: string | null;
+  /** Google Flights search for this trip, when it has an origin, destination and date. */
+  fareSearchUrl?: string | null;
   onSave: (
     component: string,
     amount: number | null,
@@ -21,6 +23,7 @@ export type FareDetail = {
   evidenceAttested: boolean;
   cabinClass: string | null;
   flightHours: number | null;
+  evidenceUrl: string | null;
 };
 
 const CABIN_OPTIONS: Array<{ value: string; label: string }> = [
@@ -41,13 +44,20 @@ function sourceLine(component: TripPriceComponent): string | null {
   return `Entered by ${component.price_source.attributed_to} on ${captured}`;
 }
 
-export function TripPricesPanel({ prices, busy, errorMessage, onSave }: TripPricesPanelProps) {
+export function TripPricesPanel({
+  prices,
+  busy,
+  errorMessage,
+  fareSearchUrl = null,
+  onSave,
+}: TripPricesPanelProps) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [lowestFare, setLowestFare] = useState("");
   const [evidenceAttested, setEvidenceAttested] = useState(false);
   const [cabinClass, setCabinClass] = useState("");
   const [flightHours, setFlightHours] = useState("");
+  const [evidenceUrl, setEvidenceUrl] = useState("");
 
   // Re-seed the inputs whenever saved prices arrive, so the fields show what is stored
   // rather than whatever was last typed.
@@ -73,6 +83,7 @@ export function TripPricesPanel({ prices, busy, errorMessage, onSave }: TripPric
     setEvidenceAttested(Boolean(fare?.evidence_attested));
     setCabinClass(fare?.cabin_class ?? "");
     setFlightHours(fare?.flight_hours == null ? "" : String(fare.flight_hours));
+    setEvidenceUrl(fare?.evidence_url ?? "");
   }, [prices]);
 
   if (prices == null) {
@@ -177,6 +188,7 @@ export function TripPricesPanel({ prices, busy, errorMessage, onSave }: TripPric
                           evidenceAttested,
                           cabinClass: cabinClass === "" ? null : cabinClass,
                           flightHours: flightHours.trim() === "" ? null : Number(flightHours),
+                          evidenceUrl: evidenceUrl.trim() === "" ? null : evidenceUrl.trim(),
                         }
                       : undefined
                   );
@@ -197,6 +209,25 @@ export function TripPricesPanel({ prices, busy, errorMessage, onSave }: TripPric
               ) : null}
               {component.component === FARE_COMPONENT ? (
                 <div className="trip-price-fare-detail">
+                  {fareSearchUrl ? (
+                    <p className="field-hint" data-testid="fare-search-link">
+                      <a href={fareSearchUrl} target="_blank" rel="noopener noreferrer">
+                        Find fares for this trip on Google Flights
+                      </a>{" "}
+                      (opens in a new tab). Enter the fare you choose and the lowest one shown,
+                      and paste the page&apos;s link below.
+                    </p>
+                  ) : null}
+                  <label htmlFor="trip-price-fare-link">Link to the fare you chose</label>
+                  <input
+                    id="trip-price-fare-link"
+                    type="url"
+                    inputMode="url"
+                    placeholder="https://www.google.com/travel/flights/…"
+                    value={evidenceUrl}
+                    disabled={busy}
+                    onChange={(event) => setEvidenceUrl(event.target.value)}
+                  />
                   <label htmlFor="trip-price-lowest-fare">
                     Lowest fare you found for the same journey
                   </label>

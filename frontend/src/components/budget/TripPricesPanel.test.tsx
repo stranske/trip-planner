@@ -72,6 +72,7 @@ describe("TripPricesPanel", () => {
         evidenceAttested: false,
         cabinClass: null,
         flightHours: null,
+        evidenceUrl: null,
       });
     });
   });
@@ -114,6 +115,7 @@ describe("TripPricesPanel", () => {
         evidenceAttested: false,
         cabinClass: null,
         flightHours: null,
+        evidenceUrl: null,
       });
     });
   });
@@ -141,6 +143,7 @@ describe("TripPricesPanel", () => {
         evidenceAttested: true,
         cabinClass: "economy",
         flightHours: 4.5,
+        evidenceUrl: null,
       });
     });
   });
@@ -173,5 +176,38 @@ describe("TripPricesPanel", () => {
     ]);
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
     expect(screen.getByTestId("trip-price-source-other")).toHaveTextContent("Enter 0 if there are none");
+  });
+
+  it("links to the trip's Google Flights search and saves the pasted fare link", async () => {
+    const onSave = vi.fn();
+    const url =
+      "https://www.google.com/travel/flights?q=Flights%20to%20Chicago%20from%20Seattle%20on%202026-10-05%20through%202026-10-07";
+    render(
+      <TripPricesPanel prices={EMPTY} busy={false} errorMessage={null} fareSearchUrl={url} onSave={onSave} />
+    );
+
+    const link = screen.getByRole("link", { name: "Find fares for this trip on Google Flights" });
+    expect(link).toHaveAttribute("href", url);
+    expect(link).toHaveAttribute("target", "_blank");
+
+    fireEvent.change(screen.getByLabelText("Flights and ground travel"), { target: { value: "486" } });
+    fireEvent.change(screen.getByLabelText("Link to the fare you chose"), {
+      target: { value: " https://www.google.com/travel/flights/booking?tfs=abc " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Flights and ground travel" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(
+        "transport",
+        486,
+        "",
+        expect.objectContaining({ evidenceUrl: "https://www.google.com/travel/flights/booking?tfs=abc" })
+      );
+    });
+  });
+
+  it("offers no search link when the trip cannot be searched", () => {
+    render(<TripPricesPanel prices={EMPTY} busy={false} errorMessage={null} onSave={vi.fn()} />);
+    expect(screen.queryByTestId("fare-search-link")).toBeNull();
   });
 });

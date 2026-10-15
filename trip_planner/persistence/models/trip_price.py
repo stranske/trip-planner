@@ -59,6 +59,9 @@ class PersistedTripPrice(Base):
     #: Longest flight's duration in hours, from the traveller's itinerary. Deliberately not the
     #: planner's modelled travel time: it decides cabin entitlement, so it must be the real one.
     flight_hours: Mapped[float | None] = mapped_column(Float(), nullable=True)
+    #: Link to the fare the traveller chose (a Google Flights or airline page), printed on
+    #: the packet and sent to TPP as fare evidence. The traveller's own link; never fetched.
+    evidence_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow

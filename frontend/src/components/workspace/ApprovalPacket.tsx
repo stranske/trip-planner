@@ -218,6 +218,11 @@ export function ApprovalPacket({
                 : "not given"}
             </li>
             <li>Cabin: {flight.cabin_class ? flight.cabin_class.replace(/_/g, " ") : "not given"}</li>
+            {flight.evidence_url ? (
+              <li data-testid="approval-packet-fare-link">
+                Fare link: <span className="approval-packet-url">{flight.evidence_url}</span>
+              </li>
+            ) : null}
             <li>
               Fare evidence:{" "}
               {flight.evidence_attested
