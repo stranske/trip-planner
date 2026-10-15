@@ -4,8 +4,8 @@ import itertools
 import json
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass
 from copy import deepcopy
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from importlib import resources
 from typing import Any
@@ -17,7 +17,6 @@ from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.geo import ResolvedPlace, distance_km, resolve_place
 from trip_planner.options import InventoryBundle, MixedOption
 from trip_planner.persistence.models.trip import PersistedTrip
-from trip_planner.sources import rail_schedule
 from trip_planner.sources import (
     AdapterIssue,
     NormalizationHandoff,
@@ -29,6 +28,7 @@ from trip_planner.sources import (
     SourceQuery,
     SourceRecord,
     SourceTrustSignals,
+    rail_schedule,
 )
 
 _BUNDLE_RESOURCE_PACKAGE = "trip_planner.resources.options.bundles"
@@ -736,8 +736,6 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
             f"{lookup.summary} Station to station; scheduled, from the Amtrak timetable. "
             "No fare and no seat availability come with a timetable."
         )
-        if train.runs_on_date is None:
-            summary += " The timetable file has no service calendar, so the date was not checked."
         payload.update(
             {
                 "bundle_id": f"bundle-{self.trip_id}{RAIL_TIMETABLE_BUNDLE_MARKER}1-1",

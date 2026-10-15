@@ -1094,7 +1094,7 @@ describe("WorkspacePage", () => {
           ...workspacePayload.inventory_summary,
           rail_lookup: {
             status: "found",
-            summary: "Amtrak Acela: Boston South Station 06:00 → New York Penn Station 09:40, 3 h 40 min, direct.",
+            summary: "Amtrak Acela: Boston South Station 06:00 → New York Penn Station 09:40, 3 h 40 min, direct. Scheduled to run on 2026-10-13.",
           },
         },
       }),
@@ -1105,6 +1105,7 @@ describe("WorkspacePage", () => {
 
     const note = await screen.findByTestId("rail-lookup-note");
     expect(note).toHaveTextContent("Trains: Amtrak Acela");
+    expect(note).toHaveTextContent("Scheduled to run on 2026-10-13.");
     expect(note).toHaveTextContent("Fares are not in the timetable");
   });
 

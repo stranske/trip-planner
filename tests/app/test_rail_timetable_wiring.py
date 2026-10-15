@@ -63,10 +63,15 @@ FEED = {
 }
 
 
-def _feed(tmp_path: Path, *, with_calendar: bool = True) -> Path:
+def _feed(
+    tmp_path: Path,
+    *,
+    with_calendar: bool = True,
+    extra_tables: dict[str, str] | None = None,
+) -> Path:
     path = tmp_path / ("GTFS.zip" if with_calendar else "GTFS-nocal.zip")
     with ZipFile(path, "w") as archive:
-        for name, body in FEED.items():
+        for name, body in (FEED | (extra_tables or {})).items():
             if name == "calendar.txt" and not with_calendar:
                 continue
             archive.writestr(name, body)
@@ -88,7 +93,9 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     reset_database_state()
 
 
-def _workspace(client: TestClient, origin: str, destination: str, day: str) -> dict[str, Any]:
+def _workspace(
+    client: TestClient, origin: str, destination: str, day: str | None
+) -> dict[str, Any]:
     created = client.post(
         "/api/trips",
         json={
@@ -145,6 +152,10 @@ def test_a_weekday_trip_gets_the_fastest_direct_train(
     assert rail["route_stops"] == ["Boston", "New York, NY"]
     assert "Boston South Station 06:00" in rail["summary"]
     assert "No fare" in rail["summary"]
+    assert "Scheduled to run on 2026-10-13." in rail["summary"]
+    assert (
+        "Scheduled to run on 2026-10-13." in payload["inventory_summary"]["rail_lookup"]["summary"]
+    )
 
 
 def test_a_saturday_trip_does_not_get_a_weekday_only_train(
@@ -155,15 +166,72 @@ def test_a_saturday_trip_does_not_get_a_weekday_only_train(
 
     assert rail["title"].endswith("by Amtrak Northeast Regional")
     assert rail["metrics"]["travel_minutes"] == 270
+    assert "Scheduled to run on 2026-10-17." in rail["summary"]
+
+
+@pytest.mark.parametrize(
+    ("day", "expected_status"),
+    [
+        ("2026-10-20", rail_schedule.NO_TRAIN_ON_DATE),
+        ("2026-10-24", rail_schedule.FOUND),
+    ],
+)
+def test_calendar_exceptions_control_the_train_and_service_date_shown(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    day: str,
+    expected_status: str,
+) -> None:
+    feed = _feed(
+        tmp_path,
+        extra_tables={
+            "calendar_dates.txt": "service_id,date,exception_type\n"
+            "WEEKDAY,20261020,2\nDAILY,20261020,2\nWEEKDAY,20261024,1\n"
+        },
+    )
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(feed))
+    payload = _workspace(client, "Boston", "New York, NY", day)
+
+    lookup = payload["inventory_summary"]["rail_lookup"]
+    assert lookup["status"] == expected_status
+    if expected_status == rail_schedule.FOUND:
+        rail = _rail(payload)
+        assert "Acela 2150" in rail["summary"]
+        assert rail["metrics"]["travel_minutes"] == 220
+        assert f"Scheduled to run on {day}." in lookup["summary"]
+        assert f"Scheduled to run on {day}." in rail["summary"]
+    else:
+        assert len(_rows(payload)) == 1
+        assert f"none on {day}" in lookup["summary"]
 
 
 def test_a_timetable_without_a_calendar_says_the_date_was_not_checked(
     client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(_feed(tmp_path, with_calendar=False)))
-    rail = _rail(_workspace(client, "Boston", "New York, NY", "2026-10-17"))
+    payload = _workspace(client, "Boston", "New York, NY", "2026-10-17")
+    rail = _rail(payload)
 
     assert "date was not checked" in rail["summary"]
+    assert "date was not checked" in payload["inventory_summary"]["rail_lookup"]["summary"]
+    assert "Scheduled to run" not in rail["summary"]
+
+
+def test_a_trip_without_a_travel_date_does_not_claim_the_calendar_is_missing(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(_feed(tmp_path)))
+    payload = _workspace(client, "Boston", "New York, NY", None)
+
+    for summary in (
+        _rail(payload)["summary"],
+        payload["inventory_summary"]["rail_lookup"]["summary"],
+    ):
+        assert "No travel date was provided" in summary
+        assert "date was not checked" in summary
+        assert "no service calendar" not in summary
+        assert "Scheduled to run" not in summary
 
 
 def test_places_without_stations_get_no_train_and_say_why(
@@ -204,4 +272,5 @@ def test_an_overnight_train_is_checked_for_the_day_it_boards_the_traveller(
     rail = _rail(wednesday)
     assert "Denver 07:10 → Salt Lake City 22:00," in rail["summary"]
     assert rail["metrics"]["travel_minutes"] == 890
+    assert "Scheduled to run on 2026-10-14." in rail["summary"]
     assert tuesday["inventory_summary"]["rail_lookup"]["status"] == rail_schedule.NO_TRAIN_ON_DATE

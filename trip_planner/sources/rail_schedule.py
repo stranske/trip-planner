@@ -392,10 +392,16 @@ def find_direct_train(
         runs_on_date=runs[trip.trip_id],
     )
     notes = ["Timetable only: no fare and no seat availability."]
-    if train.runs_on_date is None:
-        notes.append(
+    if travel_date is None:
+        date_summary = "No travel date was provided, so the date was not checked."
+    elif train.runs_on_date is None:
+        date_summary = (
             "The timetable file has no service calendar, so the travel date was not checked."
         )
+    else:
+        date_summary = f"Scheduled to run on {travel_date.isoformat()}."
+    if train.runs_on_date is None:
+        notes.append(date_summary)
     return RailLookup(
         FOUND,
         (
@@ -403,7 +409,7 @@ def find_direct_train(
             f"{f' {train.train_number}' if train.train_number else ''}: "
             f"{board.name} {train.departs} → {alight.name} "
             f"{train.arrives}, {train.duration_minutes // 60} h {train.duration_minutes % 60:02d} min, "
-            "direct."
+            f"direct. {date_summary}"
         ),
         train=train,
         direct_train_count=len({c[0].trip_id for c in dated}),
