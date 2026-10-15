@@ -130,13 +130,18 @@ def _optional_table(
     except KeyError:
         return None
     with member, TextIOWrapper(member, encoding="utf-8-sig", newline="") as stream:
-        reader = csv.DictReader(stream)
-        missing = (required_columns or set()) - set(reader.fieldnames or ())
-        if missing:
-            raise ValueError(
-                f"GTFS table {name!r} is missing required columns: {sorted(missing)!r}"
-            )
-        return [{key: (value or "").strip() for key, value in row.items() if key} for row in reader]
+        try:
+            reader = csv.DictReader(stream)
+            missing = (required_columns or set()) - set(reader.fieldnames or ())
+            if missing:
+                raise ValueError(
+                    f"GTFS table {name!r} is missing required columns: {sorted(missing)!r}"
+                )
+            return [
+                {key: (value or "").strip() for key, value in row.items() if key} for row in reader
+            ]
+        except csv.Error as error:
+            raise ValueError(f"GTFS table {name!r} is not valid CSV: {error}") from error
 
 
 @dataclass(frozen=True)
