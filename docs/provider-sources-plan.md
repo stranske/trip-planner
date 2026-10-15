@@ -283,6 +283,17 @@ mode the product cannot currently plan at all into one it plans correctly.
 
 ### 7c. Rail integration
 
+**Wired (2026-10-14).** `trip_planner/sources/rail_schedule.py` reads the feed named by
+`TRIP_PLANNER_AMTRAK_GTFS_PATH` (fetch it with `scripts/fetch_amtrak_gtfs.py`). For a trip
+with an origin and one destination it finds the fastest timetabled **direct** train between
+stations within 30 km of each place, checks the service calendar against the travel date,
+and adds it to Compare as a second option: real times, measured as direct, unpriced, and
+labelled "availability not checked". Every lookup reports a status on
+`inventory_summary.rail_lookup` (`not_configured`, `no_station_near_origin`,
+`no_direct_train`, `no_train_on_date`, `found`, ...), so a server without the file never
+reads as "no trains". Not yet: journeys with a change, multi-destination trips.
+
+
 No new pipeline. `ingest_transport_snapshot` already accepts `option_kind="rail"`, and
 `TRANSPORT_KINDS` already includes it. A GTFS adapter emits `RawSourceRecord`s of
 `payload_type="gtfs_trip"` with `SourceQuery.option_kind="rail"` and no price component;
@@ -349,6 +360,15 @@ force here.
 
 Amtrak GTFS adapter. **Your time: zero** — it is a public file.
 Then DB/SNCF for Europe if wanted.
+
+**Status:** the Amtrak adapter (#1783, #1857) is wired into planning. For a one-destination
+US trip with Amtrak stations within 30 km of both places, Compare shows the fastest direct
+timetabled train beside the measured route (times, stations, service day, no fare). The server
+needs `TRIP_PLANNER_AMTRAK_GTFS_PATH` (fetch with `scripts/fetch_amtrak_gtfs.py`); without it
+the lookup reports `not_configured`, never "no trains". `scripts/probe_rail_timetable.py` checks
+14 city pairs on a Tuesday and a Saturday against an independent query of the same ZIP
+(28/28 on the feed fetched 2026-10-15). This is a product feature, not an Orchestrator
+capability.
 
 ### Phase 4 — the Google Flights question, optionally
 

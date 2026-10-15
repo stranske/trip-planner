@@ -673,6 +673,8 @@ export type WorkspaceData = {
   feasibility_summary: FeasibilitySummary;
   inventory_summary: {
     bundle_count: number;
+    /** Whether a timetabled train was looked for, and what was found (issue: rail wiring). */
+    rail_lookup?: { status: string; summary: string } | null;
     bundles: Array<{
       bundle_id: string;
       title: string;

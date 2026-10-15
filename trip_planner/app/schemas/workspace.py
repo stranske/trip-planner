@@ -24,8 +24,22 @@ class InventoryRuntimeState(BaseModel):
     )
 
 
+class RailLookupState(BaseModel):
+    status: str = Field(
+        description=(
+            "not_configured | feed_unreadable | no_station_near_origin | "
+            "no_station_near_destination | no_direct_train | no_train_on_date | found"
+        )
+    )
+    summary: str = Field(description="What the timetable lookup found, in plain words.")
+
+
 class InventorySummary(BaseModel):
     bundle_count: int = Field(description="Number of assembled inventory bundles.")
+    rail_lookup: RailLookupState | None = Field(
+        default=None,
+        description="Whether a timetabled train was looked for, and what was found.",
+    )
     bundles: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Inventory bundle previews derived from persisted runtime context.",

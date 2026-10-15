@@ -23,7 +23,9 @@ from .base import SourceAdapter
 _TARGET_CONTRACT = "trip_planner/options/transport.py"
 _REQUIRED_COLUMNS = {
     "stops.txt": {"stop_id", "stop_name"},
-    "routes.txt": {"route_id", "route_short_name", "route_long_name", "route_type"},
+    # GTFS requires route_short_name OR route_long_name; Amtrak's real feed leaves every
+    # short name empty. The either-or rule is checked per row in _read_table.
+    "routes.txt": {"route_id", "route_type"},
     "trips.txt": {"route_id", "service_id", "trip_id", "trip_headsign"},
     "stop_times.txt": {
         "trip_id",
@@ -65,8 +67,23 @@ def _read_table(archive: ZipFile, table_name: str) -> list[dict[str, str]]:
 
     if not rows:
         raise ValueError(f"GTFS table {table_name!r} must contain at least one row")
+    if table_name == "routes.txt":
+        for row_number, row in enumerate(rows, start=2):
+            if not (row.get("route_short_name") or row.get("route_long_name")):
+                raise ValueError(
+                    f"GTFS table 'routes.txt' row {row_number} needs route_short_name "
+                    "or route_long_name"
+                )
     for row_number, row in enumerate(rows, start=2):
-        empty = sorted(column for column in _REQUIRED_COLUMNS[table_name] if not row[column])
+        if table_name == "stop_times.txt":
+            # GTFS allows blank arrival_time and/or departure_time on untimed intermediate stops.
+            empty = sorted(
+                column
+                for column in _REQUIRED_COLUMNS[table_name]
+                if column not in {"arrival_time", "departure_time"} and not row[column]
+            )
+        else:
+            empty = sorted(column for column in _REQUIRED_COLUMNS[table_name] if not row[column])
         if empty:
             raise ValueError(
                 f"GTFS table {table_name!r} row {row_number} has empty required values: {empty!r}"
@@ -164,6 +181,9 @@ class AmtrakGtfsAdapter(SourceAdapter):
                     "stop_name": stops[row["stop_id"]]["stop_name"],
                     "arrival_time": row["arrival_time"],
                     "departure_time": row["departure_time"],
+                    # GTFS: "1" means no pickup (or no drop-off) at this stop.
+                    "pickup_type": row.get("pickup_type", ""),
+                    "drop_off_type": row.get("drop_off_type", ""),
                 }
                 for sequence, row in ordered_stops
             ]
@@ -178,6 +198,7 @@ class AmtrakGtfsAdapter(SourceAdapter):
                         "trip_id": trip_id,
                         "service_id": trip["service_id"],
                         "trip_headsign": trip["trip_headsign"],
+                        "trip_short_name": trip.get("trip_short_name", ""),
                         "route": routes[route_id],
                         "stops": stop_payload,
                     },

@@ -2687,6 +2687,16 @@ function WorkspacePageContent({
       {activeTab === "compare" ? (
         <ComparePanel labelledBy={workspaceTabButtonId("compare")}>
           <div className="workspace-grid">
+            {currentWorkspace.inventory_summary.rail_lookup ? (
+              // What the train timetable said about this journey, including "no timetable on
+              // this server", which must not read as "no trains".
+              <p className="field-hint" role="note" data-testid="rail-lookup-note">
+                Trains: {currentWorkspace.inventory_summary.rail_lookup.summary}
+                {currentWorkspace.inventory_summary.rail_lookup.status === "found"
+                  ? " Fares are not in the timetable; enter one on the Budget tab if you hold it."
+                  : ""}
+              </p>
+            ) : null}
             <RouteTradeoffsPanel
               compactLayout={isCompactLayout}
               showPolicyPosture={panelVisibility.showPolicyPosture}
