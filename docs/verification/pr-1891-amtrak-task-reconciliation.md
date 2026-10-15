@@ -81,3 +81,25 @@ checklist is unchanged; this file preserves the verified reconciliation for it.
 PR #1891 was confirmed open with `draft=false` at handoff. The requested commit
 was attempted after validation, but Git could not create `.git/index.lock`
 because `.git` is mounted read-only. Both changed files remain uncommitted.
+
+## Follow-up: direct trains versus connections
+
+The concept task now has two additional served-workspace regression cases. Two
+trains sharing a route and headsign provide a faster journey via Providence, but
+require a change. With a direct Acela available, the workspace still shows that
+train's 06:00–09:40 station-to-station journey, 220 minutes, zero transfers, and no
+fare. With only the connecting trains available, it reports `no_direct_train`
+and explains that journeys with a change are not searched. Both cases agree with
+the independent CSV query.
+
+Validation: 62 tests passed in the wiring and adapter suites with `-m "not slow"`
+and the selector wrapper above. Ruff, `git diff --check`, and the repository-wide
+Black check passed (496 files unchanged); Black used `BLACK_NUM_WORKERS=1` and
+the same selector wrapper. Concept item 1 remains verified and checked above.
+
+The real-feed download again failed with a DNS resolution error, so items 4–5
+remain unchecked. The local commit failed because `.git/index.lock` cannot be
+created on the read-only mount. A fallback commit through the GitHub file API
+was also rejected: `MCP tool call requires approval, but approval policy is never`.
+The test and this evidence update remain uncommitted; the remote checklist was
+not changed. PR #1891 was confirmed open with `draft=false`.

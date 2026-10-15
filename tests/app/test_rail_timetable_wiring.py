@@ -193,6 +193,55 @@ def test_a_saturday_trip_does_not_get_a_weekday_only_train(
     assert "Scheduled to run on 2026-10-17." in rail["summary"]
 
 
+@pytest.mark.parametrize("has_direct_train", [True, False], ids=["direct", "connection-only"])
+def test_a_faster_connection_cannot_replace_a_direct_train(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    has_direct_train: bool,
+) -> None:
+    # Both legs share a route and headsign but require changing trains at Providence.
+    # Their combined 120 minutes beat the direct Acela's 220 minutes.
+    trips = FEED["trips.txt"] if has_direct_train else FEED["trips.txt"].splitlines()[0] + "\n"
+    calls = (
+        FEED["stop_times.txt"]
+        if has_direct_train
+        else FEED["stop_times.txt"].splitlines()[0] + "\n"
+    )
+    feed = _feed(
+        tmp_path,
+        extra_tables={
+            "trips.txt": trips
+            + "NER,DAILY,SHUTTLE1,101,New York,0\nNER,DAILY,SHUTTLE2,102,New York,0\n",
+            "stop_times.txt": calls
+            + "SHUTTLE1,06:00:00,06:00:00,BOS,1,0,1\n"
+            + "SHUTTLE1,06:35:00,06:35:00,PVD,2,1,0\n"
+            + "SHUTTLE2,06:40:00,06:40:00,PVD,1,0,1\n"
+            + "SHUTTLE2,08:00:00,08:00:00,NYP,2,1,0\n",
+        },
+    )
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(feed))
+
+    payload = _workspace(client, "Boston", "New York, NY", "2026-10-13")
+    lookup = payload["inventory_summary"]["rail_lookup"]
+    if has_direct_train:
+        assert lookup["status"] == rail_schedule.FOUND
+        assert len(_rows(payload)) == 2
+        rail = _rail(payload)
+        assert "Acela 2150" in rail["summary"]
+        assert "Boston South Station 06:00 → New York Penn Station 09:40" in rail["summary"]
+        assert rail["metrics"]["travel_minutes"] == 220
+        assert rail["metrics"]["transfers"] == 0
+        assert rail["metrics"]["estimated_total"] is None
+    else:
+        assert lookup["status"] == rail_schedule.NO_DIRECT_TRAIN
+        assert "journeys with a change are not searched" in lookup["summary"]
+        assert len(_rows(payload)) == 1
+        assert all("Amtrak" not in row["title"] for row in _rows(payload))
+    status, expected = _probe_answer(feed, "Boston", "New York, NY", "2026-10-13")
+    assert workspace_agrees(payload, status, expected, date(2026, 10, 13))
+
+
 def test_changing_the_travel_date_refreshes_the_train_in_the_same_workspace(
     client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
