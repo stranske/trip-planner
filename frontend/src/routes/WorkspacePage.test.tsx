@@ -1114,6 +1114,66 @@ describe("WorkspacePage", () => {
     expect(vi.mocked(searchTripFlights)).toHaveBeenCalledWith(workspacePayload.trip_record.trip.trip_id);
   });
 
+  it("shows a rejected flight search inline", async () => {
+    vi.mocked(searchTripFlights).mockRejectedValueOnce(new Error("Provider temporarily unavailable"));
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
+    renderWorkspacePage();
+    await selectWorkspaceTab("Compare");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Search flights" }));
+    expect(await screen.findByText("Provider temporarily unavailable")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Search flights" })).toBeEnabled();
+  });
+
+  it.each(["completed", "completed-error", "resolved", "rejected"])(
+    "clears flight search state and ignores a %s old-trip response", async (outcome) => {
+      const result = {
+        status: "test_mode", summary: "Old trip flight result", offer_count: 1,
+        origin_code: "CHI", destination_code: "NYC", prices_shown: false,
+      };
+      const pending = deferred<typeof result>();
+      vi.mocked(searchTripFlights).mockReturnValueOnce(pending.promise);
+      mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
+      const page = renderWorkspacePage();
+      await selectWorkspaceTab("Compare");
+      const user = userEvent.setup();
+      await user.click(screen.getByRole("button", { name: "Search flights" }));
+      if (outcome === "completed") {
+        await act(async () => { pending.resolve(result); });
+        expect(screen.getByTestId("flight-search-result")).toHaveTextContent(result.summary);
+      } else if (outcome === "completed-error") {
+        await act(async () => { pending.reject(new Error("Old trip failure")); });
+        expect(screen.getByText("Old trip failure")).toBeInTheDocument();
+      }
+      const nextWorkspace = {
+        ...workspacePayload,
+        trip_record: {
+          ...workspacePayload.trip_record,
+          trip: { ...workspacePayload.trip_record.trip, trip_id: "next-flight-trip", title: "Next flight trip" },
+        },
+      };
+      mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(nextWorkspace) });
+      page.rerender(<TestMemoryRouter><WorkspacePage /></TestMemoryRouter>);
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "Search flights" })).toBeEnabled();
+        expect(screen.queryByTestId("flight-search-result")).not.toBeInTheDocument();
+        expect(screen.queryByText("Old trip failure")).not.toBeInTheDocument();
+      });
+      const fresh = deferred<typeof result>();
+      vi.mocked(searchTripFlights).mockReturnValueOnce(fresh.promise);
+      await user.click(screen.getByRole("button", { name: "Search flights" }));
+      expect(vi.mocked(searchTripFlights)).toHaveBeenLastCalledWith("next-flight-trip");
+      await act(async () => {
+        if (outcome === "resolved") pending.resolve(result);
+        if (outcome === "rejected") pending.reject(new Error("Old trip failure"));
+      });
+      expect(screen.getByRole("button", { name: "Searching flights…" })).toBeDisabled();
+      expect(screen.queryByText("Old trip failure")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("flight-search-result")).not.toBeInTheDocument();
+      await act(async () => { fresh.resolve({ ...result, summary: "New trip flight result" }); });
+      expect(await screen.findByTestId("flight-search-result")).toHaveTextContent("New trip flight result");
+    }
+  );
+
   it("says on Compare what the train timetable found for this journey", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({

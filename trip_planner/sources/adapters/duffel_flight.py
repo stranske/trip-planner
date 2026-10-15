@@ -261,7 +261,12 @@ class DuffelFlightAdapter(SourceAdapter):
         for kind in ("city", "airport"):
             for place in places:
                 code = place.get("iata_code") or place.get("iata_city_code")
-                if place.get("type") == kind and isinstance(code, str) and len(code) == 3:
+                if (
+                    place.get("type") == kind
+                    and isinstance(code, str)
+                    and len(code) == 3
+                    and code.isalpha()
+                ):
                     return code.upper()
         return None
 

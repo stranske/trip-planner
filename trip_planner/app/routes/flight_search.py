@@ -45,4 +45,7 @@ def search_flights(
         raise public_http_error(
             error, status_code=404, message="The requested trip was not found."
         ) from error
+    # The loaded scalar fields remain available after detaching; release the
+    # connection before waiting on the provider. Dependency cleanup is idempotent.
+    db_session.close()
     return FlightSearchResponse.model_validate(search_trip_flights(record).to_dict())

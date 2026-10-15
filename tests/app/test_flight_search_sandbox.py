@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient
 from trip_planner.app.main import create_app
 from trip_planner.app.services import flight_search
 from trip_planner.persistence.db import ensure_database_ready, reset_database_state
+from trip_planner.persistence.models.trip import PersistedTrip
 
 OFFERS = Path(__file__).resolve().parents[1] / "fixtures/sources/raw/duffel_offer_request.json"
 OFFER_AMOUNTS = [
@@ -203,3 +204,107 @@ def test_places_search_keeps_the_region_for_same_named_cities(
         if urlparse(call).path.endswith("/places/suggestions")
     ]
     assert place_queries == [origin, "New York, NY"]
+
+
+@pytest.mark.parametrize(
+    "origin, regions, departure",
+    [
+        (None, ["New York, NY"], "2026-11-10"),
+        ("Chicago", [], "2026-11-10"),
+        ("Chicago", ["New York, NY", "Boston"], "2026-11-10"),
+        ("Chicago", ["New York, NY"], None),
+        ("Chicago", ["New York, NY"], "2026-02-30"),
+    ],
+)
+def test_missing_or_invalid_trip_details_never_call_duffel(
+    monkeypatch: pytest.MonkeyPatch, origin: str | None, regions: list[str], departure: str | None
+) -> None:
+    duffel = RecordedDuffel()
+    monkeypatch.setattr(flight_search, "transport", duffel)
+    record = PersistedTrip(
+        trip_id="incomplete", origin=origin, primary_regions=regions, start_date=departure
+    )
+    result = flight_search.search_trip_flights(record, token="duffel_test_fixture")
+    assert result.status == flight_search.MISSING_TRIP_DETAILS
+    assert duffel.calls == []
+
+
+@pytest.mark.parametrize("codes", [["12!"], ["12!", "chi"]])
+def test_place_suggestions_skip_invalid_codes(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, codes: list[str]
+) -> None:
+    monkeypatch.setenv(flight_search.TOKEN_ENV, "duffel_test_fixture")
+    duffel = RecordedDuffel()
+
+    def places(request: Request, timeout: float) -> bytes:
+        if "/places/suggestions" in request.full_url:
+            return json.dumps(
+                {"data": [{"type": "city", "iata_code": code} for code in codes]}
+            ).encode()
+        return duffel(request, timeout)
+
+    monkeypatch.setattr(flight_search, "transport", places)
+    result = _search(client, _trip(client))
+    assert result["status"] == (
+        flight_search.TEST_MODE if len(codes) > 1 else flight_search.NO_AIRPORT_CODE
+    )
+    if len(codes) > 1:
+        assert result["origin_code"] == "CHI"
+    else:
+        assert duffel.calls == []
+
+
+def test_empty_offer_response_is_reported(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(flight_search.TOKEN_ENV, "duffel_test_fixture")
+    duffel = RecordedDuffel()
+
+    def empty_offers(request: Request, timeout: float) -> bytes:
+        if "/air/offer_requests" in request.full_url:
+            return b'{"data": {"id": "empty-test", "live_mode": false, "offers": []}}'
+        return duffel(request, timeout)
+
+    monkeypatch.setattr(flight_search, "transport", empty_offers)
+    result = _search(client, _trip(client))
+    assert result["status"] == flight_search.NO_OFFERS
+    assert result["offer_count"] == 0
+    assert result["prices_shown"] is False
+
+
+@pytest.mark.parametrize("error_type", [ValueError, TypeError])
+@pytest.mark.parametrize("stage", ["query", "fetch"])
+def test_provider_validation_errors_are_reported(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, error_type: type[Exception], stage: str
+) -> None:
+    monkeypatch.setenv(flight_search.TOKEN_ENV, "duffel_test_fixture")
+    monkeypatch.setattr(flight_search, "transport", RecordedDuffel())
+
+    def invalid(*args: Any, **kwargs: Any) -> Any:
+        raise error_type("invalid provider details")
+
+    if stage == "query":
+        monkeypatch.setattr(flight_search, "SourceQuery", invalid)
+    else:
+        monkeypatch.setattr(flight_search.DuffelFlightAdapter, "fetch_snapshot", invalid)
+    result = _search(client, _trip(client))
+    assert result["status"] == flight_search.PROVIDER_ERROR
+    assert result["origin_code"] == "CHI"
+    assert result["destination_code"] == "NYC"
+    assert result["prices_shown"] is False
+
+
+def test_search_releases_the_session_before_provider_calls(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sqlalchemy.orm import object_session
+    from trip_planner.app.routes import flight_search as route
+
+    original = route.search_trip_flights
+
+    def detached_search(record: PersistedTrip) -> flight_search.FlightSearchResult:
+        assert object_session(record) is None
+        return original(record)
+
+    monkeypatch.setattr(route, "search_trip_flights", detached_search)
+    assert _search(client, _trip(client))["status"] == flight_search.NOT_CONFIGURED

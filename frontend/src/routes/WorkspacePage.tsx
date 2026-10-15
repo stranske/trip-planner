@@ -1261,6 +1261,16 @@ function WorkspacePageContent({
   const [flightSearch, setFlightSearch] = useState<FlightSearchResult | null>(null);
   const [flightSearchBusy, setFlightSearchBusy] = useState(false);
   const [flightSearchError, setFlightSearchError] = useState<string | null>(null);
+  const flightSearchRequestVersion = useRef(0);
+  useEffect(() => {
+    flightSearchRequestVersion.current += 1;
+    setFlightSearch(null);
+    setFlightSearchError(null);
+    setFlightSearchBusy(false);
+    return () => {
+      flightSearchRequestVersion.current += 1;
+    };
+  }, [workspace.trip_record.trip.trip_id]);
   // Set by the trip setup form after an edit, e.g. to say a policy verdict was removed.
   const setupNotice = (useLocation().state as { setupNotice?: string } | null)?.setupNotice ?? null;
   const [currentWorkspace, setCurrentWorkspace] = useState(workspace);
@@ -1512,14 +1522,22 @@ function WorkspacePageContent({
     };
   });
   async function handleFlightSearch() {
+    const requestVersion = ++flightSearchRequestVersion.current;
     setFlightSearchBusy(true);
     setFlightSearchError(null);
     try {
-      setFlightSearch(await searchTripFlights(trip.trip_id));
+      const result = await searchTripFlights(trip.trip_id);
+      if (requestVersion === flightSearchRequestVersion.current) {
+        setFlightSearch(result);
+      }
     } catch (error) {
-      setFlightSearchError(error instanceof Error ? error.message : "The flight search failed.");
+      if (requestVersion === flightSearchRequestVersion.current) {
+        setFlightSearchError(error instanceof Error ? error.message : "The flight search failed.");
+      }
     } finally {
-      setFlightSearchBusy(false);
+      if (requestVersion === flightSearchRequestVersion.current) {
+        setFlightSearchBusy(false);
+      }
     }
   }
 

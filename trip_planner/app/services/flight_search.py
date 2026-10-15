@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from http.client import HTTPException
 from typing import Any
 
@@ -78,6 +78,13 @@ def search_trip_flights(record: PersistedTrip, *, token: str | None = None) -> F
             "Flight search needs a starting point, one destination and a departure date.",
         )
 
+    try:
+        date.fromisoformat(record.start_date)
+    except (TypeError, ValueError):
+        return FlightSearchResult(
+            MISSING_TRIP_DETAILS, "Flight search needs a valid ISO departure date."
+        )
+
     adapter = DuffelFlightAdapter(api_token=token, transport=transport)
     try:
         origin_code = adapter.suggest_iata_code(record.origin)
@@ -97,17 +104,25 @@ def search_trip_flights(record: PersistedTrip, *, token: str | None = None) -> F
         )
     assert origin_code is not None and destination_code is not None
 
-    snapshot = adapter.fetch_snapshot(
-        SourceQuery(
-            query_id=f"flights:{record.trip_id}",
-            entity_scope="transport",
-            option_kind="flight",
-            requested_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            origin=origin_code,
-            destination=destination_code,
-            filters={"departure_date": record.start_date, "cabin_class": "economy"},
+    try:
+        snapshot = adapter.fetch_snapshot(
+            SourceQuery(
+                query_id=f"flights:{record.trip_id}",
+                entity_scope="transport",
+                option_kind="flight",
+                requested_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                origin=origin_code,
+                destination=destination_code,
+                filters={"departure_date": record.start_date, "cabin_class": "economy"},
+            )
         )
-    )
+    except (ValueError, TypeError) as error:
+        return FlightSearchResult(
+            PROVIDER_ERROR,
+            f"Duffel's flight search returned invalid details ({type(error).__name__}). {_ENTER_IT}",
+            origin_code=origin_code,
+            destination_code=destination_code,
+        )
     issues = [issue.to_dict() for issue in snapshot.issues]
     route = f"{origin_code} → {destination_code} on {record.start_date}"
     if snapshot.snapshot_status == "failed":
