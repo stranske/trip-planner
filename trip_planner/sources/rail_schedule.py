@@ -282,6 +282,38 @@ def configured_feed_path() -> Path | None:
     return Path(raw) if raw else None
 
 
+#: timetable_status() values beyond NOT_CONFIGURED / FEED_UNREADABLE.
+LOADED = "loaded"
+
+
+def timetable_status() -> dict[str, object]:
+    """Whether this server can answer rail questions, for /api/health.
+
+    Three distinct answers: no feed configured, a feed that cannot be read (a failed
+    download at deploy), or a loaded feed with its size. Never one word for two of them.
+    """
+
+    path = configured_feed_path()
+    if path is None:
+        return {"status": NOT_CONFIGURED, "feed_name": None, "stations": 0, "trips": 0}
+    try:
+        schedule = _load_cached(str(path), path.stat().st_mtime_ns)
+    except (OSError, ValueError, BadZipFile) as error:
+        return {
+            "status": FEED_UNREADABLE,
+            "feed_name": path.name,
+            "reason": type(error).__name__,
+            "stations": 0,
+            "trips": 0,
+        }
+    return {
+        "status": LOADED,
+        "feed_name": schedule.feed_name,
+        "stations": len(schedule.stations),
+        "trips": len(schedule.trips),
+    }
+
+
 def _closest(stations: list[Station], place: ResolvedPlace) -> dict[str, float]:
     return {
         station.stop_id: distance_km(
