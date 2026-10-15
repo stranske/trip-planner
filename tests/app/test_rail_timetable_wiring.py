@@ -353,6 +353,85 @@ def test_places_without_stations_get_no_train_and_say_why(
     assert len(_rows(payload)) == 1
 
 
+@pytest.mark.parametrize("endpoint", ["origin", "destination"])
+@pytest.mark.parametrize("latitude_offset", [0.26, 0.28], ids=["inside-30km", "outside-30km"])
+def test_stations_must_be_within_30_km_of_both_trip_endpoints(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    endpoint: str,
+    latitude_offset: float,
+) -> None:
+    # A shift of 0.26 degrees north is about 29 km; 0.28 is about 31 km.
+    # Move the other Boston-area stops away so they cannot mask the radius limit.
+    stops = list(csv.DictReader(io.StringIO(FEED["stops.txt"])))
+    station_id, place_name = ("BOS", "Boston") if endpoint == "origin" else ("NYP", "New York, NY")
+    place = resolve_place(place_name)
+    assert place is not None
+    for stop in stops:
+        if stop["stop_id"] in {"PVD", "RTE"}:
+            stop["stop_lat"] = "0"
+            stop["stop_lon"] = "0"
+        elif stop["stop_id"] == station_id:
+            stop["stop_lat"] = str(place.latitude + latitude_offset)
+            stop["stop_lon"] = str(place.longitude)
+    stream = io.StringIO()
+    writer = csv.DictWriter(stream, fieldnames=list(stops[0]))
+    writer.writeheader()
+    writer.writerows(stops)
+    feed = _feed(tmp_path, extra_tables={"stops.txt": stream.getvalue()})
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(feed))
+
+    payload = _workspace(client, "Boston", "New York, NY", "2026-10-13")
+    lookup = payload["inventory_summary"]["rail_lookup"]
+    if latitude_offset == 0.26:
+        assert lookup["status"] == rail_schedule.FOUND
+        assert len(_rows(payload)) == 2
+        assert (
+            "Boston South Station 06:00 → New York Penn Station 09:40" in _rail(payload)["summary"]
+        )
+    else:
+        assert lookup["status"] == f"no_station_near_{endpoint}"
+        assert "within 30 km" in lookup["summary"]
+        assert len(_rows(payload)) == 1
+    status, expected = _probe_answer(feed, "Boston", "New York, NY", "2026-10-13")
+    assert workspace_agrees(payload, status, expected, date(2026, 10, 13))
+
+
+def test_the_train_boards_at_the_city_station_even_when_a_suburban_call_is_faster(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = list(csv.DictReader(io.StringIO(FEED["stop_times.txt"])))
+    for call in calls:
+        if call["trip_id"] == "2150" and int(call["stop_sequence"]) > 1:
+            call["stop_sequence"] = str(int(call["stop_sequence"]) + 1)
+    calls.append(
+        {
+            "trip_id": "2150",
+            "arrival_time": "06:10:00",
+            "departure_time": "06:12:00",
+            "stop_id": "RTE",
+            "stop_sequence": "2",
+            "pickup_type": "0",
+            "drop_off_type": "0",
+        }
+    )
+    stream = io.StringIO()
+    writer = csv.DictWriter(stream, fieldnames=list(calls[0]))
+    writer.writeheader()
+    writer.writerows(calls)
+    feed = _feed(tmp_path, extra_tables={"stop_times.txt": stream.getvalue()})
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(feed))
+
+    payload = _workspace(client, "Boston", "New York, NY", "2026-10-13")
+    rail = _rail(payload)
+    assert "Boston South Station 06:00 → New York Penn Station 09:40" in rail["summary"]
+    assert rail["metrics"]["travel_minutes"] == 220
+    assert "Route 128" not in rail["summary"]
+    status, expected = _probe_answer(feed, "Boston", "New York, NY", "2026-10-13")
+    assert workspace_agrees(payload, status, expected, date(2026, 10, 13))
+
+
 def test_the_train_stops_at_the_city_station_not_a_suburban_one_on_the_way(
     client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
