@@ -3,12 +3,20 @@ services:
     name: trip-planner-api
     runtime: python
     plan: free
-    buildCommand: python -m pip install --upgrade pip && python -m pip install -e .
+    # The Amtrak timetable is fetched at each build (public file, no key). A failed
+    # download must not fail the deploy: the app then reports the timetable as
+    # unreadable (GET /api/health -> rail_timetable) instead of claiming no trains.
+    buildCommand: >-
+      python -m pip install --upgrade pip && python -m pip install -e . &&
+      (python scripts/fetch_amtrak_gtfs.py data/amtrak/GTFS.zip ||
+      echo "Amtrak timetable not fetched; rail lookups will report feed_unreadable")
     startCommand: uvicorn trip_planner.app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
     envVars:
       - key: TRIP_PLANNER_ENV
         value: staging
+      - key: TRIP_PLANNER_AMTRAK_GTFS_PATH
+        value: data/amtrak/GTFS.zip
       - key: TRIP_PLANNER_DATABASE_URL
         fromDatabase:
           name: trip-planner-db

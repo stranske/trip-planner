@@ -3,8 +3,9 @@ import os
 from fastapi import APIRouter, Request
 
 from trip_planner.app.database_status import DatabaseStatus
-from trip_planner.app.schemas.health import DatabaseHealth, HealthStatus
+from trip_planner.app.schemas.health import DatabaseHealth, HealthStatus, RailTimetableHealth
 from trip_planner.persistence import db
+from trip_planner.sources import rail_schedule
 
 router = APIRouter(tags=["health"])
 
@@ -28,4 +29,6 @@ def read_health(request: Request) -> HealthStatus:
             reason=status.reason,
             checked_at=status.checked_at.isoformat() if status.checked_at else None,
         ),
+        # The deploy fetches the timetable; this is how a deployed server shows it worked.
+        rail_timetable=RailTimetableHealth.model_validate(rail_schedule.timetable_status()),
     )

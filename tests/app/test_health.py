@@ -79,3 +79,56 @@ def test_degraded_health_clears_when_the_database_comes_back(monkeypatch) -> Non
         "reason": None,
         "checked_at": recovered["database"]["checked_at"],
     }
+
+
+def test_health_reports_the_rail_timetable_in_three_distinct_states(monkeypatch, tmp_path) -> None:
+    """The deploy fetches the Amtrak timetable; /api/health is how a deployed server shows
+    whether that worked. "Not configured", "configured but unreadable" (a failed download)
+    and "loaded" must read differently, and none of them makes the service degraded."""
+
+    from zipfile import ZipFile
+
+    from trip_planner.sources import rail_schedule
+
+    from trip_planner.persistence.db import reset_database_state
+
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'health.db'}")
+    reset_database_state()
+    monkeypatch.delenv(rail_schedule.FEED_PATH_ENV, raising=False)
+    client = TestClient(create_app())
+    body = client.get("/api/health").json()
+    assert body["rail_timetable"]["status"] == "not_configured"
+
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(tmp_path / "missing" / "GTFS.zip"))
+    body = client.get("/api/health").json()
+    assert body["rail_timetable"]["status"] == "feed_unreadable"
+    assert body["rail_timetable"]["reason"] == "FileNotFoundError"
+    assert body["status"] == "ok"
+
+    feed = tmp_path / "GTFS.zip"
+    with ZipFile(feed, "w") as archive:
+        archive.writestr(
+            "stops.txt",
+            "stop_id,stop_name,stop_lat,stop_lon\nNYP,New York,40.75,-73.99\nPHL,Philadelphia,39.95,-75.18\n",
+        )
+        archive.writestr(
+            "routes.txt",
+            "route_id,route_short_name,route_long_name,route_type\nNER,,Northeast Regional,2\n",
+        )
+        archive.writestr(
+            "trips.txt", "route_id,service_id,trip_id,trip_headsign\nNER,DAILY,171,Washington\n"
+        )
+        archive.writestr(
+            "stop_times.txt",
+            "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
+            "171,07:00:00,07:00:00,NYP,1\n171,08:20:00,08:22:00,PHL,2\n",
+        )
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(feed))
+    body = client.get("/api/health").json()
+    assert body["rail_timetable"] == {
+        "status": "loaded",
+        "feed_name": "GTFS.zip",
+        "reason": None,
+        "stations": 2,
+        "trips": 1,
+    }
