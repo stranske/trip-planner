@@ -23,18 +23,43 @@ FEED = {
     "stops.txt": "stop_id,stop_name,stop_lat,stop_lon\n"
     "BOS,Boston South Station,42.3523,-71.0552\n"
     "PVD,Providence,41.8295,-71.4134\n"
-    "NYP,New York Penn Station,40.7506,-73.9935\n",
+    "NYP,New York Penn Station,40.7506,-73.9935\n"
+    "RTE,Route 128 Amtrak Station,42.2102,-71.1476\n"
+    "CHI,Chicago Union Station,41.8789,-87.6403\n"
+    "DEN,Denver,39.7525,-105.0000\n"
+    "SLC,Salt Lake City,40.7497,-111.9122\n",
+    # As in Amtrak's real feed: short names empty, Thruway buses (route_type 3) alongside
+    # trains, and pickup_type / drop_off_type marking stops a train only sets down at.
     "routes.txt": "route_id,agency_id,route_short_name,route_long_name,route_type\n"
-    "ACELA,AMTK,ACELA,Acela,2\nNER,AMTK,NER,Northeast Regional,2\n",
-    "trips.txt": "route_id,service_id,trip_id,trip_headsign,direction_id\n"
-    "ACELA,WEEKDAY,2150,New York,0\nNER,DAILY,171,New York,0\nNER,DAILY,172,Boston,1\n",
-    "stop_times.txt": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
-    "2150,06:00:00,06:00:00,BOS,1\n2150,06:35:00,06:37:00,PVD,2\n2150,09:40:00,09:40:00,NYP,3\n"
-    "171,05:00:00,05:00:00,BOS,1\n171,05:45:00,05:47:00,PVD,2\n171,09:30:00,09:30:00,NYP,3\n"
-    "172,07:00:00,07:00:00,NYP,1\n172,09:50:00,09:52:00,PVD,2\n172,10:30:00,10:30:00,BOS,3\n",
+    "ACELA,AMTK,,Acela,2\nNER,AMTK,,Northeast Regional,2\n"
+    "BUS,AMTK,,Amtrak Thruway Connecting Service,3\n"
+    "CZ,AMTK,,California Zephyr,2\n",
+    "trips.txt": "route_id,service_id,trip_id,trip_short_name,trip_headsign,direction_id\n"
+    "ACELA,WEEKDAY,2150,2150,New York,0\nNER,DAILY,171,171,New York,0\n"
+    "NER,DAILY,172,172,Boston,1\nBUS,DAILY,9001,9001,New York,0\n"
+    "ACELA,WEEKDAY,2190,2190,New York,0\n"
+    "CZ,TUESDAY,5,5,Emeryville,0\n",
+    "stop_times.txt": "trip_id,arrival_time,departure_time,stop_id,stop_sequence,"
+    "pickup_type,drop_off_type\n"
+    "2150,06:00:00,06:00:00,BOS,1,0,1\n2150,06:35:00,06:37:00,PVD,2,0,0\n"
+    "2150,09:40:00,09:40:00,NYP,3,1,0\n"
+    "171,05:00:00,05:00:00,BOS,1,0,1\n171,05:45:00,05:47:00,PVD,2,0,0\n"
+    "171,09:30:00,09:30:00,NYP,3,1,0\n"
+    # Northbound, it reaches Route 128 (inside 30 km of Boston) before South Station.
+    "172,07:00:00,07:00:00,NYP,1,0,1\n172,09:50:00,09:52:00,PVD,2,0,0\n"
+    "172,10:10:00,10:11:00,RTE,3,0,0\n172,10:30:00,10:30:00,BOS,4,1,0\n"
+    # Leaves Chicago on Tuesdays only, so it boards Denver on Wednesdays (GTFS hour 31).
+    "5,14:00:00,14:00:00,CHI,1,0,1\n5,31:00:00,31:10:00,DEN,2,0,0\n"
+    "5,46:00:00,46:00:00,SLC,3,1,0\n"
+    # A bus that is faster than any train: it must not be shown as a train.
+    "9001,06:30:00,06:30:00,BOS,1,0,1\n9001,08:00:00,08:00:00,NYP,2,1,0\n"
+    # The fastest Acela of all, but it does not pick up at Boston (set-down only).
+    "2190,07:00:00,07:00:00,BOS,1,1,1\n2190,07:35:00,07:37:00,PVD,2,0,0\n"
+    "2190,09:05:00,09:05:00,NYP,3,1,0\n",
     "calendar.txt": "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,"
     "start_date,end_date\n"
-    "WEEKDAY,1,1,1,1,1,0,0,20260901,20270901\nDAILY,1,1,1,1,1,1,1,20260901,20270901\n",
+    "WEEKDAY,1,1,1,1,1,0,0,20260901,20270901\nDAILY,1,1,1,1,1,1,1,20260901,20270901\n"
+    "TUESDAY,0,1,0,0,0,0,0,20260901,20270901\n",
 }
 
 
@@ -110,8 +135,10 @@ def test_a_weekday_trip_gets_the_fastest_direct_train(
     assert payload["inventory_summary"]["rail_lookup"]["status"] == rail_schedule.FOUND
     assert len(_rows(payload)) == 2
     rail = _rail(payload)
-    assert rail["title"] == "Boston → New York, NY by Amtrak (Acela)"
+    # Not the 90-minute bus, and not the 2190 that does not pick up at Boston.
+    assert rail["title"] == "Boston → New York, NY by Amtrak Acela"
     assert rail["metrics"]["travel_minutes"] == 220  # 06:00 to 09:40
+    assert "Acela 2150" in rail["summary"]
     assert rail["metrics"]["transfers"] == 0  # a direct train: measured, not assumed
     assert rail["availability_checked"] is False
     assert rail["metrics"]["estimated_total"] is None
@@ -126,7 +153,7 @@ def test_a_saturday_trip_does_not_get_a_weekday_only_train(
     monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(_feed(tmp_path)))
     rail = _rail(_workspace(client, "Boston", "New York, NY", "2026-10-17"))
 
-    assert rail["title"].endswith("(Northeast Regional)")
+    assert rail["title"].endswith("by Amtrak Northeast Regional")
     assert rail["metrics"]["travel_minutes"] == 270
 
 
@@ -149,3 +176,32 @@ def test_places_without_stations_get_no_train_and_say_why(
     assert lookup["status"] == rail_schedule.NO_STATION_NEAR_ORIGIN
     assert "Seattle" in lookup["summary"]
     assert len(_rows(payload)) == 1
+
+
+def test_the_train_stops_at_the_city_station_not_a_suburban_one_on_the_way(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real feed, 2026-10-14: Washington to Boston arrived at "Route 128" because the train
+    reaches it minutes before South Station."""
+
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(_feed(tmp_path)))
+    rail = _rail(_workspace(client, "New York, NY", "Boston", "2026-10-13"))
+
+    assert "Boston South Station 10:30" in rail["summary"]
+    assert rail["metrics"]["travel_minutes"] == 210
+
+
+def test_an_overnight_train_is_checked_for_the_day_it_boards_the_traveller(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GTFS counts times from the train's first departure: this one leaves Chicago on
+    Tuesdays, so it leaves Denver on Wednesdays, at 07:10."""
+
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(_feed(tmp_path)))
+    wednesday = _workspace(client, "Denver, CO", "Salt Lake City, UT", "2026-10-14")
+    tuesday = _workspace(client, "Denver, CO", "Salt Lake City, UT", "2026-10-13")
+
+    rail = _rail(wednesday)
+    assert "Denver 07:10 → Salt Lake City 22:00," in rail["summary"]
+    assert rail["metrics"]["travel_minutes"] == 890
+    assert tuesday["inventory_summary"]["rail_lookup"]["status"] == rail_schedule.NO_TRAIN_ON_DATE

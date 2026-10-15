@@ -14,7 +14,7 @@ from __future__ import annotations
 import csv
 import os
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from functools import lru_cache
 from io import TextIOWrapper
 from pathlib import Path
@@ -47,20 +47,27 @@ class Station:
     longitude: float
 
 
+#: GTFS route_type for rail. Amtrak's feed also carries Thruway buses (route_type 3),
+#: which must not be shown as a train.
+RAIL_ROUTE_TYPE = "2"
+
+
 @dataclass(frozen=True)
 class TrainTrip:
     trip_id: str
     service_id: str
     route_name: str
+    train_number: str
     headsign: str
-    #: (stop_id, arrival minutes, departure minutes) in timetable order.
-    calls: tuple[tuple[str, int, int], ...]
+    #: (stop_id, arrival minutes, departure minutes, can board, can alight), in order.
+    calls: tuple[tuple[str, int, int, bool, bool], ...]
 
 
 @dataclass(frozen=True)
 class DirectTrain:
     trip_id: str
     route_name: str
+    train_number: str
     headsign: str
     origin_station: Station
     destination_station: Station
@@ -89,10 +96,28 @@ def _minutes(value: str) -> int:
     return int(hours) * 60 + int(minutes)
 
 
+_DAY = 24 * 60
+
+
 def _clock(minutes: int) -> str:
-    day_minutes = minutes % (24 * 60)
-    suffix = " (+1 day)" if minutes >= 24 * 60 else ""
-    return f"{day_minutes // 60:02d}:{day_minutes % 60:02d}{suffix}"
+    """Minutes after midnight on the day the traveller boards, as "HH:MM"."""
+
+    day_minutes = minutes % _DAY
+    return f"{day_minutes // 60:02d}:{day_minutes % 60:02d}"
+
+
+def _arrival_clock(departs: int, arrives: int) -> str:
+    """Arrival time, with how many days after boarding it falls (overnight trains)."""
+
+    days = arrives // _DAY - departs // _DAY
+    suffix = "" if days == 0 else f" (+{days} day{'s' if days > 1 else ''})"
+    return f"{_clock(arrives)}{suffix}"
+
+
+def service_name(route_name: str) -> str:
+    """ "Amtrak Acela", and "Amtrak Cascades" rather than "Amtrak Amtrak Cascades"."""
+
+    return route_name if route_name.lower().startswith("amtrak") else f"Amtrak {route_name}"
 
 
 def _optional_table(archive: ZipFile, name: str) -> list[dict[str, str]] | None:
@@ -164,17 +189,22 @@ def _load(path: Path) -> RailSchedule:
     for record in snapshot.records:
         payload = record.payload
         route = payload["route"]
+        if route.get("route_type") != RAIL_ROUTE_TYPE:
+            continue
         trips.append(
             TrainTrip(
                 trip_id=payload["trip_id"],
                 service_id=payload["service_id"],
                 route_name=route.get("route_long_name") or route.get("route_short_name") or "",
+                train_number=payload.get("trip_short_name") or "",
                 headsign=payload.get("trip_headsign") or "",
                 calls=tuple(
                     (
                         stop["stop_id"],
                         _minutes(stop["arrival_time"]),
                         _minutes(stop["departure_time"]),
+                        stop.get("pickup_type") != "1",
+                        stop.get("drop_off_type") != "1",
                     )
                     for stop in payload["stops"]
                 ),
@@ -234,20 +264,55 @@ def configured_feed_path() -> Path | None:
     return Path(raw) if raw else None
 
 
+def _closest(stations: list[Station], place: ResolvedPlace) -> dict[str, float]:
+    return {
+        station.stop_id: distance_km(
+            place,
+            ResolvedPlace(
+                query=station.name,
+                name=station.name,
+                latitude=station.latitude,
+                longitude=station.longitude,
+                country_code=place.country_code,
+                population=0,
+            ),
+        )
+        for station in stations
+    }
+
+
 def _direct_trains(
-    schedule: RailSchedule, origins: list[Station], destinations: list[Station]
+    schedule: RailSchedule,
+    origin: ResolvedPlace,
+    destination: ResolvedPlace,
+    origins: list[Station],
+    destinations: list[Station],
 ) -> list[tuple[TrainTrip, Station, Station, int, int]]:
-    origin_ids = {station.stop_id: station for station in origins}
-    destination_ids = {station.stop_id: station for station in destinations}
+    """Per train: board at the stop nearest the origin, leave at the stop nearest the
+    destination. The fastest call pair would pick a suburban stop the train reaches a few
+    minutes before the city ("Route 128" for Boston, "Glenview" for Chicago)."""
+
+    origin_km = _closest(origins, origin)
+    destination_km = _closest(destinations, destination)
     found = []
     for trip in schedule.trips:
-        boarding: tuple[Station, int] | None = None
-        for stop_id, arrival, departure in trip.calls:
-            if boarding is None and stop_id in origin_ids:
-                boarding = (origin_ids[stop_id], departure)
-            elif boarding is not None and stop_id in destination_ids:
-                found.append((trip, boarding[0], destination_ids[stop_id], boarding[1], arrival))
-                break
+        boards = [
+            (index, stop_id, departure)
+            for index, (stop_id, _arrival, departure, can_board, _alight) in enumerate(trip.calls)
+            if stop_id in origin_km and can_board
+        ]
+        if not boards:
+            continue
+        b_index, b_stop, b_time = min(boards, key=lambda call: origin_km[call[1]])
+        alights = [
+            (stop_id, arrival)
+            for stop_id, arrival, _departure, _board, can_alight in trip.calls[b_index + 1 :]
+            if stop_id in destination_km and can_alight
+        ]
+        if not alights:
+            continue
+        a_stop, a_time = min(alights, key=lambda call: destination_km[call[0]])
+        found.append((trip, schedule.stations[b_stop], schedule.stations[a_stop], b_time, a_time))
     return found
 
 
@@ -285,7 +350,7 @@ def find_direct_train(
             f"No Amtrak station within {STATION_RADIUS_KM:.0f} km of {destination.name}.",
             feed_name=schedule.feed_name,
         )
-    candidates = _direct_trains(schedule, origins, destinations)
+    candidates = _direct_trains(schedule, origin, destination, origins, destinations)
     if not candidates:
         return RailLookup(
             NO_DIRECT_TRAIN,
@@ -293,11 +358,16 @@ def find_direct_train(
             "journeys with a change are not searched.",
             feed_name=schedule.feed_name,
         )
+    # GTFS times count from the train's service day, so a long-distance train boards the
+    # traveller's station a day or more after it starts (the Zephyr leaves Denver on day 2).
+    # The calendar is asked about the service day that puts the boarding on the travel date.
     runs = {
         trip.trip_id: (
-            schedule.runs_on(trip.service_id, travel_date) if travel_date is not None else None
+            schedule.runs_on(trip.service_id, travel_date - timedelta(days=departs // _DAY))
+            if travel_date is not None
+            else None
         )
-        for trip, *_ in candidates
+        for trip, _board, _alight, departs, _arrives in candidates
     }
     dated = [c for c in candidates if runs[c[0].trip_id] is not False]
     if not dated:
@@ -312,11 +382,12 @@ def find_direct_train(
     train = DirectTrain(
         trip_id=trip.trip_id,
         route_name=trip.route_name,
+        train_number=trip.train_number,
         headsign=trip.headsign,
         origin_station=board,
         destination_station=alight,
         departs=_clock(departs),
-        arrives=_clock(arrives),
+        arrives=_arrival_clock(departs, arrives),
         duration_minutes=arrives - departs,
         runs_on_date=runs[trip.trip_id],
     )
@@ -328,7 +399,9 @@ def find_direct_train(
     return RailLookup(
         FOUND,
         (
-            f"Amtrak {train.route_name}: {board.name} {train.departs} → {alight.name} "
+            f"{service_name(train.route_name)}"
+            f"{f' {train.train_number}' if train.train_number else ''}: "
+            f"{board.name} {train.departs} → {alight.name} "
             f"{train.arrives}, {train.duration_minutes // 60} h {train.duration_minutes % 60:02d} min, "
             "direct."
         ),

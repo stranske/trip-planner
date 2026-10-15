@@ -57,6 +57,8 @@ def test_parses_fixture_trips(tmp_path: Path) -> None:
             "stop_name": "New York Penn Station",
             "arrival_time": "07:00:00",
             "departure_time": "07:00:00",
+            "pickup_type": "",
+            "drop_off_type": "",
         },
         {
             "stop_sequence": 2,
@@ -64,6 +66,8 @@ def test_parses_fixture_trips(tmp_path: Path) -> None:
             "stop_name": "Philadelphia 30th Street Station",
             "arrival_time": "08:20:00",
             "departure_time": "08:22:00",
+            "pickup_type": "",
+            "drop_off_type": "",
         },
         {
             "stop_sequence": 3,
@@ -71,6 +75,8 @@ def test_parses_fixture_trips(tmp_path: Path) -> None:
             "stop_name": "Washington Union Station",
             "arrival_time": "10:25:00",
             "departure_time": "10:25:00",
+            "pickup_type": "",
+            "drop_off_type": "",
         },
     ]
     assert handoff.target_contract == "trip_planner/options/transport.py"
@@ -246,3 +252,35 @@ def test_rejects_non_zip_feed(tmp_path: Path) -> None:
 def test_rejects_unsupported_query(query: SourceQuery, message: str, tmp_path: Path) -> None:
     with pytest.raises(ValueError, match=message):
         AmtrakGtfsAdapter(_fixture_zip(tmp_path)).fetch_snapshot(query)
+
+
+def test_reads_routes_named_only_by_their_long_name(tmp_path: Path) -> None:
+    """Amtrak's real feed leaves route_short_name empty on every route; GTFS requires the
+    short or the long name, not both. The merged adapter refused the real file."""
+
+    feed_path = _fixture_zip(
+        tmp_path,
+        overrides={
+            "routes.txt": (
+                "route_id,agency_id,route_short_name,route_long_name,route_type\n"
+                "NEC,AMTK,,Northeast Regional,2\n"
+            )
+        },
+    )
+
+    snapshot = AmtrakGtfsAdapter(feed_path).fetch_snapshot(_query())
+    assert snapshot.records[0].payload["route"]["route_long_name"] == "Northeast Regional"
+
+
+def test_rejects_a_route_with_neither_name(tmp_path: Path) -> None:
+    feed_path = _fixture_zip(
+        tmp_path,
+        overrides={
+            "routes.txt": (
+                "route_id,agency_id,route_short_name,route_long_name,route_type\n" "NEC,AMTK,,,2\n"
+            )
+        },
+    )
+
+    with pytest.raises(ValueError, match="needs route_short_name or route_long_name"):
+        AmtrakGtfsAdapter(feed_path).fetch_snapshot(_query())

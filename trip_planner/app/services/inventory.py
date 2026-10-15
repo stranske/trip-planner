@@ -170,10 +170,10 @@ def availability_checked_with_provider(bundle_id: object) -> bool:
 
 
 def _clock_minutes(clock: str) -> int:
-    """ "06:05" or "00:40 (+1 day)" from the rail timetable, as minutes after midnight."""
+    """A departure "HH:MM" on the travel date, as minutes after midnight."""
 
     hours, minutes = clock[:5].split(":")
-    return int(hours) * 60 + int(minutes) + (24 * 60 if "+1 day" in clock else 0)
+    return int(hours) * 60 + int(minutes)
 
 
 def _unpriced_total(amount: float | None) -> dict[str, Any]:
@@ -741,7 +741,10 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         payload.update(
             {
                 "bundle_id": f"bundle-{self.trip_id}{RAIL_TIMETABLE_BUNDLE_MARKER}1-1",
-                "title": f"{self.origin} → {self.primary_regions[0]} by Amtrak ({train.route_name})",
+                "title": (
+                    f"{self.origin} → {self.primary_regions[0]} by "
+                    f"{rail_schedule.service_name(train.route_name)}"
+                ),
                 "summary": summary,
                 "source_records": [*payload["source_records"], amtrak.to_dict()],
             }
@@ -758,7 +761,10 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
             {
                 **payload["transport_options"][0],
                 "option_id": option_id,
-                "name": f"Amtrak {train.route_name} to {train.headsign or train.destination_station.name}",
+                "name": (
+                    f"{rail_schedule.service_name(train.route_name)} to "
+                    f"{train.headsign or train.destination_station.name}"
+                ),
                 "transport_kind": "rail",
                 "origin_id": gateway_id,
                 "destination_id": destination_id,
