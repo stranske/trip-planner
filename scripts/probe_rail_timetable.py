@@ -248,9 +248,7 @@ def workspace_agrees(
             "The timetable file has no service calendar, so the travel date was not checked."
         )
     else:
-        date_summary = (
-            f"Direct Amtrak trains run on this route, but the timetable shows none on {day.isoformat()}."
-        )
+        date_summary = f"Direct Amtrak trains run on this route, but the timetable shows none on {day.isoformat()}."
     return bool(
         rail[0]["metrics"]["travel_minutes"] == expected.duration_minutes
         and rail[0]["metrics"]["transfers"] == 0

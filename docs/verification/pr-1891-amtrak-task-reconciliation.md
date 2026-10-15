@@ -1,10 +1,20 @@
 # PR #1891 task reconciliation
 
+## Current disposition — October 15, 2026
+
+The exact accepted head and actual merged tree passed28/28 real-feed cases on
+October20/24. The committed [complete JSON proof](../evidence/rail1891-real-feed/report.json)
+and [input manifest](../evidence/rail1891-real-feed/manifest.json) supersede every
+historical DNS/no-ZIP/unchecked-trial note below. Actual providerCONCERNS remains
+unchanged; no production deployment or seat/fare verification is inferred.
+
+## Original checklist and historical execution notes
+
 Reviewed on 2026-10-15: commits `dfc3d819` through `0de203ee`, the original wiring
 commits, and the Phase 3 entry in `docs/provider-sources-plan.md`.
 
 The PR body contains numbered requirements and defect bullets without checkboxes.
-The proposed reconciliation is 9/11 complete:
+The current reconciliation is 11/11 complete; historical notes below retain prior states:
 
 1. [x] Concept and situations: eligible trips show the fastest direct timetabled
    train, stations, departure and arrival times, service-date status, and no fare.
@@ -12,9 +22,9 @@ The proposed reconciliation is 9/11 complete:
    served workspaces with a raw CSV query of the feed.
 3. [x] Mechanism and first weakness: the configured feed supplies the train;
    a missing feed reports `not_configured`, and the train remains unpriced.
-4. [ ] Smallest full test: rerun the current workspace probe against the real
+4. [x] Smallest full test: rerun the current workspace probe against the real
    Amtrak ZIP and retain the JSON report.
-5. [ ] Pass number: verify that every real-feed case agrees with the independent
+5. [x] Pass number: verify that every real-feed case agrees with the independent
    query in that report.
 6. [x] Dedup: the feature is recorded as Phase 3 of the product provider plan.
 

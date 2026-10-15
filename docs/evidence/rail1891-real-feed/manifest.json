@@ -1,0 +1,27 @@
+{
+  "accepted_head": "9757d6a597c018a314f0c8c5fe89acf689ff38d6",
+  "evaluated_merge": "536a9beeea37e86323399a9df552bc6c2b80bbe0",
+  "accepted_head_and_merge_tree": "5b6852ac7453507792a7861194c5b7e790425e87",
+  "feed_url": "https://content.amtrak.com/content/gtfs/GTFS.zip",
+  "feed_sha256": "29fde0737b9a2d522a2ad29652aff037c8851bfdb3cec23bbaffa5c6e5ef066a",
+  "report_sha256": "caa9d8929c85a96a1c97bdf1fda105b76c84c7496255c9994455cf89250f1f40",
+  "interpreter": "Existing local Python3.14.3, explicitPYTHONPATH to exact-head git archive",
+  "trial": "14citypairs x 2dates2026-10-20/2026-10-24;28/28 independentCSV vs servedworkspace; temporarysyntheticSQLite only",
+  "qualification": "Real public data trial, not production use/deployment or seat/fare verification",
+  "accepted_rail_input_sha256": {
+    "trip_planner/sources/rail_schedule.py": "e1c953407cd966d036184c1ca22b436ccc8b55978f113558bde84df16f12af1d",
+    "scripts/probe_rail_timetable.py": "52730c3a21de047a9d188fb64ade3d4a3ae078af17ce687beb3486eebdb05a69",
+    "trip_planner/sources/adapters/amtrak_gtfs.py": "55d7f6b15f913ce5c4c8779e34a9fe4321d6fe4c6259eee6f276ff00d76ddf2d",
+    "tests/app/test_rail_timetable_wiring.py": "0fe04d0ec9c6c6d31c486b9157c5b216acaa79b51cb243a9b110d9ee5a92b76a"
+  },
+  "followup_rail_input_sha256": {
+    "trip_planner/sources/rail_schedule.py": "e1c953407cd966d036184c1ca22b436ccc8b55978f113558bde84df16f12af1d",
+    "scripts/probe_rail_timetable.py": "fac0b93fedf19fa1a565676986a66463d4640ca282f813a9360e810dd4efac0d",
+    "trip_planner/sources/adapters/amtrak_gtfs.py": "55d7f6b15f913ce5c4c8779e34a9fe4321d6fe4c6259eee6f276ff00d76ddf2d",
+    "tests/app/test_rail_timetable_wiring.py": "ba1ee49f00f7df52bd53c13eedc0ae885d5d42eed74daea20002c807cb4b0bfd"
+  },
+  "format_only_ast_equal": {
+    "scripts/probe_rail_timetable.py": true,
+    "tests/app/test_rail_timetable_wiring.py": true
+  }
+}
