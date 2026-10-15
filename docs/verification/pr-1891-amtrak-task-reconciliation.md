@@ -170,3 +170,25 @@ wrapper above. Ruff, `git diff --check`, and the repository-wide Black check pas
 (496 files unchanged). The workspace commit failed because `.git` is read-only;
 the tested changes are preserved as a commit and patch in a temporary checkout
 at `/tmp/trip-planner-1891-measured-route`. PR #1891 remains open and ready for review.
+
+## Follow-up: long-distance calendar exceptions
+
+Concept item 1 has four additional served-workspace regression cases. Train 5
+boards Denver on Wednesday at GTFS hour 31:10, after starting its Tuesday service.
+Adding or cancelling Tuesday's service changes Wednesday's train; an exception
+dated Wednesday does not. Each case checks the displayed train or stated absence
+against the independent CSV query, alongside the measured route. Found trains
+retain their station times, 890-minute duration, zero transfers, and no fare.
+
+Validation: 79 wiring and adapter tests passed with `-m "not slow"` and the selector
+wrapper above. Ruff, `git diff --check`, and the repository-wide Black check passed
+(496 files unchanged). Black used `BLACK_NUM_WORKERS=1` and the selector wrapper.
+The official real-feed download failed DNS resolution, so items 4–5 remain
+unchecked. Concept item 1 remains verified and checked in this local checklist.
+
+The workspace commit failed because `.git` is read-only. The tested changes are
+preserved as a commit and patch under
+`/tmp/trip-planner-1891-service-day-exceptions`. Automatic approval review rejected
+the first-task checkbox update, blocker comment, and `needs-human` label because
+approval policy is `never`; the remote checklist is unchanged. PR #1891 was
+confirmed open with `draft=false`.

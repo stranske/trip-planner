@@ -756,6 +756,61 @@ def test_an_overnight_train_is_checked_for_the_day_it_boards_the_traveller(
         assert workspace_agrees(payload, status, expected, date.fromisoformat(day))
 
 
+@pytest.mark.parametrize(
+    ("exception_type", "exception_day", "expected_status"),
+    [
+        ("2", "20261013", "no_train_on_date"),
+        ("2", "20261014", "found"),
+        ("1", "20261013", "found"),
+        ("1", "20261014", "no_train_on_date"),
+    ],
+    ids=["cancel-service-day", "cancel-boarding-day", "add-service-day", "add-boarding-day"],
+)
+def test_long_distance_calendar_exceptions_apply_to_the_service_day(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    exception_type: str,
+    exception_day: str,
+    expected_status: str,
+) -> None:
+    # Train 5 boards Denver at GTFS hour 31:10 on Wednesday. Its service day
+    # is Tuesday: a Wednesday exception affects Thursday's boarding instead.
+    calendar = FEED["calendar.txt"]
+    if exception_type == "1":
+        calendar = calendar.replace("TUESDAY,0,1,0,0,0,0,0,", "TUESDAY,0,0,0,0,0,0,0,")
+    feed = _feed(
+        tmp_path,
+        extra_tables={
+            "calendar.txt": calendar,
+            "calendar_dates.txt": (
+                "service_id,date,exception_type\n" f"TUESDAY,{exception_day},{exception_type}\n"
+            ),
+        },
+    )
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(feed))
+
+    payload = _workspace(client, "Denver, CO", "Salt Lake City, UT", "2026-10-14")
+    lookup = payload["inventory_summary"]["rail_lookup"]
+    assert lookup["status"] == expected_status
+    if expected_status == rail_schedule.FOUND:
+        rail = _rail(payload)
+        assert len(_rows(payload)) == 2
+        assert "California Zephyr 5:" in rail["summary"]
+        assert "Denver 07:10 → Salt Lake City 22:00," in rail["summary"]
+        assert "Scheduled to run on 2026-10-14." in rail["summary"]
+        assert rail["metrics"]["travel_minutes"] == 890
+        assert rail["metrics"]["transfers"] == 0
+        assert rail["metrics"]["estimated_total"] is None
+        assert "No fare" in rail["summary"]
+    else:
+        assert len(_rows(payload)) == 1
+        assert "timetable shows none on 2026-10-14." in lookup["summary"]
+    status, expected = _probe_answer(feed, "Denver, CO", "Salt Lake City, UT", "2026-10-14")
+    assert status == expected_status
+    assert workspace_agrees(payload, status, expected, date(2026, 10, 14))
+
+
 def test_a_two_day_train_arrives_at_the_city_and_displays_the_correct_day(
     client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
