@@ -280,6 +280,18 @@ a {
   grid-column: 1 / -1;
 }
 
+.compare-sources {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-items: start;
+}
+
+.compare-sources > * {
+  margin: 0;
+}
+
 .route-workbench-card {
   grid-column: 1 / -1;
 }

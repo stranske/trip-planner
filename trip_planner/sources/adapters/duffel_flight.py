@@ -10,6 +10,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from trip_planner.sources.models import SourceRecord
@@ -27,6 +28,8 @@ from .base import SourceAdapter
 _API_BASE_URL = "https://api.duffel.com"
 _TARGET_CONTRACT = "trip_planner/options/transport.py"
 _CABIN_CLASSES = {"economy", "premium_economy", "business", "first"}
+#: AdapterIssue code for any snapshot taken with a test credential (plan §5, gate §9.2).
+SANDBOX_CREDENTIAL = "sandbox_credential"
 
 JsonTransport = Callable[[Request, float], bytes]
 
@@ -222,6 +225,51 @@ class DuffelFlightAdapter(SourceAdapter):
             notes=["Duffel request failed; no offer records were emitted."],
         )
 
+    def _sandbox_issue(self, query: SourceQuery) -> AdapterIssue:
+        return AdapterIssue(
+            issue_id=f"{query.query_id}-sandbox_credential",
+            stage="availability",
+            severity="warning",
+            code=SANDBOX_CREDENTIAL,
+            message=(
+                "Duffel test mode: these offers come from a fictional airline, so no price "
+                "may be built from them."
+            ),
+            observed_at=query.requested_at,
+            retriable=False,
+        )
+
+    def suggest_iata_code(self, place_name: str) -> str | None:
+        """The IATA city (or airport) code Duffel's places search gives for a place name.
+
+        Needs the API (a token); returns None when Duffel names no city or airport.
+        """
+
+        if self.api_token is None:
+            raise ValueError("place suggestions need an api_token")
+        request = Request(
+            f"{self.api_base_url}/places/suggestions?query={quote(place_name.strip(), safe='')}",
+            headers={
+                "Accept": "application/json",
+                "Duffel-Version": "v2",
+                "Authorization": f"Bearer {self.api_token}",
+            },
+            method="GET",
+        )
+        payload = _decode_object(self.transport(request, self.timeout), "places response")
+        places = [place for place in payload.get("data") or [] if isinstance(place, dict)]
+        for kind in ("city", "airport"):
+            for place in places:
+                code = place.get("iata_code") or place.get("iata_city_code")
+                if (
+                    place.get("type") == kind
+                    and isinstance(code, str)
+                    and len(code) == 3
+                    and code.isalpha()
+                ):
+                    return code.upper()
+        return None
+
     def _provider_issue(
         self,
         query: SourceQuery,
@@ -347,6 +395,9 @@ class DuffelFlightAdapter(SourceAdapter):
             fetched_at=query.requested_at,
             query=query,
             records=records,
+            # docs/provider-sources-plan.md §5: test-mode offers come from a fictional
+            # airline. The snapshot says so, and nothing downstream may build a price from it.
+            issues=[self._sandbox_issue(query)],
             payload_format="json",
             transport=mode,
             snapshot_status="complete",
@@ -386,7 +437,11 @@ class DuffelFlightAdapter(SourceAdapter):
             entity_scope=snapshot.entity_scope,
             status="blocked" if blocked else "ready",
             input_record_ids=[record.record_id for record in snapshot.records],
-            blocked_issue_ids=[issue.issue_id for issue in snapshot.issues],
+            # The sandbox warning does not block normalisation (shape is real); it blocks
+            # pricing, which is enforced where prices are built.
+            blocked_issue_ids=[
+                issue.issue_id for issue in snapshot.issues if issue.code != SANDBOX_CREDENTIAL
+            ],
             provenance_refs=provenance_refs,
             record_count=len(snapshot.records),
             notes=[

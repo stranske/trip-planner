@@ -356,6 +356,15 @@ transacting, not a dev task, and worth pausing on).
 Build `DuffelFlightAdapter` against test mode for shape, then switch. §5 applies with full
 force here.
 
+**Wired in test mode (2026-10-14).** `POST /api/workspace/{trip_id}/flights/search` (the
+"Search flights" button on Compare) resolves the trip's places to IATA codes through
+Duffel's places search, requests offers, and reports what came back. With a
+`duffel_test_` token in `TRIP_PLANNER_DUFFEL_TOKEN` it answers `test_mode` with the offer
+count and a `sandbox_credential` issue, and shows no fare anywhere (gate §9.2,
+`tests/app/test_flight_search_sandbox.py`). A live token answers `live_not_enabled` and is
+not used: switching on live fares is the account decision above, plus building the price
+path (provider-kind prices with `expires_at`, §6 gap 2), which does not exist yet.
+
 ### Phase 3 — trains
 
 Amtrak GTFS adapter. **Your time: zero** — it is a public file.

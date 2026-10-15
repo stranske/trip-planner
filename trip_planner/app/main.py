@@ -13,6 +13,7 @@ from trip_planner.app import APP_VERSION
 from trip_planner.app.database_status import DatabaseStatus
 from trip_planner.app.routes.auth import router as auth_router
 from trip_planner.app.routes.budget import router as budget_router
+from trip_planner.app.routes.flight_search import router as flight_search_router
 from trip_planner.app.routes.health import router as health_router
 from trip_planner.app.routes.inventory import router as inventory_router
 from trip_planner.app.routes.planner import router as planner_router
@@ -103,6 +104,7 @@ def create_app(*, portal_receipt_client: OwnerPortalReceiptClient | None = None)
     app.include_router(health_router, prefix="/api")
     app.include_router(auth_router, prefix="/api")
     app.include_router(trips_router, prefix="/api")
+    app.include_router(flight_search_router, prefix="/api")
     app.include_router(inventory_router, prefix="/api")
     app.include_router(planner_router, prefix="/api")
     app.include_router(policy_router, prefix="/api")
