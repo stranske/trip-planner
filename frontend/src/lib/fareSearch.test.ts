@@ -16,14 +16,14 @@ describe("googleFlightsSearchUrl", () => {
     );
   });
 
-  it("asks for one way when there is no return date", () => {
+  it("offers no fare search for a trip that cannot be submitted without a return date", () => {
     const url = googleFlightsSearchUrl({
       origin: "Seattle",
       primary_regions: ["Boston"],
       start_date: "2026-11-10",
       end_date: null,
     });
-    expect(decodeURIComponent(url ?? "")).toContain("on 2026-11-10 one way");
+    expect(url).toBeNull();
   });
 
   it("offers no search it cannot build", () => {

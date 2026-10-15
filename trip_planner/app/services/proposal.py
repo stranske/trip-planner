@@ -1555,14 +1555,7 @@ def build_workspace_submission_proposal(
                 vendor=transport_row.note or f"Entered by {transport_row.entered_by}",
                 booking_channel=booking_channel,
                 estimated_cost=_money(transport_row.lowest_amount),
-                notes=[
-                    f"Entered by {transport_row.entered_by}",
-                    *(
-                        [f"Fare link: {transport_row.evidence_url}"]
-                        if transport_row.evidence_url
-                        else []
-                    ),
-                ],
+                notes=[f"Entered by {transport_row.entered_by}"],
             )
         )
     summary_note = "Priced from amounts the traveller entered on the Budget tab."

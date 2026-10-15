@@ -118,8 +118,12 @@ def _validated_evidence_url(url: str | None) -> str | None:
     text = (url or "").strip()
     if not text:
         return None
-    parsed = urlparse(text)
-    if parsed.scheme != "https" or not parsed.netloc or len(text) > 500:
+    try:
+        parsed = urlparse(text)
+        hostname = parsed.hostname
+    except ValueError as error:
+        raise TripPriceInvalidError("the fare link must be an https:// web address") from error
+    if parsed.scheme != "https" or not hostname or len(text) > 500:
         raise TripPriceInvalidError("the fare link must be an https:// web address")
     return text
 

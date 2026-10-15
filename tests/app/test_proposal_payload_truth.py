@@ -9,7 +9,6 @@ These tests capture the trip plan exactly as it would go over the wire, by inter
 TPP client, and assert on that — not on an internal helper.
 """
 
-import json
 from typing import Any
 
 import pytest
@@ -207,14 +206,38 @@ def test_the_fare_link_is_kept_and_sent_with_the_airfare(client: TestClient) -> 
     assert transport["evidence_url"] == GOOGLE_FARE
 
     assert _submit(client, trip_id).status_code == 200
-    assert GOOGLE_FARE in json.dumps(_SENT[-1])
+    airfare = next(item for item in _SENT[-1]["expenses"] if item["category"] == "airfare")
+    assert airfare["receipt_url"] == GOOGLE_FARE
+    assert airfare.get("receipt_attached") is None
+
+    proposal = client.get(f"/api/workspace/{trip_id}/proposal").json()["proposal_state"]["proposal"]
+    lowest = next(
+        item
+        for item in proposal["comparables"]
+        if item["label"] == "Lowest available fare (for comparison)"
+    )
+    assert all(GOOGLE_FARE not in note for note in lowest["notes"])
+    chosen = next(item for item in proposal["selected_options"] if item["category"] == "airfare")
+    assert GOOGLE_FARE in chosen["justification_refs"]
 
 
-def test_a_fare_link_must_be_a_web_address(client: TestClient) -> None:
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "javascript:alert(1)",
+        "http://example.com/fare",
+        "not a link",
+        "https://[broken",
+        "https://@",
+    ],
+)
+def test_a_fare_link_must_be_a_web_address(client: TestClient, bad: str) -> None:
     trip_id = _business_trip(client)
-    for bad in ("javascript:alert(1)", "http://example.com/fare", "not a link"):
-        response = client.put(
-            f"/api/workspace/{trip_id}/prices",
-            json={"component": "transport", "amount": 486.0, "evidence_url": bad},
-        )
-        assert response.status_code in {400, 422}, bad
+    response = client.put(
+        f"/api/workspace/{trip_id}/prices",
+        json={"component": "transport", "amount": 486.0, "evidence_url": bad},
+    )
+    assert response.status_code in {400, 422}, bad
+    prices = client.get(f"/api/workspace/{trip_id}/prices").json()
+    transport = next(item for item in prices["components"] if item["component"] == "transport")
+    assert transport["evidence_url"] is None
