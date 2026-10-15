@@ -132,3 +132,21 @@ failed because `.git/index.lock` cannot be created on the read-only filesystem;
 the source and test changes remain uncommitted for the automation runner.
 The blocker comment and `needs-human` label were also rejected by automatic
 approval review under policy `never`. PR #1891 remains open with `draft=false`.
+
+## Follow-up: permitted nearby stops when the city call is restricted
+
+Concept item 1 now has two more served-workspace regression cases. When Boston
+South Station forbids pickup or drop-off, the same direct train can still serve
+the trip through Route 128 within 30 km. The workspace must show that usable
+station's times and duration (208 minutes southbound, 190 northbound), zero
+transfers, no fare, and the verified service date. Both cases agree with the
+independent CSV query; the existing city-preference tests still pass.
+
+Validation: 73 wiring and adapter tests passed with `-m "not slow"` and the selector
+wrapper above. Ruff, `git diff --check`, and the repository-wide Black check passed
+(496 files unchanged). The real-feed download again failed DNS resolution, so
+items 4–5 remain unchecked. The workspace commit failed because `.git` is read-only;
+the tested changes are preserved in a temporary checkout and commit patch under
+`/tmp/trip-planner-1891-restricted-stops`. Automatic approval review rejected the
+first-task checkbox update, blocker comment, and `needs-human` label under policy
+`never`. PR #1891 was confirmed open with `draft=false`.
