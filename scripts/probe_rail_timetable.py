@@ -19,6 +19,7 @@ import os
 import sys
 import tempfile
 import zipfile
+from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
 
@@ -43,21 +44,51 @@ RADIUS_KM = 30.0
 WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 
 
+@dataclass(frozen=True)
+class IndependentTrain:
+    service: str
+    number: str
+    origin: str
+    destination: str
+    departure_minutes: int
+    arrival_minutes: int
+    runs_on_date: bool | None
+
+    @property
+    def duration_minutes(self) -> int:
+        return self.arrival_minutes - self.departure_minutes
+
+
 class IndependentTimetable:
     """The same question asked of the raw tables, without trip_planner.sources."""
 
     def __init__(self, feed: str) -> None:
-        archive = zipfile.ZipFile(feed)
+        with zipfile.ZipFile(feed) as archive:
 
-        def table(name: str) -> list[dict[str, str]]:
-            return list(csv.DictReader(io.TextIOWrapper(archive.open(name), encoding="utf-8-sig")))
+            def table(name: str, *, optional: bool = False) -> list[dict[str, str]] | None:
+                try:
+                    member = archive.open(name)
+                except KeyError:
+                    if optional:
+                        return None
+                    raise
+                with member, io.TextIOWrapper(member, encoding="utf-8-sig") as stream:
+                    return list(csv.DictReader(stream))
 
-        self.stops = {row["stop_id"]: row for row in table("stops.txt")}
-        self.routes = {row["route_id"]: row for row in table("routes.txt")}
-        self.trips = {row["trip_id"]: row for row in table("trips.txt")}
-        self.calendar = {row["service_id"]: row for row in table("calendar.txt")}
+            self.stops = {row["stop_id"]: row for row in table("stops.txt") or []}
+            self.routes = {row["route_id"]: row for row in table("routes.txt") or []}
+            self.trips = {row["trip_id"]: row for row in table("trips.txt") or []}
+            calendar = table("calendar.txt", optional=True)
+            self.calendar = (
+                {row["service_id"]: row for row in calendar} if calendar is not None else None
+            )
+            self.exceptions = {
+                (row["service_id"], row["date"]): row["exception_type"] == "1"
+                for row in table("calendar_dates.txt", optional=True) or []
+            }
+            calls = table("stop_times.txt") or []
         self.calls: dict[str, list[dict[str, str]]] = {}
-        for row in table("stop_times.txt"):
+        for row in calls:
             self.calls.setdefault(row["trip_id"], []).append(row)
 
     @staticmethod
@@ -75,8 +106,14 @@ class IndependentTimetable:
             place.latitude, place.longitude, float(stop["stop_lat"]), float(stop["stop_lon"])
         )
 
-    def _runs(self, service_id: str, day: date) -> bool:
-        entry = self.calendar.get(service_id)
+    def _runs(self, service_id: str, day: date) -> bool | None:
+        if self.calendar is None and not self.exceptions:
+            return None
+        day_key = day.strftime("%Y%m%d")
+        override = self.exceptions.get((service_id, day_key))
+        if override is not None:
+            return override
+        entry = (self.calendar or {}).get(service_id)
         if entry is None:
             return False
         in_range = entry["start_date"] <= day.strftime("%Y%m%d") <= entry["end_date"]
@@ -87,14 +124,16 @@ class IndependentTimetable:
         hours, minutes, _ = value.split(":")
         return int(hours) * 60 + int(minutes)
 
-    def answer(self, origin: Any, destination: Any, day: date) -> tuple[str, Any]:
+    def answer(
+        self, origin: Any, destination: Any, day: date
+    ) -> tuple[str, IndependentTrain | None]:
         near_origin = {s for s in self.stops if self._distance(origin, s) <= RADIUS_KM}
         near_destination = {s for s in self.stops if self._distance(destination, s) <= RADIUS_KM}
         if not near_origin:
             return "no_station_near_origin", None
         if not near_destination:
             return "no_station_near_destination", None
-        best: tuple[tuple[int, int], str, str] | None = None
+        best: tuple[tuple[int, int], IndependentTrain] | None = None
         any_direct = False
         for trip_id, rows in self.calls.items():
             if self.routes[self.trips[trip_id]["route_id"]]["route_type"] != "2":
@@ -120,14 +159,78 @@ class IndependentTimetable:
             alight = min(alights, key=lambda row: self._distance(destination, row["stop_id"]))
             any_direct = True
             departs = self._minutes(board["departure_time"])
-            if self._runs(self.trips[trip_id]["service_id"], day - timedelta(days=departs // 1440)):
+            runs = self._runs(
+                self.trips[trip_id]["service_id"], day - timedelta(days=departs // 1440)
+            )
+            if runs is not False:
                 key = (self._minutes(alight["arrival_time"]) - departs, departs)
                 if best is None or key < best[0]:
-                    number = self.trips[trip_id].get("trip_short_name") or trip_id
-                    best = (key, number, self.stops[alight["stop_id"]]["stop_name"])
+                    route = self.routes[self.trips[trip_id]["route_id"]]
+                    best = (
+                        key,
+                        IndependentTrain(
+                            service=route.get("route_long_name") or route["route_short_name"],
+                            number=self.trips[trip_id].get("trip_short_name") or "",
+                            origin=self.stops[board["stop_id"]]["stop_name"],
+                            destination=self.stops[alight["stop_id"]]["stop_name"],
+                            departure_minutes=departs,
+                            arrival_minutes=self._minutes(alight["arrival_time"]),
+                            runs_on_date=runs,
+                        ),
+                    )
         if best is not None:
-            return "found", (best[0][0], best[1], best[2])
+            return "found", best[1]
         return ("no_train_on_date" if any_direct else "no_direct_train"), None
+
+
+def workspace_agrees(
+    workspace: dict[str, Any],
+    status: str,
+    expected: IndependentTrain | None,
+    day: date,
+) -> bool:
+    """Check the displayed journey, including the times the traveller would use."""
+
+    lookup = workspace["inventory_summary"]["rail_lookup"]
+    rail = [
+        row
+        for row in workspace["runtime_scenario_comparison"]["scenarios"]
+        if "Amtrak" in row["title"]
+    ]
+    if expected is None:
+        return bool(lookup["status"] == status and not rail)
+    if lookup["status"] != status or len(rail) != 1:
+        return False
+
+    def clock(minutes: int) -> str:
+        return f"{minutes // 60 % 24:02d}:{minutes % 60:02d}"
+
+    days = expected.arrival_minutes // 1440 - expected.departure_minutes // 1440
+    suffix = f" (+{days} day{'s' if days > 1 else ''})" if days else ""
+    journey = (
+        f"{expected.origin} {clock(expected.departure_minutes)} → "
+        f"{expected.destination} {clock(expected.arrival_minutes)}{suffix},"
+    )
+    service = expected.service
+    if not service.lower().startswith("amtrak"):
+        service = f"Amtrak {service}"
+    train_label = f"{service}{f' {expected.number}' if expected.number else ''}:"
+    date_summary = (
+        f"Scheduled to run on {day.isoformat()}."
+        if expected.runs_on_date is True
+        else "The timetable file has no service calendar, so the travel date was not checked."
+    )
+    return bool(
+        rail[0]["metrics"]["travel_minutes"] == expected.duration_minutes
+        and rail[0]["metrics"]["transfers"] == 0
+        and rail[0]["metrics"]["estimated_total"] is None
+        and rail[0]["availability_checked"] is False
+        and "No fare" in rail[0]["summary"]
+        and all(
+            journey in summary and train_label in summary and date_summary in summary
+            for summary in (lookup["summary"], rail[0]["summary"])
+        )
+    )
 
 
 def main(argv: list[str]) -> int:
@@ -168,25 +271,10 @@ def main(argv: list[str]) -> int:
                 )
                 workspace = client.get(f"/api/workspace/{created.json()['trip']['trip_id']}").json()
                 lookup = workspace["inventory_summary"]["rail_lookup"]
-                rail = [
-                    row
-                    for row in workspace["runtime_scenario_comparison"]["scenarios"]
-                    if "Amtrak" in row["title"]
-                ]
                 status, expected = independent.answer(
                     resolve_place(origin), resolve_place(destination), day
                 )
-                if expected is None:
-                    agree = lookup["status"] == status and not rail
-                else:
-                    minutes, number, station = expected
-                    agree = (
-                        lookup["status"] == status
-                        and len(rail) == 1
-                        and rail[0]["metrics"]["travel_minutes"] == minutes
-                        and f" {number}:" in rail[0]["summary"]
-                        and f"→ {station} " in rail[0]["summary"]
-                    )
+                agree = workspace_agrees(workspace, status, expected, day)
                 results.append(
                     {
                         "pair": f"{origin} -> {destination}",
