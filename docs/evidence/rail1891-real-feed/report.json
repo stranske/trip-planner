@@ -1,0 +1,731 @@
+{
+  "feed": {
+    "name": "amtrak-GTFS.zip",
+    "sha256": "29fde0737b9a2d522a2ad29652aff037c8851bfdb3cec23bbaffa5c6e5ef066a"
+  },
+  "results": [
+    {
+      "pair": "Boston -> New York, NY",
+      "day": "2026-10-20",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Acela 2149: Boston 06:05 \u2192 Ny Moynihan Train Hall At Penn Station 09:51, 3 h 46 min, direct. Scheduled to run on 2026-10-20.",
+      "independent_train": {
+        "service": "Acela",
+        "number": "2149",
+        "origin": "Boston",
+        "destination": "Ny Moynihan Train Hall At Penn Station",
+        "departure_minutes": 365,
+        "arrival_minutes": 591,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "Boston \u2192 New York, NY by Amtrak Acela",
+          "summary": "Amtrak Acela 2149: Boston 06:05 \u2192 Ny Moynihan Train Hall At Penn Station 09:51, 3 h 46 min, direct. Scheduled to run on 2026-10-20. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.8014,
+            "travel_minutes": 226,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "Boston -> New York, NY",
+      "day": "2026-10-24",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Northeast Regional 169: Boston 19:55 \u2192 Ny Moynihan Train Hall At Penn Station 23:59, 4 h 04 min, direct. Scheduled to run on 2026-10-24.",
+      "independent_train": {
+        "service": "Northeast Regional",
+        "number": "169",
+        "origin": "Boston",
+        "destination": "Ny Moynihan Train Hall At Penn Station",
+        "departure_minutes": 1195,
+        "arrival_minutes": 1439,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "Boston \u2192 New York, NY by Amtrak Northeast Regional",
+          "summary": "Amtrak Northeast Regional 169: Boston 19:55 \u2192 Ny Moynihan Train Hall At Penn Station 23:59, 4 h 04 min, direct. Scheduled to run on 2026-10-24. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.637,
+            "travel_minutes": 244,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "New York, NY -> Washington, DC",
+      "day": "2026-10-20",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Acela 2151: Ny Moynihan Train Hall At Penn Station 11:06 \u2192 Washington Union Station 14:05, 2 h 59 min, direct. Scheduled to run on 2026-10-20.",
+      "independent_train": {
+        "service": "Acela",
+        "number": "2151",
+        "origin": "Ny Moynihan Train Hall At Penn Station",
+        "destination": "Washington Union Station",
+        "departure_minutes": 666,
+        "arrival_minutes": 845,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "New York, NY \u2192 Washington, DC by Amtrak Acela",
+          "summary": "Amtrak Acela 2151: Ny Moynihan Train Hall At Penn Station 11:06 \u2192 Washington Union Station 14:05, 2 h 59 min, direct. Scheduled to run on 2026-10-20. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.8043,
+            "travel_minutes": 179,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "New York, NY -> Washington, DC",
+      "day": "2026-10-24",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Acela 2251: Ny Moynihan Train Hall At Penn Station 11:50 \u2192 Washington Union Station 14:50, 3 h 00 min, direct. Scheduled to run on 2026-10-24.",
+      "independent_train": {
+        "service": "Acela",
+        "number": "2251",
+        "origin": "Ny Moynihan Train Hall At Penn Station",
+        "destination": "Washington Union Station",
+        "departure_minutes": 710,
+        "arrival_minutes": 890,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "New York, NY \u2192 Washington, DC by Amtrak Acela",
+          "summary": "Amtrak Acela 2251: Ny Moynihan Train Hall At Penn Station 11:50 \u2192 Washington Union Station 14:50, 3 h 00 min, direct. Scheduled to run on 2026-10-24. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.8042,
+            "travel_minutes": 180,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "New York, NY -> Philadelphia, PA",
+      "day": "2026-10-20",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Acela 2133: Ny Moynihan Train Hall At Penn Station 12:10 \u2192 Philadelphia 13:18, 1 h 08 min, direct. Scheduled to run on 2026-10-20.",
+      "independent_train": {
+        "service": "Acela",
+        "number": "2133",
+        "origin": "Ny Moynihan Train Hall At Penn Station",
+        "destination": "Philadelphia",
+        "departure_minutes": 730,
+        "arrival_minutes": 798,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "New York, NY \u2192 Philadelphia, PA by Amtrak Acela",
+          "summary": "Amtrak Acela 2133: Ny Moynihan Train Hall At Penn Station 12:10 \u2192 Philadelphia 13:18, 1 h 08 min, direct. Scheduled to run on 2026-10-20. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.8109,
+            "travel_minutes": 68,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "New York, NY -> Philadelphia, PA",
+      "day": "2026-10-24",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Acela 2205: Ny Moynihan Train Hall At Penn Station 09:00 \u2192 Philadelphia 10:11, 1 h 11 min, direct. Scheduled to run on 2026-10-24.",
+      "independent_train": {
+        "service": "Acela",
+        "number": "2205",
+        "origin": "Ny Moynihan Train Hall At Penn Station",
+        "destination": "Philadelphia",
+        "departure_minutes": 540,
+        "arrival_minutes": 611,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "New York, NY \u2192 Philadelphia, PA by Amtrak Acela",
+          "summary": "Amtrak Acela 2205: Ny Moynihan Train Hall At Penn Station 09:00 \u2192 Philadelphia 10:11, 1 h 11 min, direct. Scheduled to run on 2026-10-24. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.8107,
+            "travel_minutes": 71,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "Chicago, IL -> Milwaukee, WI",
+      "day": "2026-10-20",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Empire Builder 27: Chicago Union Station 16:05 \u2192 Milwaukee 17:35, 1 h 30 min, direct. Scheduled to run on 2026-10-20.",
+      "independent_train": {
+        "service": "Empire Builder",
+        "number": "27",
+        "origin": "Chicago Union Station",
+        "destination": "Milwaukee",
+        "departure_minutes": 965,
+        "arrival_minutes": 1055,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "Chicago, IL \u2192 Milwaukee, WI by Amtrak Empire Builder",
+          "summary": "Amtrak Empire Builder 27: Chicago Union Station 16:05 \u2192 Milwaukee 17:35, 1 h 30 min, direct. Scheduled to run on 2026-10-20. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.8096,
+            "travel_minutes": 90,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "Chicago, IL -> Milwaukee, WI",
+      "day": "2026-10-24",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Hiawatha Service 337: Chicago Union Station 16:15 \u2192 Milwaukee 17:44, 1 h 29 min, direct. Scheduled to run on 2026-10-24.",
+      "independent_train": {
+        "service": "Hiawatha Service",
+        "number": "337",
+        "origin": "Chicago Union Station",
+        "destination": "Milwaukee",
+        "departure_minutes": 975,
+        "arrival_minutes": 1064,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "Chicago, IL \u2192 Milwaukee, WI by Amtrak Hiawatha Service",
+          "summary": "Amtrak Hiawatha Service 337: Chicago Union Station 16:15 \u2192 Milwaukee 17:44, 1 h 29 min, direct. Scheduled to run on 2026-10-24. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.8097,
+            "travel_minutes": 89,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "Seattle -> Portland, OR",
+      "day": "2026-10-20",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Cascades 503: Seattle 10:10 \u2192 Portland 13:35, 3 h 25 min, direct. Scheduled to run on 2026-10-20.",
+      "independent_train": {
+        "service": "Amtrak Cascades",
+        "number": "503",
+        "origin": "Seattle",
+        "destination": "Portland",
+        "departure_minutes": 610,
+        "arrival_minutes": 815,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "Seattle \u2192 Portland, OR by Amtrak Cascades",
+          "summary": "Amtrak Cascades 503: Seattle 10:10 \u2192 Portland 13:35, 3 h 25 min, direct. Scheduled to run on 2026-10-20. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.8027,
+            "travel_minutes": 205,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "Seattle -> Portland, OR",
+      "day": "2026-10-24",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Cascades 503: Seattle 10:10 \u2192 Portland 13:35, 3 h 25 min, direct. Scheduled to run on 2026-10-24.",
+      "independent_train": {
+        "service": "Amtrak Cascades",
+        "number": "503",
+        "origin": "Seattle",
+        "destination": "Portland",
+        "departure_minutes": 610,
+        "arrival_minutes": 815,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "Seattle \u2192 Portland, OR by Amtrak Cascades",
+          "summary": "Amtrak Cascades 503: Seattle 10:10 \u2192 Portland 13:35, 3 h 25 min, direct. Scheduled to run on 2026-10-24. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.8027,
+            "travel_minutes": 205,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "Los Angeles, CA -> San Diego, CA",
+      "day": "2026-10-20",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Pacific Surfliner 562: Los Angeles 09:10 \u2192 San Diego 12:04, 2 h 54 min, direct. Scheduled to run on 2026-10-20.",
+      "independent_train": {
+        "service": "Pacific Surfliner",
+        "number": "562",
+        "origin": "Los Angeles",
+        "destination": "San Diego",
+        "departure_minutes": 550,
+        "arrival_minutes": 724,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "Los Angeles, CA \u2192 San Diego, CA by Amtrak Pacific Surfliner",
+          "summary": "Amtrak Pacific Surfliner 562: Los Angeles 09:10 \u2192 San Diego 12:04, 2 h 54 min, direct. Scheduled to run on 2026-10-20. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.8046,
+            "travel_minutes": 174,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "Los Angeles, CA -> San Diego, CA",
+      "day": "2026-10-24",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Pacific Surfliner 794: Los Angeles 01:37 \u2192 San Diego 04:31, 2 h 54 min, direct. Scheduled to run on 2026-10-24.",
+      "independent_train": {
+        "service": "Pacific Surfliner",
+        "number": "794",
+        "origin": "Los Angeles",
+        "destination": "San Diego",
+        "departure_minutes": 97,
+        "arrival_minutes": 271,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "Los Angeles, CA \u2192 San Diego, CA by Amtrak Pacific Surfliner",
+          "summary": "Amtrak Pacific Surfliner 794: Los Angeles 01:37 \u2192 San Diego 04:31, 2 h 54 min, direct. Scheduled to run on 2026-10-24. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.8046,
+            "travel_minutes": 174,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "Chicago, IL -> St. Louis, MO",
+      "day": "2026-10-20",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Lincoln Service 301: Chicago Union Station 08:15 \u2192 St. Louis 13:01, 4 h 46 min, direct. Scheduled to run on 2026-10-20.",
+      "independent_train": {
+        "service": "Lincoln Service",
+        "number": "301",
+        "origin": "Chicago Union Station",
+        "destination": "St. Louis",
+        "departure_minutes": 495,
+        "arrival_minutes": 781,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "Chicago, IL \u2192 St. Louis, MO by Amtrak Lincoln Service",
+          "summary": "Amtrak Lincoln Service 301: Chicago Union Station 08:15 \u2192 St. Louis 13:01, 4 h 46 min, direct. Scheduled to run on 2026-10-20. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.7978,
+            "travel_minutes": 286,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "Chicago, IL -> St. Louis, MO",
+      "day": "2026-10-24",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Lincoln Service 301: Chicago Union Station 08:15 \u2192 St. Louis 13:01, 4 h 46 min, direct. Scheduled to run on 2026-10-24.",
+      "independent_train": {
+        "service": "Lincoln Service",
+        "number": "301",
+        "origin": "Chicago Union Station",
+        "destination": "St. Louis",
+        "departure_minutes": 495,
+        "arrival_minutes": 781,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "Chicago, IL \u2192 St. Louis, MO by Amtrak Lincoln Service",
+          "summary": "Amtrak Lincoln Service 301: Chicago Union Station 08:15 \u2192 St. Louis 13:01, 4 h 46 min, direct. Scheduled to run on 2026-10-24. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.7978,
+            "travel_minutes": 286,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "Washington, DC -> Boston",
+      "day": "2026-10-20",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Acela 2150: Washington Union Station 08:45 \u2192 Boston 15:53, 7 h 08 min, direct. Scheduled to run on 2026-10-20.",
+      "independent_train": {
+        "service": "Acela",
+        "number": "2150",
+        "origin": "Washington Union Station",
+        "destination": "Boston",
+        "departure_minutes": 525,
+        "arrival_minutes": 953,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "Washington, DC \u2192 Boston by Amtrak Acela",
+          "summary": "Amtrak Acela 2150: Washington Union Station 08:45 \u2192 Boston 15:53, 7 h 08 min, direct. Scheduled to run on 2026-10-20. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.7893,
+            "travel_minutes": 428,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "Washington, DC -> Boston",
+      "day": "2026-10-24",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Northeast Regional 168: Washington Union Station 15:25 \u2192 Boston 23:30, 8 h 05 min, direct. Scheduled to run on 2026-10-24.",
+      "independent_train": {
+        "service": "Northeast Regional",
+        "number": "168",
+        "origin": "Washington Union Station",
+        "destination": "Boston",
+        "departure_minutes": 925,
+        "arrival_minutes": 1410,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "Washington, DC \u2192 Boston by Amtrak Northeast Regional",
+          "summary": "Amtrak Northeast Regional 168: Washington Union Station 15:25 \u2192 Boston 23:30, 8 h 05 min, direct. Scheduled to run on 2026-10-24. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.6225,
+            "travel_minutes": 485,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "Seattle -> Chicago, IL",
+      "day": "2026-10-20",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Empire Builder 8: Seattle 19:55 \u2192 Chicago Union Station 17:45 (+2 days), 45 h 50 min, direct. Scheduled to run on 2026-10-20.",
+      "independent_train": {
+        "service": "Empire Builder",
+        "number": "8",
+        "origin": "Seattle",
+        "destination": "Chicago Union Station",
+        "departure_minutes": 1195,
+        "arrival_minutes": 3945,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "Seattle \u2192 Chicago, IL by Amtrak Empire Builder",
+          "summary": "Amtrak Empire Builder 8: Seattle 19:55 \u2192 Chicago Union Station 17:45 (+2 days), 45 h 50 min, direct. Scheduled to run on 2026-10-20. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.6156,
+            "travel_minutes": 2750,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "Seattle -> Chicago, IL",
+      "day": "2026-10-24",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Empire Builder 8: Seattle 19:55 \u2192 Chicago Union Station 17:45 (+2 days), 45 h 50 min, direct. Scheduled to run on 2026-10-24.",
+      "independent_train": {
+        "service": "Empire Builder",
+        "number": "8",
+        "origin": "Seattle",
+        "destination": "Chicago Union Station",
+        "departure_minutes": 1195,
+        "arrival_minutes": 3945,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "Seattle \u2192 Chicago, IL by Amtrak Empire Builder",
+          "summary": "Amtrak Empire Builder 8: Seattle 19:55 \u2192 Chicago Union Station 17:45 (+2 days), 45 h 50 min, direct. Scheduled to run on 2026-10-24. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.6156,
+            "travel_minutes": 2750,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "Denver, CO -> Salt Lake City, UT",
+      "day": "2026-10-20",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak California Zephyr 5: Denver 10:46 \u2192 Salt Lake City 01:15 (+1 day), 14 h 29 min, direct. Scheduled to run on 2026-10-20.",
+      "independent_train": {
+        "service": "California Zephyr",
+        "number": "5",
+        "origin": "Denver",
+        "destination": "Salt Lake City",
+        "departure_minutes": 2086,
+        "arrival_minutes": 2955,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "Denver, CO \u2192 Salt Lake City, UT by Amtrak California Zephyr",
+          "summary": "Amtrak California Zephyr 5: Denver 10:46 \u2192 Salt Lake City 01:15 (+1 day), 14 h 29 min, direct. Scheduled to run on 2026-10-20. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.6156,
+            "travel_minutes": 869,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "Denver, CO -> Salt Lake City, UT",
+      "day": "2026-10-24",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak California Zephyr 5: Denver 10:46 \u2192 Salt Lake City 01:15 (+1 day), 14 h 29 min, direct. Scheduled to run on 2026-10-24.",
+      "independent_train": {
+        "service": "California Zephyr",
+        "number": "5",
+        "origin": "Denver",
+        "destination": "Salt Lake City",
+        "departure_minutes": 2086,
+        "arrival_minutes": 2955,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "Denver, CO \u2192 Salt Lake City, UT by Amtrak California Zephyr",
+          "summary": "Amtrak California Zephyr 5: Denver 10:46 \u2192 Salt Lake City 01:15 (+1 day), 14 h 29 min, direct. Scheduled to run on 2026-10-24. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.6156,
+            "travel_minutes": 869,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "Atlanta, GA -> Miami, FL",
+      "day": "2026-10-20",
+      "served": "no_direct_train",
+      "independent": "no_direct_train",
+      "agree": true,
+      "summary": "No direct Amtrak train runs from Atlanta to Miami; journeys with a change are not searched.",
+      "independent_train": null,
+      "displayed_trains": []
+    },
+    {
+      "pair": "Atlanta, GA -> Miami, FL",
+      "day": "2026-10-24",
+      "served": "no_direct_train",
+      "independent": "no_direct_train",
+      "agree": true,
+      "summary": "No direct Amtrak train runs from Atlanta to Miami; journeys with a change are not searched.",
+      "independent_train": null,
+      "displayed_trains": []
+    },
+    {
+      "pair": "Dallas, TX -> Houston, TX",
+      "day": "2026-10-20",
+      "served": "no_direct_train",
+      "independent": "no_direct_train",
+      "agree": true,
+      "summary": "No direct Amtrak train runs from Dallas to Houston; journeys with a change are not searched.",
+      "independent_train": null,
+      "displayed_trains": []
+    },
+    {
+      "pair": "Dallas, TX -> Houston, TX",
+      "day": "2026-10-24",
+      "served": "no_direct_train",
+      "independent": "no_direct_train",
+      "agree": true,
+      "summary": "No direct Amtrak train runs from Dallas to Houston; journeys with a change are not searched.",
+      "independent_train": null,
+      "displayed_trains": []
+    },
+    {
+      "pair": "Phoenix, AZ -> Las Vegas, NV",
+      "day": "2026-10-20",
+      "served": "no_direct_train",
+      "independent": "no_direct_train",
+      "agree": true,
+      "summary": "No direct Amtrak train runs from Phoenix to Las Vegas; journeys with a change are not searched.",
+      "independent_train": null,
+      "displayed_trains": []
+    },
+    {
+      "pair": "Phoenix, AZ -> Las Vegas, NV",
+      "day": "2026-10-24",
+      "served": "no_direct_train",
+      "independent": "no_direct_train",
+      "agree": true,
+      "summary": "No direct Amtrak train runs from Phoenix to Las Vegas; journeys with a change are not searched.",
+      "independent_train": null,
+      "displayed_trains": []
+    },
+    {
+      "pair": "Austin, TX -> Chicago, IL",
+      "day": "2026-10-20",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Texas Eagle 22: Austin 10:26 \u2192 Chicago Union Station 14:49 (+1 day), 28 h 23 min, direct. Scheduled to run on 2026-10-20.",
+      "independent_train": {
+        "service": "Texas Eagle",
+        "number": "22",
+        "origin": "Austin",
+        "destination": "Chicago Union Station",
+        "departure_minutes": 626,
+        "arrival_minutes": 2329,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "Austin, TX \u2192 Chicago, IL by Amtrak Texas Eagle",
+          "summary": "Amtrak Texas Eagle 22: Austin 10:26 \u2192 Chicago Union Station 14:49 (+1 day), 28 h 23 min, direct. Scheduled to run on 2026-10-20. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.6156,
+            "travel_minutes": 1703,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    },
+    {
+      "pair": "Austin, TX -> Chicago, IL",
+      "day": "2026-10-24",
+      "served": "found",
+      "independent": "found",
+      "agree": true,
+      "summary": "Amtrak Texas Eagle 22: Austin 10:26 \u2192 Chicago Union Station 14:49 (+1 day), 28 h 23 min, direct. Scheduled to run on 2026-10-24.",
+      "independent_train": {
+        "service": "Texas Eagle",
+        "number": "22",
+        "origin": "Austin",
+        "destination": "Chicago Union Station",
+        "departure_minutes": 626,
+        "arrival_minutes": 2329,
+        "runs_on_date": true
+      },
+      "displayed_trains": [
+        {
+          "title": "Austin, TX \u2192 Chicago, IL by Amtrak Texas Eagle",
+          "summary": "Amtrak Texas Eagle 22: Austin 10:26 \u2192 Chicago Union Station 14:49 (+1 day), 28 h 23 min, direct. Scheduled to run on 2026-10-24. Station to station; scheduled, from the Amtrak timetable. No fare and no seat availability come with a timetable.",
+          "metrics": {
+            "score": 0.6156,
+            "travel_minutes": 1703,
+            "transfers": 0,
+            "estimated_total": null
+          },
+          "availability_checked": false
+        }
+      ]
+    }
+  ],
+  "passed": 28,
+  "total": 28,
+  "all_agree": true
+}

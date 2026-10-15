@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import tempfile
 from pathlib import Path
 from urllib.request import urlopen
 
@@ -27,11 +28,22 @@ def main(argv: list[str] | None = None) -> int:
     from trip_planner.sources import rail_schedule
 
     args.target.parent.mkdir(parents=True, exist_ok=True)
-    partial = args.target.with_suffix(".partial")
-    with urlopen(args.url, timeout=120) as response:  # noqa: S310 - fixed public URL
-        partial.write_bytes(response.read())
-    schedule = rail_schedule._load(partial)
-    partial.replace(args.target)
+    partial = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=args.target.parent,
+            prefix=f".{args.target.name}.",
+            suffix=".partial",
+            delete=False,
+        ) as download:
+            partial = Path(download.name)
+            with urlopen(args.url, timeout=120) as response:  # noqa: S310 - fixed public URL
+                download.write(response.read())
+        schedule = rail_schedule._load(partial)
+        partial.replace(args.target)
+    finally:
+        if partial is not None:
+            partial.unlink(missing_ok=True)
     print(
         f"{args.target}: {len(schedule.stations)} stations, {len(schedule.trips)} trips, "
         f"calendar {'present' if schedule.calendar is not None else 'absent'}"

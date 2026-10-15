@@ -858,9 +858,7 @@ def test_untimed_intermediate_stop_does_not_make_the_feed_unreadable(
         "2150,06:35:00,06:37:00,PVD,3,0,0\n"
         "2150,09:40:00,09:40:00,NYP,4,1,0\n"
         + "\n".join(
-            line
-            for line in FEED["stop_times.txt"].splitlines()[1:]
-            if not line.startswith("2150,")
+            line for line in FEED["stop_times.txt"].splitlines()[1:] if not line.startswith("2150,")
         )
         + "\n"
     )
@@ -888,9 +886,9 @@ def test_workspace_agrees_rejects_false_calendar_message_when_date_was_checked(
         "The timetable file has no service calendar, so the travel date was not checked."
     )
     scheduled = f"Scheduled to run on {day.isoformat()}."
-    corrupted["inventory_summary"]["rail_lookup"]["summary"] = corrupted[
-        "inventory_summary"
-    ]["rail_lookup"]["summary"].replace(scheduled, calendar_only)
+    corrupted["inventory_summary"]["rail_lookup"]["summary"] = corrupted["inventory_summary"][
+        "rail_lookup"
+    ]["summary"].replace(scheduled, calendar_only)
     _rail(corrupted)["summary"] = _rail(corrupted)["summary"].replace(scheduled, calendar_only)
     assert not workspace_agrees(corrupted, status, expected, day)
 

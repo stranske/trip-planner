@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="4" time="0.301" timestamp="2026-10-15T14:59:20.666118-05:00" hostname="server.trs.private"><testcase classname="tests.scripts.test_fetch_amtrak_gtfs" name="test_validation_precedes_publication" time="0.175" /><testcase classname="tests.scripts.test_fetch_amtrak_gtfs" name="test_failure_preserves_target_and_cleans_own_partial[download]" time="0.001" /><testcase classname="tests.scripts.test_fetch_amtrak_gtfs" name="test_failure_preserves_target_and_cleans_own_partial[validation]" time="0.001"><failure message="AssertionError: assert [PosixPath('/...TFS.partial')] == [PosixPath('/..._1/GTFS.zip')]&#10;  &#10;  Left contains one more item: PosixPath('/private/var/folders/qm/w0dtc0j132gd6ymf1hxtd2p00000gp/T/pytest-of-teacher/pytest-2403/test_failure_preserves_target_1/GTFS.partial')&#10;  Use -v to get more diff">tmp_path = PosixPath('/private/var/folders/qm/w0dtc0j132gd6ymf1hxtd2p00000gp/T/pytest-of-teacher/pytest-2403/test_failure_preserves_target_1')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x10b04f9b0&gt;
+failure = 'validation'
+
+    @pytest.mark.parametrize("failure", ["download", "validation"])
+    def test_failure_preserves_target_and_cleans_own_partial(tmp_path, monkeypatch, failure):
+        target = tmp_path / "GTFS.zip"
+        target.write_bytes(b"previous valid feed")
+    
+        class BrokenDownload(BytesIO):
+            def read(self, *args):
+                raise OSError("truncated transfer")
+    
+        response = BrokenDownload() if failure == "download" else BytesIO(b"invalid feed")
+        monkeypatch.setattr(fetch_amtrak_gtfs, "urlopen", lambda *a, **k: response)
+    
+        def load(partial):
+            raise ValueError("invalid timetable")
+    
+        monkeypatch.setattr(rail_schedule, "_load", load)
+        with pytest.raises((OSError, ValueError)):
+            fetch_amtrak_gtfs.main([str(target)])
+        assert target.read_bytes() == b"previous valid feed"
+&gt;       assert list(tmp_path.iterdir()) == [target]
+E       AssertionError: assert [PosixPath('/...TFS.partial')] == [PosixPath('/..._1/GTFS.zip')]
+E         
+E         Left contains one more item: PosixPath('/private/var/folders/qm/w0dtc0j132gd6ymf1hxtd2p00000gp/T/pytest-of-teacher/pytest-2403/test_failure_preserves_target_1/GTFS.partial')
+E         Use -v to get more diff
+
+tests/scripts/test_fetch_amtrak_gtfs.py:52: AssertionError</failure></testcase><testcase classname="tests.scripts.test_fetch_amtrak_gtfs" name="test_overlapping_fetches_do_not_replace_or_remove_another_partial" time="0.002"><failure message="FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/qm/w0dtc0j132gd6ymf1hxtd2p00000gp/T/pytest-of-teacher/pytest-2403/test_overlapping_fetches_do_no0/GTFS.partial'">tmp_path = PosixPath('/private/var/folders/qm/w0dtc0j132gd6ymf1hxtd2p00000gp/T/pytest-of-teacher/pytest-2403/test_overlapping_fetches_do_no0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x10b04a250&gt;
+
+    def test_overlapping_fetches_do_not_replace_or_remove_another_partial(tmp_path, monkeypatch):
+        target = tmp_path / "GTFS.zip"
+        target.write_bytes(b"previous valid feed")
+        unrelated = target.with_suffix(".partial")
+        unrelated.write_bytes(b"another process owns this")
+        monkeypatch.setattr(
+            fetch_amtrak_gtfs, "urlopen", lambda url, **k: BytesIO(url.encode())
+        )
+        validated_paths = []
+    
+        def load(partial: Path):
+            validated_paths.append(partial)
+            payload = partial.read_bytes()
+            if payload == b"outer":
+                assert fetch_amtrak_gtfs.main([str(target), "--url", "inner"]) == 0
+                assert target.read_bytes() == b"inner"
+                assert partial.read_bytes() == b"outer"
+            return schedule()
+    
+        monkeypatch.setattr(rail_schedule, "_load", load)
+&gt;       assert fetch_amtrak_gtfs.main([str(target), "--url", "outer"]) == 0
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/scripts/test_fetch_amtrak_gtfs.py:75: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/fetch_amtrak_gtfs.py:33: in main
+    schedule = rail_schedule._load(partial)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/scripts/test_fetch_amtrak_gtfs.py:71: in load
+    assert partial.read_bytes() == b"outer"
+           ^^^^^^^^^^^^^^^^^^^^
+/Users/teacher/.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/pathlib/__init__.py:777: in read_bytes
+    with self.open(mode='rb', buffering=0) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/private/var/folders/qm/w0dtc0j132gd6ymf1hxtd2p00000gp/T/pytest-of-teacher/pytest-2403/test_overlapping_fetches_do_no0/GTFS.partial')
+mode = 'rb', buffering = 0, encoding = None, errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+&gt;       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/qm/w0dtc0j132gd6ymf1hxtd2p00000gp/T/pytest-of-teacher/pytest-2403/test_overlapping_fetches_do_no0/GTFS.partial'
+
+/Users/teacher/.local/share/uv/python/cpython-3.14.3-macos-aarch64-none/lib/python3.14/pathlib/__init__.py:771: FileNotFoundError</failure></testcase></testsuite></testsuites>
