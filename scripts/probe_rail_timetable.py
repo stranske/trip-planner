@@ -10,6 +10,8 @@ with the lookup: the geo resolver for city coordinates. The last line printed is
 "PASS NUMBER: <agree>/<total>". Uses a throwaway SQLite database.
 Use --date repeatedly to choose travel dates covered by the feed. --report saves the
 feed's SHA-256, independent train details, displayed journeys, and pass counts as JSON.
+Each date must have calendar-verified rail service somewhere in the feed, so an expired
+feed cannot produce a perfect pass by showing no trains for every pair.
 """
 
 from __future__ import annotations
@@ -129,6 +131,23 @@ class IndependentTimetable:
     def _minutes(value: str) -> int:
         hours, minutes, _ = value.split(":")
         return int(hours) * 60 + int(minutes)
+
+    def has_verified_service_on(self, day: date) -> bool:
+        """Require an operating train, including boarding after its GTFS service day."""
+
+        for trip_id, rows in self.calls.items():
+            trip = self.trips[trip_id]
+            if self.routes[trip["route_id"]]["route_type"] != "2":
+                continue
+            # A terminal arrival alone does not establish service that can be boarded.
+            ordered = sorted(rows, key=lambda row: int(row["stop_sequence"]))
+            for row in ordered[:-1]:
+                if row.get("pickup_type") == "1":
+                    continue
+                service_day = day - timedelta(days=self._minutes(row["departure_time"]) // 1440)
+                if self._runs(trip["service_id"], service_day) is True:
+                    return True
+        return False
 
     def answer(
         self, origin: Any, destination: Any, day: date
@@ -255,6 +274,13 @@ def main(argv: list[str]) -> int:
     if not PAIRS or not days:
         parser.error("the probe requires at least one city pair and travel date")
     feed = str(args.feed)
+    independent = IndependentTimetable(feed)
+    for day in days:
+        if not independent.has_verified_service_on(day):
+            parser.error(
+                f"no verified rail service on {day.isoformat()}; "
+                "choose travel dates covered by the feed's service calendar"
+            )
     feed_sha256 = None
     if args.report is not None:
         with args.feed.open("rb") as stream:
@@ -267,7 +293,6 @@ def main(argv: list[str]) -> int:
     from trip_planner.geo.resolver import resolve_place
     from trip_planner.persistence.db import ensure_database_ready, reset_database_state
 
-    independent = IndependentTimetable(feed)
     reset_database_state()
     ensure_database_ready()
     results = []

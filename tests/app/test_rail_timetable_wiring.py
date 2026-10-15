@@ -807,6 +807,92 @@ def test_probe_can_select_travel_dates_covered_by_the_feed(
         reset_database_state()
 
 
+@pytest.mark.parametrize(
+    ("day", "restricted_pickup", "expected"),
+    [
+        ("2026-10-13", False, True),
+        ("2026-10-14", False, True),
+        ("2026-10-14", True, False),
+        ("2026-10-15", False, False),
+    ],
+)
+def test_probe_date_validation_checks_rail_boarding_on_the_correct_service_day(
+    tmp_path: Path, day: str, restricted_pickup: bool, expected: bool
+) -> None:
+    # Keep a daily bus: it cannot establish rail service on a date with no train.
+    # The Tuesday train boards Denver on Wednesday and terminates on Thursday.
+    feed = _feed(
+        tmp_path,
+        extra_tables={
+            "trips.txt": FEED["trips.txt"].splitlines()[0]
+            + "\nCZ,TUESDAY,5,5,Emeryville,0\nBUS,DAILY,9001,9001,New York,0\n",
+            "stop_times.txt": FEED["stop_times.txt"].splitlines()[0]
+            + "\n5,14:00:00,14:00:00,CHI,1,0,1\n"
+            + f"5,31:00:00,31:10:00,DEN,2,{int(restricted_pickup)},0\n"
+            + "5,55:00:00,55:00:00,SLC,3,0,0\n"
+            + "9001,06:30:00,06:30:00,BOS,1,0,1\n9001,08:00:00,08:00:00,NYP,2,1,0\n",
+        },
+    )
+    independent = IndependentTimetable(str(feed))
+
+    assert independent.has_verified_service_on(date.fromisoformat(day)) is expected
+
+
+@pytest.mark.parametrize("with_calendar", [True, False], ids=["weekly-calendar", "exceptions-only"])
+def test_probe_date_validation_respects_service_additions_and_removals(
+    tmp_path: Path, with_calendar: bool
+) -> None:
+    feed = _feed(
+        tmp_path,
+        with_calendar=with_calendar,
+        extra_tables={
+            "calendar_dates.txt": "service_id,date,exception_type\n"
+            "WEEKDAY,20261013,2\nDAILY,20261013,2\nTUESDAY,20261013,2\n"
+            "WEEKDAY,20281016,1\n"
+        },
+    )
+    independent = IndependentTimetable(str(feed))
+
+    assert not independent.has_verified_service_on(date(2026, 10, 13))
+    assert independent.has_verified_service_on(date(2028, 10, 16))
+    assert not independent.has_verified_service_on(date(2028, 10, 17))
+
+
+@pytest.mark.parametrize(
+    ("days", "with_calendar"),
+    [
+        (["2028-10-17"], True),
+        (["2026-10-20", "2028-10-17"], True),
+        (["2026-10-20"], False),
+    ],
+    ids=["all-outside-calendar", "one-outside-calendar", "no-calendar"],
+)
+def test_probe_rejects_dates_without_service_instead_of_passing_absent_trains(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    days: list[str],
+    with_calendar: bool,
+) -> None:
+    feed = _feed(tmp_path, with_calendar=with_calendar)
+    monkeypatch.setattr(probe_rail_timetable, "PAIRS", [("Boston", "New York, NY")])
+    report_path = tmp_path / "rail-report.json"
+    argv = ["probe", str(feed), "--report", str(report_path)]
+    for day in days:
+        argv.extend(["--date", day])
+
+    try:
+        with pytest.raises(SystemExit) as error:
+            probe_rail_timetable.main(argv)
+        assert error.value.code == 2
+        output = capsys.readouterr()
+        assert f"no verified rail service on {days[-1]}" in output.err
+        assert "PASS NUMBER:" not in output.out
+        assert not report_path.exists()
+    finally:
+        reset_database_state()
+
+
 @pytest.mark.parametrize("empty_setting", ["PAIRS", "DAYS"])
 def test_probe_rejects_empty_trials_instead_of_passing_zero_cases(
     tmp_path: Path,

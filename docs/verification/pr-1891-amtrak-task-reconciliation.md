@@ -103,3 +103,32 @@ created on the read-only mount. A fallback commit through the GitHub file API
 was also rejected: `MCP tool call requires approval, but approval policy is never`.
 The test and this evidence update remain uncommitted; the remote checklist was
 not changed. PR #1891 was confirmed open with `draft=false`.
+
+## Follow-up: reject empty evidence from out-of-calendar dates
+
+Reviewed commits `521c604e` through `226decbb` and reran the existing suites:
+62 tests passed. The nine checked requirements above remain verified. Updating
+the remote PR checklist was again rejected by automatic approval review because
+the approval policy is `never`.
+
+The probe previously printed `PASS NUMBER: 1/1` for a 2028 travel date outside
+the fixture's service calendar, comparing two absences without testing a train.
+New regression tests reproduced this false pass. The probe now requires
+calendar-verified rail boarding service somewhere in the feed on every requested
+date, before creating workspaces or writing a report. It respects service
+exceptions and long-distance boarding offsets; a bus, restricted pickup, or
+terminal arrival cannot establish that service. Feeds without a service calendar
+cannot supply the date verification required by this trial.
+
+Validation: 71 tests passed in the wiring and adapter suites with `-m "not slow"`
+and the selector wrapper above. After refining the terminal-stop fixture, all six
+date-validation unit cases passed again. Ruff, `git diff --check`, and the
+repository-wide Black check passed (496 files unchanged).
+
+Items 4–5 remain unchecked: downloading the real Amtrak feed failed with a DNS
+resolution error. Run the probe on a runner with the real ZIP and covered dates,
+retain its JSON report, and require agreement for every case. The commit attempt
+failed because `.git/index.lock` cannot be created on the read-only filesystem;
+the source and test changes remain uncommitted for the automation runner.
+The blocker comment and `needs-human` label were also rejected by automatic
+approval review under policy `never`. PR #1891 remains open with `draft=false`.
