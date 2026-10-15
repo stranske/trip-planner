@@ -1298,6 +1298,8 @@ export type TripPriceComponent = {
   evidence_attested?: boolean;
   cabin_class?: string | null;
   flight_hours?: number | null;
+  /** Link to the fare chosen (Google Flights or the airline), printed as fare evidence. */
+  evidence_url?: string | null;
   price_source: { kind: string; attributed_to: string; captured_at: string } | null;
 };
 
@@ -1330,6 +1332,7 @@ export async function saveTripPrice(
     evidence_attested?: boolean;
     cabin_class?: string | null;
     flight_hours?: number | null;
+    evidence_url?: string | null;
   }
 ): Promise<TripPricesState> {
   return fetchJson<TripPricesState>({

@@ -14,6 +14,7 @@ invent something in their place.
 from __future__ import annotations
 
 import math
+from urllib.parse import urlparse
 from typing import Any
 
 from sqlalchemy import select
@@ -111,6 +112,18 @@ def read_trip_prices(
     return read_trip_prices_for_owner(db_session, user_id=user.user_id, trip_id=trip_id)
 
 
+def _validated_evidence_url(url: str | None) -> str | None:
+    """An https link, or nothing. Stored and printed as given; never fetched."""
+
+    text = (url or "").strip()
+    if not text:
+        return None
+    parsed = urlparse(text)
+    if parsed.scheme != "https" or not parsed.netloc or len(text) > 500:
+        raise TripPriceInvalidError("the fare link must be an https:// web address")
+    return text
+
+
 def save_trip_price(
     db_session: Session,
     *,
@@ -124,6 +137,7 @@ def save_trip_price(
     evidence_attested: bool = False,
     cabin_class: str | None = None,
     flight_hours: float | None = None,
+    evidence_url: str | None = None,
 ) -> list[PersistedTripPrice]:
     """Record, replace or clear one component's price. Returns every price on the trip.
 
@@ -188,6 +202,7 @@ def save_trip_price(
             raise TripPriceInvalidError("flight time must be between 0 and 30 hours")
     else:
         hours = None
+    link = _validated_evidence_url(evidence_url)
 
     if existing is None:
         db_session.add(
@@ -205,6 +220,7 @@ def save_trip_price(
                 evidence_attested=bool(evidence_attested),
                 cabin_class=cabin_class,
                 flight_hours=hours,
+                evidence_url=link,
             )
         )
     else:
@@ -217,6 +233,7 @@ def save_trip_price(
         existing.evidence_attested = bool(evidence_attested)
         existing.cabin_class = cabin_class
         existing.flight_hours = hours
+        existing.evidence_url = link
     db_session.commit()
     return read_trip_prices(db_session, user=user, trip_id=trip_id)
 
@@ -268,6 +285,7 @@ def build_trip_prices_payload(rows: list[PersistedTripPrice]) -> dict[str, Any]:
                 ),
                 "cabin_class": entered[component].cabin_class if component in entered else None,
                 "flight_hours": entered[component].flight_hours if component in entered else None,
+                "evidence_url": entered[component].evidence_url if component in entered else None,
                 "price_source": (
                     _sourced(entered[component]).source.to_dict() if component in entered else None
                 ),

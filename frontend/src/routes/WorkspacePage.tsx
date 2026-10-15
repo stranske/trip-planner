@@ -82,6 +82,7 @@ import { NotebookPanel } from "./workspace/NotebookPanel";
 import { PlanPanel } from "./workspace/PlanPanel";
 import { PolicyPanel as PolicyTabPanel } from "./workspace/PolicyPanel";
 import { formatMoney } from "../lib/money";
+import { googleFlightsSearchUrl } from "../lib/fareSearch";
 import { NOT_MEASURED, describeAvailability } from "../lib/metrics";
 import { submitTppPortalHandoff } from "../lib/tppPortalHandoff";
 import { policyCheckStatusMessage } from "../lib/policyCheckStatus";
@@ -1744,6 +1745,7 @@ function WorkspacePageContent({
               evidence_attested: fareDetail.evidenceAttested,
               cabin_class: fareDetail.cabinClass,
               flight_hours: fareDetail.flightHours,
+              evidence_url: fareDetail.evidenceUrl,
             }
           : {}),
       });
@@ -2954,6 +2956,7 @@ function WorkspacePageContent({
             prices={tripPrices}
             busy={tripPricesBusy}
             errorMessage={tripPricesError}
+            fareSearchUrl={googleFlightsSearchUrl(trip.trip_frame)}
             onSave={handleTripPriceSave}
           />
           {panelVisibility.showBudgetPanel ? (

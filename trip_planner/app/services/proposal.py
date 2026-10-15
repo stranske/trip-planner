@@ -226,6 +226,9 @@ def _traveller_supplied_policy_fields(
             "vendor": row.note or None,
             "amount": row.amount,
             "expense_date": departure_date,
+            # TPP's ExpenseItem.receipt_url is its only link field. Before the trip the page
+            # behind the fare is the evidence; receipt_attached stays unset (it is not one).
+            **({"receipt_url": row.evidence_url} if row.evidence_url else {}),
         }
         for row in rows
     ]
@@ -1517,7 +1520,10 @@ def build_workspace_submission_proposal(
             vendor=row.note or f"Entered by {row.entered_by}",
             booking_channel=booking_channel,
             estimated_cost=_money(row.amount),
-            justification_refs=[f"Entered by {row.entered_by} on {row.captured_at[:10]}"],
+            justification_refs=[
+                f"Entered by {row.entered_by} on {row.captured_at[:10]}",
+                *([row.evidence_url] if row.evidence_url else []),
+            ],
         )
         for row in price_rows
     ]
@@ -1533,7 +1539,10 @@ def build_workspace_submission_proposal(
             vendor=row.note or f"Entered by {row.entered_by}",
             booking_channel=booking_channel,
             estimated_cost=_money(row.amount),
-            notes=[f"Entered by {row.entered_by} on {row.captured_at[:10]}"],
+            notes=[
+                f"Entered by {row.entered_by} on {row.captured_at[:10]}",
+                *([f"Fare link: {row.evidence_url}"] if row.evidence_url else []),
+            ],
         )
         for row in price_rows
     ]
@@ -1546,7 +1555,14 @@ def build_workspace_submission_proposal(
                 vendor=transport_row.note or f"Entered by {transport_row.entered_by}",
                 booking_channel=booking_channel,
                 estimated_cost=_money(transport_row.lowest_amount),
-                notes=[f"Entered by {transport_row.entered_by}"],
+                notes=[
+                    f"Entered by {transport_row.entered_by}",
+                    *(
+                        [f"Fare link: {transport_row.evidence_url}"]
+                        if transport_row.evidence_url
+                        else []
+                    ),
+                ],
             )
         )
     summary_note = "Priced from amounts the traveller entered on the Budget tab."
