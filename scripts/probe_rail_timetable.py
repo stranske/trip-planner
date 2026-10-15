@@ -214,14 +214,15 @@ def workspace_agrees(
     expected: IndependentTrain | None,
     day: date,
 ) -> bool:
-    """Check the displayed journey, including the times the traveller would use."""
+    """Check the timetable answer beside the fresh trip's single measured route."""
 
     lookup = workspace["inventory_summary"]["rail_lookup"]
-    rail = [
-        row
-        for row in workspace["runtime_scenario_comparison"]["scenarios"]
-        if "Amtrak" in row["title"]
-    ]
+    scenarios = workspace["runtime_scenario_comparison"]["scenarios"]
+    rail = [row for row in scenarios if "Amtrak" in row["title"]]
+    # The probe creates fresh trips: Compare must retain exactly one measured route,
+    # whether or not the independent timetable query finds a train.
+    if len(scenarios) - len(rail) != 1:
+        return False
     if expected is None:
         return bool(lookup["status"] == status and not rail)
     if lookup["status"] != status or len(rail) != 1:

@@ -510,6 +510,34 @@ def test_probe_rejects_incorrect_times_stations_service_dates_and_pricing(
     assert not workspace_agrees(corrupted, status, expected, day)
 
 
+@pytest.mark.parametrize("origin", ["Boston", "Seattle"], ids=["train", "no-train"])
+def test_probe_requires_the_measured_route_beside_the_train_or_its_absence(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    origin: str,
+) -> None:
+    feed = _feed(tmp_path)
+    monkeypatch.setenv(rail_schedule.FEED_PATH_ENV, str(feed))
+    day = date(2026, 10, 13)
+    payload = _workspace(client, origin, "New York, NY", day.isoformat())
+    status, expected = _probe_answer(feed, origin, "New York, NY", day.isoformat())
+    assert workspace_agrees(payload, status, expected, day)
+
+    # A correct timetable answer is insufficient if Compare loses the measured route
+    # or duplicates it. Check both served trains and correctly absent trains.
+    corrupted = deepcopy(payload)
+    corrupted["runtime_scenario_comparison"]["scenarios"] = [
+        row for row in _rows(corrupted) if "Amtrak" in row["title"]
+    ]
+    assert not workspace_agrees(corrupted, status, expected, day), "missing measured route"
+
+    corrupted = deepcopy(payload)
+    (measured,) = [row for row in _rows(corrupted) if "Amtrak" not in row["title"]]
+    corrupted["runtime_scenario_comparison"]["scenarios"].append(deepcopy(measured))
+    assert not workspace_agrees(corrupted, status, expected, day), "duplicate measured route"
+
+
 def test_a_timetable_without_a_calendar_says_the_date_was_not_checked(
     client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

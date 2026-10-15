@@ -150,3 +150,23 @@ the tested changes are preserved in a temporary checkout and commit patch under
 `/tmp/trip-planner-1891-restricted-stops`. Automatic approval review rejected the
 first-task checkbox update, blocker comment, and `needs-human` label under policy
 `never`. PR #1891 was confirmed open with `draft=false`.
+
+## Follow-up: require the measured route in the trial
+
+Reviewed the latest commits through `9792a35d` and reran the baseline: 73 tests
+passed. The reconciliation remains 9/11; tasks 4–5 still need a current real-feed
+report. No ZIP is available locally, and the official download again failed DNS
+resolution. Automatic approval review rejected the PR-body reconciliation,
+blocker comment, and `needs-human` label under policy `never`.
+
+The probe accepted a correct timetable answer even when Compare lost the measured
+route. Two new served-workspace regression cases reproduced that false pass,
+covering both a train and its stated absence. The probe now requires exactly one
+measured route alongside the timetable answer and rejects a duplicated measured
+route as well. This strengthens the trial without claiming real-feed evidence.
+
+Validation: 75 wiring and adapter tests passed with `-m "not slow"` and the selector
+wrapper above. Ruff, `git diff --check`, and the repository-wide Black check passed
+(496 files unchanged). The workspace commit failed because `.git` is read-only;
+the tested changes are preserved as a commit and patch in a temporary checkout
+at `/tmp/trip-planner-1891-measured-route`. PR #1891 remains open and ready for review.
