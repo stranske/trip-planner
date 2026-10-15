@@ -1193,6 +1193,10 @@ describe("WorkspacePage", () => {
 
     const note = await screen.findByTestId("rail-lookup-note");
     expect(note).toHaveTextContent("Trains: Amtrak Acela");
+    // Train and flight notes share one full-width row, not two narrow grid columns.
+    const row = screen.getByTestId("compare-sources");
+    expect(row).toContainElement(note);
+    expect(row).toContainElement(screen.getByTestId("flight-search"));
     expect(note).toHaveTextContent("Scheduled to run on 2026-10-13.");
     expect(note).toHaveTextContent("Fares are not in the timetable");
   });
