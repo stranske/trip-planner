@@ -20,7 +20,7 @@ on:
         required: false
 
 env:
-  TPP_PINNED_REF: 3010e3e39eb0ae039a1e648f957d8e87441d8e2a
+  TPP_PINNED_REF: 21663e279cd61937ad172216a6762961a82c5460
 
 jobs:
   cross-repo-full-product:
