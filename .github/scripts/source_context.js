@@ -182,6 +182,11 @@ function hasExplicitIssueReferencePrefix(value) {
   if (/\b(?:known|no)\s+(?:linked\s+)?issue\s*[:#-]?\s*$/i.test(prefix)) {
     return false;
   }
+  // In release tasks/history, "record the already-merged ... fix #N"
+  // names a delivered change. Here "fix" is a noun, not closing intent.
+  if (hasHistoricalFixReferencePrefix(rawPrefix)) {
+    return false;
+  }
 
   const issuePrefixPattern =
     '(?:(?:close[sd]?|closing|fix(?:e[sd])?|fixing|resolve[sd]?|resolving|address(?:e[sd])?|addressing)(?:\\s+(?:issue|source\\s+issue|github\\s+issue))?|relate[sd]?\\s+to(?:\\s+(?:(?:[a-z-]+\\s+)?issue|source\\s+issue|github\\s+issue))?|refs?(?:\\s+(?:issue|source\\s+issue|github\\s+issue))?|references?(?:\\s+(?:issue|source\\s+issue|github\\s+issue))?|source(?:\\s*:\\s*|\\s+)issue|github\\s+issue|linked\\s+issue|issue)';
@@ -194,6 +199,16 @@ function hasExplicitIssueReferencePrefix(value) {
     'i',
   );
   return linePattern.test(rawPrefix);
+}
+
+function hasHistoricalFixReferencePrefix(prefix) {
+  // Stay within this line: history on a preceding line must not mask a new
+  // "Fix #N" directive. Strip Markdown formatting, not clause boundaries.
+  const line = String(prefix || '').split(/\r?\n/).pop().replace(/[_[\]()`~>*]/g, ' ');
+  // Modifiers cannot cross another fix/closing verb or a coordinating clause.
+  // "previous fixes and Fix #N" ends with a new directive, not the earlier noun.
+  // Release changelogs also use "historical fixes" as a plural delivered noun.
+  return /\b(?:already[- ]merged|merged|released|previous|prior|existing|historical)\s+(?:(?!(?:and|or|but|then|close[sd]?|closing|fix(?:e[sd])?|fixing|resolve[sd]?|resolving)\b)[\w-]+\s+){0,6}fix(?:es)?\s*[:#-]?\s*$/i.test(line);
 }
 
 function extractIssueNumbersFromText(text) {
@@ -252,6 +267,15 @@ function extractClosingIssueNumbersFromText(text) {
       .trim()
       .replace(/[>*]/g, ' ')
       .replace(/\s+/g, ' ');
+    // A negated verb is not closing intent. Keep this governor on the same
+    // line and immediately before the verb so it cannot hide a later directive.
+    const linePrefix = before.split(/\r?\n/).pop().replace(/[_\[\]()`~>*]/g, ' ');
+    if (/\b(?:not|never|without|avoid(?:s|ing)?|(?:do|does|did|should|would|could|must)n['’]t|can['’]t|won['’]t)\s+(?:(?:actually|directly|currently|fully|completely|yet)\s+){0,2}(?:close[sd]?|closing|fix(?:e[sd])?|fixing|resolve[sd]?|resolving)(?:\s+(?:source\s+issue|github\s+issue|issue))?\s*[:#-]?\s*$/i.test(linePrefix)) {
+      continue;
+    }
+    if (hasHistoricalFixReferencePrefix(before)) {
+      continue;
+    }
     if (
       !/\b(?:close[sd]?|closing|fix(?:e[sd])?|fixing|resolve[sd]?|resolving)(?:\s+(?:source\s+issue|github\s+issue|issue))?\s*[:#-]?\s*$/i.test(
         prefix
@@ -267,48 +291,89 @@ function extractClosingIssueNumbersFromText(text) {
   return issueNumbers;
 }
 
-function extractIssueNumberFromPull(pull = {}) {
+function findIssueSourceFromPull(pull = {}) {
   const bodyText = String(pull?.body || '');
+  const titleClosingIssueNumbers = extractClosingIssueNumbersFromText(pull?.title || '');
   const metaIssueNumbers = new Set(
     Array.from(bodyText.matchAll(/<!--\s*meta:issue:([0-9]+)\s*-->/gi), (match) =>
       Number.parseInt(match[1], 10),
     ),
   );
   if (metaIssueNumbers.size > 1) {
-    return null;
+    return { issueNumber: null, via: null, ambiguous: true, closing: true };
   }
   if (metaIssueNumbers.size === 1) {
-    return Array.from(metaIssueNumbers)[0];
+    const issueNumber = Array.from(metaIssueNumbers)[0];
+    // Metadata pins synchronized body text, but cannot silently override a
+    // different explicit closing target in the independently authored title.
+    if (Array.from(titleClosingIssueNumbers).some((target) => target !== issueNumber)) {
+      return { issueNumber: null, via: null, ambiguous: true, closing: true };
+    }
+    return { issueNumber, via: 'meta' };
+  }
+
+  // A generated mention/title binding survives synchronized issue text, which
+  // can itself contain closing references to a different issue. Explicit title
+  // closing intent retains the existing conflict checks below.
+  if (titleClosingIssueNumbers.size === 0) {
+    const relatedIssueNumbers = new Set(
+      Array.from(bodyText.matchAll(/<!--\s*meta:related-issue:([0-9]+)\s*-->/gi), (match) =>
+        Number.parseInt(match[1], 10),
+      ),
+    );
+    if (relatedIssueNumbers.size > 1) {
+      return { issueNumber: null, via: null, ambiguous: true };
+    }
+    if (relatedIssueNumbers.size === 1) {
+      return { issueNumber: Array.from(relatedIssueNumbers)[0], via: 'mention' };
+    }
   }
 
   const closingIssueNumbers = extractClosingIssueNumbersFromText(bodyText);
-  if (closingIssueNumbers.size === 1) {
-    return Array.from(closingIssueNumbers)[0];
+  const explicitClosingTargets = new Set([...closingIssueNumbers, ...titleClosingIssueNumbers]);
+  if (explicitClosingTargets.size > 1) {
+    return { issueNumber: null, via: null, ambiguous: true, closing: true };
   }
-  if (closingIssueNumbers.size > 1) {
-    return null;
+  if (explicitClosingTargets.size === 1) {
+    return { issueNumber: Array.from(explicitClosingTargets)[0], via: 'closing' };
   }
 
   const bodyIssueNumbers = extractIssueNumbersFromText(bodyText);
+  for (const match of bodyText.matchAll(/<!--\s*meta:related-issue:([0-9]+)\s*-->/gi)) {
+    bodyIssueNumbers.add(Number.parseInt(match[1], 10));
+  }
   if (bodyIssueNumbers.size === 1) {
-    return Array.from(bodyIssueNumbers)[0];
+    const issueNumber = Array.from(bodyIssueNumbers)[0];
+    return { issueNumber, via: 'mention' };
   }
   if (bodyIssueNumbers.size > 1) {
-    return null;
+    return { issueNumber: null, via: null, ambiguous: true };
   }
 
   const branch = String(pull?.head?.ref || '');
   const branchMatch = branch.match(/issue-#?([0-9]+)/i) || branch.match(/-issue-#([0-9]+)(?:$|[^0-9])/i);
   if (branchMatch) {
-    return Number.parseInt(branchMatch[1], 10);
+    return { issueNumber: Number.parseInt(branchMatch[1], 10), via: 'branch' };
   }
 
-  const titleNumber = extractIssueNumberFromText(pull?.title || '');
-  if (titleNumber) {
-    return titleNumber;
+  const titleIssueNumbers = extractIssueNumbersFromText(pull?.title || '');
+  if (titleIssueNumbers.size > 1) {
+    return { issueNumber: null, via: null, ambiguous: true };
+  }
+  if (titleIssueNumbers.size === 1) {
+    return { issueNumber: Array.from(titleIssueNumbers)[0], via: 'title' };
   }
 
-  return null;
+  return { issueNumber: null, via: null };
+}
+
+function extractIssueSourceFromPull(pull = {}) {
+  const { issueNumber, via } = findIssueSourceFromPull(pull);
+  return { issueNumber, via };
+}
+
+function extractIssueNumberFromPull(pull = {}) {
+  return extractIssueSourceFromPull(pull).issueNumber;
 }
 
 function parseHtmlMarker(body, name) {
@@ -496,6 +561,17 @@ function inferredSourceType(pull = {}) {
   const author = cleanString(pull?.user?.login).toLowerCase();
   const labels = labelNames(pull).map((label) => label.toLowerCase());
 
+  // A branch name is author-controlled. Bind Release Please inference to the
+  // repository-owned branch and the configured release publisher identity.
+  if (branch.startsWith('release-please--branches--')) {
+    const headRepo = cleanString(pull?.head?.repo?.full_name).toLowerCase();
+    const baseRepo = cleanString(pull?.base?.repo?.full_name).toLowerCase();
+    const releaseAuthor = cleanString(
+      process.env.RELEASE_PLEASE_AUTHOR || 'github-actions[bot]',
+    ).toLowerCase();
+    return /^[^/\s]+\/[^/\s]+$/.test(baseRepo) && headRepo === baseRepo && author === releaseAuthor
+      ? SOURCE_TYPES.AUTOMATION_RUN : SOURCE_TYPES.UNKNOWN;
+  }
   if (author.startsWith('dependabot') || branch.startsWith('dependabot/')) {
     return SOURCE_TYPES.DEPENDABOT;
   }
@@ -546,18 +622,31 @@ function resolvePrSourceContext(pull = {}) {
   // to its exact repository, branch, and controlled labels so stale metadata
   // cannot promote that provenance into a closing issue reference.
   const boundVerifierCorpusHarvest = hasBoundVerifierCorpusHarvestContext(pull);
-  const extractedIssueNumber = extractIssueNumberFromPull(pull);
-  // Controlled promotion/sync provenance is authoritative: a coincidental
-  // issue reference must not route the PR through issue-body synchronization.
-  const issueNumber = trustedDependencyRepairPromotion || boundGeneratedSync || boundVerifierCorpusHarvest
-    ? null
-    : extractedIssueNumber;
-  const noAutomation = hasNoAutomationWorkflowContext(pull);
-
+  const issueSource = findIssueSourceFromPull(pull);
+  const extractedIssueNumber = issueSource?.issueNumber || null;
   const markerType = normalizeSourceType(parseHtmlMarker(body, 'workflow-source'));
   const blockType = normalizeSourceType(block.origin || block.source || block.type);
   const checkboxType = sourceTypeFromCheckedTemplate(body);
   const labelType = sourceTypeFromLabels(pull);
+  const declaredType = [markerType, blockType, checkboxType, labelType]
+    .find((type) => type !== SOURCE_TYPES.UNKNOWN);
+  const declaredNonIssue = declaredType && declaredType !== SOURCE_TYPES.GITHUB_ISSUE;
+  const explicitIssueOverride = issueSource?.via === 'closing' || issueSource?.via === 'meta';
+  // No target and conflicting targets are different states. Inference must
+  // not turn unresolved explicit lineage into a valid automation source.
+  const hasAmbiguousIssueSource = Boolean(
+    issueSource.ambiguous &&
+      !trustedDependencyRepairPromotion && !boundGeneratedSync && !boundVerifierCorpusHarvest &&
+      (!declaredNonIssue || issueSource.closing),
+  );
+  // Controlled promotion/sync provenance is authoritative: a coincidental
+  // issue reference must not route the PR through issue-body synchronization.
+  const issueNumber = trustedDependencyRepairPromotion || boundGeneratedSync || boundVerifierCorpusHarvest
+    || (declaredNonIssue && !explicitIssueOverride)
+    ? null
+    : extractedIssueNumber;
+  const noAutomation = hasNoAutomationWorkflowContext(pull);
+
   const inferredType = inferredSourceType(pull);
   const detectedSourceType = trustedDependencyRepairPromotion
     ? SOURCE_TYPES.DEPENDABOT
@@ -565,11 +654,13 @@ function resolvePrSourceContext(pull = {}) {
     ? SOURCE_TYPES.SYNC_CAMPAIGN
     : boundVerifierCorpusHarvest
     ? SOURCE_TYPES.AUTOMATION_RUN
+    : hasAmbiguousIssueSource
+    ? SOURCE_TYPES.UNKNOWN
     : issueNumber
     ? SOURCE_TYPES.GITHUB_ISSUE
     : [markerType, blockType, checkboxType, labelType, inferredType].find((type) => type !== SOURCE_TYPES.UNKNOWN)
       || SOURCE_TYPES.UNKNOWN;
-  const sourceType = noAutomation && detectedSourceType === SOURCE_TYPES.UNKNOWN
+  const sourceType = noAutomation && !hasAmbiguousIssueSource && detectedSourceType === SOURCE_TYPES.UNKNOWN
     ? SOURCE_TYPES.MANUAL_REMOTE
     : detectedSourceType;
 
@@ -600,7 +691,7 @@ function resolvePrSourceContext(pull = {}) {
     isKnown: sourceType !== SOURCE_TYPES.UNKNOWN,
     isValid: VALID_SOURCE_TYPES.has(sourceType),
     isExplicit: Boolean(
-      issueNumber ||
+      issueNumber || hasAmbiguousIssueSource ||
         trustedDependencyRepairPromotion ||
         boundGeneratedSync ||
         boundVerifierCorpusHarvest ||
@@ -610,7 +701,8 @@ function resolvePrSourceContext(pull = {}) {
         labelType !== SOURCE_TYPES.UNKNOWN ||
         noAutomation
     ),
-    requiresIssue: sourceType === SOURCE_TYPES.GITHUB_ISSUE,
+    requiresIssue: sourceType === SOURCE_TYPES.GITHUB_ISSUE || hasAmbiguousIssueSource,
+    hasAmbiguousIssueSource,
     noAutomation,
     isRecurringDataJob: boundVerifierCorpusHarvest,
   };
@@ -646,6 +738,7 @@ module.exports = {
   extractIssueNumbersFromText,
   extractClosingIssueNumbersFromText,
   extractIssueNumberFromPull,
+  extractIssueSourceFromPull,
   parseWorkflowSourceBlock,
   parseDependencyRepairPromotionSource,
   hasBoundVerifierCorpusHarvestContext,
