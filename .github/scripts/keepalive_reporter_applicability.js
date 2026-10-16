@@ -2,6 +2,7 @@
 
 const {
   findAuthorityPrForAttempt,
+  hasAttemptIndexesForPr,
   readAuthorityStateForReplay,
   reconcileFailedAuthorityAttempt,
   requester,
@@ -35,7 +36,16 @@ async function classifyReporterRun({ github, owner, repo, run, lookupTarget = fi
       Number(origin.run_attempt) !== Number(run.run_attempt || 1) ||
       String(origin.head_sha) !== String(run.head_sha) ||
       origin.event !== 'workflow_dispatch' || !PRODUCERS.has(origin.path)) {
-    throw new Error('Unassociated run has no verified dispatch classification');
+    // This run is not one of OUR dispatches at all: a different workflow path, a non-dispatch
+    // event, or a different attempt/sha. docs/keepalive/Agents.md requires fail-closed only for
+    // the authority-relevant cases below -- a missing authority-candidate index, an
+    // unrecognized/legacy binding, a corrupt index or an unavailable lookup -- and this is none
+    // of them. Throwing here failed the whole job, and it is the case that actually fires:
+    // 50 failures in six hours in stranske/Workflows, all of them this one (#3839). The
+    // reporter runs only after an upstream round already failed, so that turned the alarm into
+    // noise exactly when it mattered. No authority is granted either way: a skip hands back no
+    // PR number at all.
+    return { status: 'skip', reason: 'unassociated run has no verified dispatch classification' };
   }
   const { data: producer } = await withRetry((client) => client.rest.repos.getContent({
     owner, repo, path: origin.path, ref: origin.head_sha,
@@ -152,6 +162,7 @@ async function replayReporterAuthority({
   writerLogin,
   maxPasses = 3,
   readAuthority = readAuthorityStateForReplay,
+  hasAttemptIndexes = hasAttemptIndexesForPr,
   lookupTarget = findAuthorityPrForAttempt,
   reconcileAttempt = reconcileFailedAuthorityAttempt,
   projectRecovery = projectRecoveredAuthorityState,
@@ -170,9 +181,18 @@ async function replayReporterAuthority({
   const seen = new Set();
   for (let pass = 0; pass < maxPasses; pass += 1) {
     const authority = await readAuthority(request, repository, number);
-    // Most keepalive PRs never enter the challenge path and have no ledger. Only
-    // absence proved from a complete, pinned authority tree is an empty replay.
-    if (authority === null) break;
+    // Most keepalive PRs never enter the challenge path and have no ledger.
+    // A confirmed 404 (null from readAuthorityStateForReplay) is only accepted after
+    // verifying the PR is ordinary (no attempt indexes). Authority candidates fail closed:
+    // a missing ledger for a PR with attempt indexes indicates a reconciliation problem
+    // that must not be silently abandoned.
+    if (authority === null) {
+      const hasIndexes = await hasAttemptIndexes(request, repository, number);
+      if (hasIndexes) {
+        throw new Error('Authority ledger is missing for a PR with attempt indexes; cannot abandon reconciliation');
+      }
+      break;
+    }
     const { state } = authority;
     const attempts = [];
     for (const receipt of [state.receipt, state.released_receipt, state.recovered_receipt]) {

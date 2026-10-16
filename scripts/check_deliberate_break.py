@@ -624,6 +624,23 @@ def _uv_python_module_probe(command: tuple[str, ...]) -> tuple[str, ...] | None:
     return _python_module_pytest_probe(command, index)
 
 
+def _is_pytest_command(command: tuple[str, ...]) -> bool:
+    """Classify pytest execution independently of who owns its environment."""
+    return bool(
+        command
+        and (
+            Path(command[0]).name == "pytest"
+            or (
+                re.fullmatch(r"python(?:\d+(?:\.\d+)*)?", Path(command[0]).name)
+                and _python_module_pytest_probe(command, 0) is not None
+            )
+            or _uv_run_pytest_prefix(command) is not None
+            or _uv_module_pytest_prefix(command) is not None
+            or _uv_python_module_probe(command) is not None
+        )
+    )
+
+
 def _python_shebang_launcher(
     executable: Path,
     resolve_name: Callable[[str], str | None],
@@ -787,7 +804,68 @@ _COLLECTION_ERROR_RE = re.compile(
 )
 
 
-def _missing_module_from_pytest_output(*streams: str | None) -> str | None:
+_TEST_RESULT_RE = re.compile(r"""(?mx)
+    ^(?:(?P<summary_status>PASSED|FAILED)\s+(?P<summary_tail>.+)
+      |(?P<verbose_node>.+)\s+
+       (?P<verbose_status>PASSED|FAILED)(?:\s+\[\s*\d+%\])?\s*)$
+    """)
+
+
+def _pytest_node_id_matches_selected(selected: str, executed: str) -> bool:
+    """Return whether an executed pytest node is the selected test identity.
+
+    A base-function selector runs all of that function's parametrized cases, so
+    ``test_case`` legitimately selects ``test_case[param]``.  An explicitly
+    selected parametrized node remains exact: another parameter, function, or
+    file cannot establish deliberate-break proof.
+    """
+    return executed == selected or ("[" not in selected and executed.startswith(f"{selected}["))
+
+
+def _pytest_summary_node(summary_tail: str) -> str | None:
+    """Extract a node ID from pytest's ``FAILED node - detail`` summary record."""
+    separator = summary_tail.find("::")
+    if separator < 0:
+        return None
+    parameter_start = summary_tail.find("[", separator + 2)
+    if parameter_start < 0:
+        detail = summary_tail.find(" - ", separator + 2)
+        return summary_tail if detail < 0 else summary_tail[:detail]
+    boundary = None
+    index = summary_tail.find(" - ", parameter_start)
+    saw_separator = index >= 0
+    while index >= 0:
+        if summary_tail[index - 1] == "]":
+            if boundary is not None:
+                return None
+            boundary = index
+        index = summary_tail.find(" - ", index + 3)
+    if summary_tail.endswith("]"):
+        return summary_tail if boundary is None else None
+    if not saw_separator:
+        return summary_tail
+    return summary_tail[:boundary] if boundary is not None else None
+
+
+def _pytest_results_from_output(*streams: str | None) -> list[tuple[str, str]]:
+    """Return pytest result status and node ID pairs from its terminal output."""
+    joined = "\n".join(stream for stream in streams if stream)
+    results = []
+    for match in _TEST_RESULT_RE.finditer(joined):
+        status = match["summary_status"] or match["verbose_status"]
+        node = (
+            _pytest_summary_node(match["summary_tail"])
+            if match["summary_status"]
+            else match["verbose_node"]
+        )
+        if node is not None and "::" in node:
+            results.append((status, node))
+    return results
+
+
+def _missing_module_from_pytest_output(
+    *streams: str | None, executed_test_id: str | None = None
+) -> str | None:
     """Return the module missing at COLLECTION time, or None if that is not the failure.
 
     Collection-time ImportErrors surface inside pytest's captured output rather than as an
@@ -796,6 +874,11 @@ def _missing_module_from_pytest_output(*streams: str | None) -> str | None:
     """
     joined = "\n".join(stream for stream in streams if stream)
     if not joined or not _COLLECTION_ERROR_RE.search(joined):
+        return None
+    if executed_test_id is not None and any(
+        _pytest_node_id_matches_selected(executed_test_id, node)
+        for _, node in _pytest_results_from_output(joined)
+    ):
         return None
     match = _MISSING_MODULE_RE.search(joined)
     return match.group(1) if match else None
@@ -980,7 +1063,13 @@ def verify_spec(
         # spent five autofix attempts on a missing runtime dependency while its own declaration
         # was correct, because `head-test-failed` reads as an acceptance failure. Name the
         # environment case so the next reader fixes the environment, not the PR.
-        missing = _missing_module_from_pytest_output(head_run.stdout, head_run.stderr)
+        missing = (
+            _missing_module_from_pytest_output(
+                head_run.stdout, head_run.stderr, executed_test_id=spec.test_id
+            )
+            if _is_pytest_command(spec.command)
+            else None
+        )
         if missing is not None:
             return _json_result(
                 VERDICT_BROKEN,
@@ -1061,6 +1150,49 @@ def verify_spec(
             command=list(spec.command),
             stdout=base_run.stdout,
             stderr=base_run.stderr,
+        )
+
+    # A test that never collected cannot establish sensitivity to the base behavior.
+    missing = (
+        _missing_module_from_pytest_output(
+            base_run.stdout, base_run.stderr, executed_test_id=spec.test_id
+        )
+        if _is_pytest_command(spec.command)
+        else None
+    )
+    if missing is not None:
+        return _json_result(
+            VERDICT_BROKEN,
+            reason="base-test-not-importable",
+            test_id=spec.test_id,
+            command=list(spec.command),
+            missing_module=missing,
+            detail=(
+                f"The named base test could not be imported: no module named {missing!r}. "
+                "The test never ran, so this is not proof of a deliberate break."
+            ),
+            base_stdout=base_run.stdout,
+            base_stderr=base_run.stderr,
+        )
+    # Pytest reserves 1 for failed tests; 2/3/4/5 denote interrupted execution,
+    # internal/usage errors, or no collection. Custom commands keep their contract.
+    # With --continue-on-collection-errors, exit 1 also covers collection errors.
+    # Collection diagnostics require evidence that the selected test actually ran;
+    # collection-like text printed inside a selected FAILED test remains behavioral RED.
+    base_output = "\n".join(stream for stream in (base_run.stdout, base_run.stderr) if stream)
+    unexecuted_collection = _COLLECTION_ERROR_RE.search(base_output) and not any(
+        status == "FAILED" and _pytest_node_id_matches_selected(spec.test_id, node)
+        for status, node in _pytest_results_from_output(base_output)
+    )
+    if _is_pytest_command(spec.command) and (base_run.returncode != 1 or unexecuted_collection):
+        return _json_result(
+            VERDICT_BROKEN,
+            reason="base-test-did-not-run",
+            test_id=spec.test_id,
+            command=list(spec.command),
+            returncode=base_run.returncode,
+            base_stdout=base_run.stdout,
+            base_stderr=base_run.stderr,
         )
 
     return _json_result(
