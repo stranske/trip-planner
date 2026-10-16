@@ -20,11 +20,11 @@ dependencies = [
 [project.optional-dependencies]
 app = []
 dev = [
-    "ruff==0.16.10",
+    "ruff==0.17.0",
     "mypy==2.4.0",
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
-    "black==26.10.0",
+    "black==26.10.1",
     "httpx==0.28.1",
     "PyYAML==6.0.3",
     "types-PyYAML==6.0.12.20260724",
