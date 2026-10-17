@@ -88,5 +88,6 @@
     "hosted_versions": "Separate; local tooling is not represented as the hosted pins."
   },
   "portable_script": "1904-proof.py derives checkout root, uses sys.executable, pins the full baseline and checks its historical SHA256; replay output is external. The script itself is a portable rewrite of the executed capture harness, and was rerun successfully.",
-  "complexity": "Extracted follow-up construction and persisted overlay without changing their semantics; changed functions constrained to25."
+  "complexity": "Extracted follow-up construction and persisted overlay without changing their semantics; changed functions constrained to 25.",
+  "evidence_revision": "Historical initial delivery04b4f7dee8e3bcd124fe2740ad8a0115f27262f8; later CI and review recovery have separate receipts. Current review hashes/counts are in review-recovery.json."
 }

@@ -1,0 +1,71 @@
+{
+  "baseline": "62673c2845ed914bdc8f8d9178e04699f8ce5b39",
+  "current_source_hashes": {
+    "trip_planner/app/services/proposal.py": "0ed5a552c07ccf0ccc492466385c795b9d1c6ee659c665c37eb721523ffa4167",
+    "trip_planner/integrations/tpp/reoptimization.py": "968fad0606239ddea7592923d1d826c84795f68b0d6ae161f142494d509d231e",
+    "tests/app/test_proposal.py": "a36b3c0e4f8728ceb1f7df8a38ef041c3bd35690a4d6bcb4bd8143cf78f3875a"
+  },
+  "full_gate": "222PASS/0SKIP; source217files Mypy PASS",
+  "causal": {
+    "baseline": "62673c2845ed914bdc8f8d9178e04699f8ce5b39",
+    "baseline_sha256": "676eb734e1cf9a70fbbca39ca42ec6c626a9c932b3eaa9aa0939dadae6117728",
+    "current_sha256": "0ed5a552c07ccf0ccc492466385c795b9d1c6ee659c665c37eb721523ffa4167",
+    "restored_byte_identical": true,
+    "red": {
+      "exit": 1,
+      "tests": 2,
+      "failures": 2,
+      "errors": 0,
+      "skips": 0
+    },
+    "green": {
+      "exit": 0,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0
+    }
+  },
+  "artifacts": [
+    {
+      "file": "review-prior-red.log",
+      "raw_sha256": "0ddbb7667f81927da41a1ee7cefd2ebfadf70a023fdd1fcbb19b738443183591",
+      "published_sha256": "7696a41b83b4f14ac2c79544d369c64bc2ca38dc38f871df5a5e031f49957290"
+    },
+    {
+      "file": "review-prior-red.xml",
+      "raw_sha256": "a9a60578d8aefdddcf595f410bf4c6fc647d8db45049fce1022d5f6a5ce0490e",
+      "published_sha256": "53643c71e41f713a79977560c31011ca9669fecc9aebb8e9714a60cefa56e01d"
+    },
+    {
+      "file": "review-current-green.log",
+      "raw_sha256": "ccfd20d782eed3050af947e7d8c89ef408d5da951375d4bb4608f4f84e7efe1e",
+      "published_sha256": "b1067a44ae3a545381c1349d6db86b31be61920502becf0120b5ff5235da3164"
+    },
+    {
+      "file": "review-current-green.xml",
+      "raw_sha256": "05d75080243ca67233aa6ab1057bc64e58d4568a877c90298c19703c7eaaeca6",
+      "published_sha256": "88131b9fbf201798adb7d0c998c642ee4dfd97a51693714bd60f397c62e8d60b"
+    },
+    {
+      "file": "review-receipt.json",
+      "raw_sha256": "8c89246303d3b1598b0c86e55f5753102f9865072c9107846f2ee4df4515a953",
+      "published_sha256": "8c89246303d3b1598b0c86e55f5753102f9865072c9107846f2ee4df4515a953"
+    },
+    {
+      "file": "1915-review-green.log",
+      "raw_sha256": "9af3bf07d4b6d71cb963c732eba66ac9e73cb18281af5ee70a9a199544f4d93b",
+      "published_sha256": "ffe1224806a8ac092de1f7a86c333cb55e530196841efc03259f09f1eb193363"
+    },
+    {
+      "file": "1915-review-green.xml",
+      "raw_sha256": "99f6570696309a1e130ec08bd398b62c57e5dd2798b98aa22e97d41e4d78d4ca",
+      "published_sha256": "c7f903d781fc969b97b50783eb80c77164e8bd43f8dd8a2bf4685ed9e3b8c8d9"
+    },
+    {
+      "file": "1915-review-mypy.log",
+      "raw_sha256": "acb95be999ab9419706b6508a3108bbbbadadc551a8deadaeef8711a7837660e",
+      "published_sha256": "acb95be999ab9419706b6508a3108bbbbadadc551a8deadaeef8711a7837660e"
+    }
+  ]
+}

@@ -61,3 +61,5 @@ The native test materializes the scenario through the public saved-scenarios API
 through `/proposal/submit`; it never injects proposal lineage. Controlled TPP responses prove
 planner persistence and routing, not deployed cross-repository approval. Raw JUnit and
 serialized production removal/restoration evidence are retained in `docs/evidence/issue-1904/`.
+
+When several saved scenarios share an itinerary ID, lineage follows the current saved scenario; an explicit saved-scenario ID takes precedence. `REOPTIMIZATION_SOURCE_LABELS` defines the supported source labels at storage, follow-up and reoptimization boundaries. Unsupported `in_trip_revision` snapshots, including older persisted records, receive the no-lineage disposition rather than an advertised operation ending in HTTP400.

@@ -1084,6 +1084,81 @@ def test_reoptimization_uses_the_submitted_version_after_scenario_changes(
     )
 
 
+def test_native_lineage_prefers_current_saved_scenario_for_shared_itinerary(
+    tpp_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from trip_planner.persistence.models.session import PersistedPlanningSessionState
+
+    monkeypatch.setenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", "true")
+    trip_id, workspace = _native_non_compliant_submission(tpp_client)
+    original = tpp_client.get(f"/api/workspace/{trip_id}/proposal").json()["proposal_state"][
+        "proposal"
+    ]["source_version"]
+    second = tpp_client.post(
+        f"/api/trips/{trip_id}/saved-scenarios",
+        json={
+            "title": "ZZZ selected route",
+            "label": "compliant_first",
+            "snapshot_refs": original["snapshot_refs"],
+        },
+    )
+    assert second.status_code == 201, second.text
+    selected = second.json()["saved_scenario"]
+    with get_session_factory()() as session:
+        record = session.get(
+            PersistedPlanningSessionState, workspace["session"]["session_state_id"]
+        )
+        assert record is not None
+        record.current_saved_scenario_id = selected["saved_scenario_id"]
+        session.commit()
+    submitted = tpp_client.post(f"/api/workspace/{trip_id}/proposal/submit", json={})
+    assert submitted.status_code == 200, submitted.text
+    source = submitted.json()["proposal_state"]["proposal"]["source_version"]
+    assert source["saved_scenario_id"] == selected["saved_scenario_id"]
+    assert source["version_id"] == selected["current_version_id"]
+
+
+@pytest.mark.parametrize("label", ["in_trip_revision"])
+def test_unsupported_saved_lineage_is_not_advertised_or_reoptimized(
+    tpp_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    label: str,
+) -> None:
+    from trip_planner.persistence.models.scenario import PersistedSavedScenario
+
+    monkeypatch.setenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", "true")
+    trip_id, _ = _native_non_compliant_submission(tpp_client)
+    original = tpp_client.get(f"/api/workspace/{trip_id}/proposal").json()["proposal_state"][
+        "proposal"
+    ]["source_version"]
+    with get_session_factory()() as session:
+        stored = session.query(PersistedProposalState).filter_by(trip_id=trip_id).one()
+        stored.proposal_payload = {
+            **stored.proposal_payload,
+            "source_version": {**original, "label": label},
+        }
+        session.commit()
+    readback = tpp_client.get(f"/api/workspace/{trip_id}/proposal")
+    assert readback.json()["proposal_state"]["follow_up"]["status"] == "no_scenario_lineage"
+    assert readback.json()["summary"]["follow_up_status"] == "no_scenario_lineage"
+    response = tpp_client.post(f"/api/workspace/{trip_id}/proposal/reoptimize", json={})
+    assert response.status_code == 200, response.text
+    assert response.json()["summary"]["follow_up"]["status"] == "no_scenario_lineage"
+    assert "reoptimization_plan" not in response.json()["summary"]["follow_up"]
+    with get_session_factory()() as session:
+        saved = session.get(PersistedSavedScenario, original["saved_scenario_id"])
+        assert saved is not None
+        saved.versions = [
+            {**v, "label": label} if v["version_id"] == saved.current_version_id else v
+            for v in saved.versions
+        ]
+        session.commit()
+    submitted = tpp_client.post(f"/api/workspace/{trip_id}/proposal/submit", json={})
+    assert submitted.status_code == 200, submitted.text
+    assert "source_version" not in submitted.json()["proposal_state"]["proposal"]
+
+
 def test_trip_level_reoptimization_returns_no_scenario_lineage(
     tpp_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, TypeGuard
 from uuid import uuid4
 
 from pydantic import TypeAdapter, ValidationError
@@ -57,6 +57,7 @@ from trip_planner.integrations.tpp.portal_handoff import (
     snapshot_hash,
 )
 from trip_planner.integrations.tpp.portal_receipt_client import OwnerPortalReceiptClient
+from trip_planner.integrations.tpp.reoptimization import REOPTIMIZATION_SOURCE_LABELS
 from trip_planner.persistence.models.account import UserAccount
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
@@ -572,6 +573,10 @@ def _no_scenario_lineage_follow_up() -> dict[str, Any]:
     }
 
 
+def _supported_source_version(payload: Any) -> TypeGuard[dict[str, Any]]:
+    return isinstance(payload, dict) and payload.get("label") in REOPTIMIZATION_SOURCE_LABELS
+
+
 def _non_compliant_follow_up(
     preferred_alternatives: list[Any], proposal_payload: dict[str, Any]
 ) -> dict[str, Any]:
@@ -589,7 +594,7 @@ def _non_compliant_follow_up(
         "recommended_label": "Reoptimize plan",
         "selected_alternative": alternative if isinstance(alternative, dict) else None,
     }
-    if not isinstance(proposal_payload.get("source_version"), dict):
+    if not _supported_source_version(proposal_payload.get("source_version")):
         follow_up.update(_no_scenario_lineage_follow_up())
     return follow_up
 
@@ -796,6 +801,12 @@ _FOLLOW_UP_STATUSES_USING_EXISTING_PATH = {"approval_pending", "resolved"}
 def _resolved_follow_up_payload(record: PersistedProposalState) -> dict[str, Any]:
     follow_up = dict(record.summary.get("follow_up") or {})
     if follow_up:
+        if follow_up.get("status") in {
+            "reoptimization_required",
+            "reoptimized",
+        } and not _supported_source_version(record.proposal_payload.get("source_version")):
+            follow_up.update(_no_scenario_lineage_follow_up())
+            follow_up.pop("reoptimization_plan", None)
         return follow_up
     return _derive_follow_up_state(
         proposal_payload=dict(record.proposal_payload),
@@ -979,6 +990,14 @@ def _bind_portal_handoff_evaluation_snapshot(
 
 def _serialize_proposal_state(record: PersistedProposalState) -> dict[str, Any]:
     follow_up = _resolved_follow_up_payload(record)
+    summary = dict(record.summary)
+    if follow_up != summary.get("follow_up"):
+        summary = _build_summary(
+            submission_record=dict(record.submission_record),
+            evaluation_record=dict(record.evaluation_record),
+            proposal_payload=dict(record.proposal_payload),
+            persisted_follow_up=follow_up,
+        )
     return {
         "proposal_state_id": record.proposal_state_id,
         "trip_id": record.trip_id,
@@ -993,7 +1012,7 @@ def _serialize_proposal_state(record: PersistedProposalState) -> dict[str, Any]:
         "proposal": dict(record.proposal_payload),
         "submission": dict(record.submission_record),
         "evaluation": dict(record.evaluation_record),
-        "summary": dict(record.summary),
+        "summary": summary,
         "follow_up": follow_up,
         "portal_handoff": _public_portal_handoff(record.portal_handoff),
     }
@@ -1490,9 +1509,18 @@ def _submission_source_version(
     """Resolve only the selected persisted version; caller lineage is not authoritative."""
     if scenario_id is None:
         return None
-    for saved in workspace.get("saved_scenarios") or []:
-        if not isinstance(saved, dict):
-            continue
+    session = workspace.get("session")
+    current_saved_id = (
+        session.get("current_saved_scenario_id") if isinstance(session, dict) else None
+    )
+    ordered = sorted(
+        (saved for saved in workspace.get("saved_scenarios") or [] if isinstance(saved, dict)),
+        key=lambda saved: (
+            saved.get("saved_scenario_id") != scenario_id,
+            saved.get("saved_scenario_id") != current_saved_id,
+        ),
+    )
+    for saved in ordered:
         for version in saved.get("versions") or []:
             if not isinstance(version, dict) or version.get("version_id") != saved.get(
                 "current_version_id"
@@ -1511,7 +1539,7 @@ def _submission_source_version(
                 "saved_scenario_id"
             ):
                 raise ValueError("Saved scenario lineage must belong to this trip.")
-            return resolved.to_dict()
+            return resolved.to_dict() if resolved.label in REOPTIMIZATION_SOURCE_LABELS else None
     return None
 
 
@@ -1675,7 +1703,7 @@ def get_workspace_proposal_payload(
             )
     return {
         "proposal_state": serialized,
-        "summary": dict(proposal_state.summary),
+        "summary": serialized["summary"],
     }
 
 
@@ -2218,7 +2246,7 @@ def save_workspace_proposal_reoptimize(
     source_version_payload = proposal_payload.get("source_version")
     follow_up = _resolved_follow_up_payload(existing)
     follow_up["manual"] = True
-    if isinstance(source_version_payload, dict):
+    if _supported_source_version(source_version_payload):
         plan = TPPReoptimizationService().plan_reoptimization(
             TripPlanProposal.from_dict(proposal_payload),
             PolicyEvaluationResult.from_dict(evaluation_payload),

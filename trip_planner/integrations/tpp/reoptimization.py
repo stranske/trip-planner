@@ -19,6 +19,7 @@ REACTION_KINDS: tuple[str, ...] = (
     "manual_review",
 )
 BUSINESS_SCENARIO_LABELS: tuple[str, ...] = ("compliant_first", "exception_nearest")
+REOPTIMIZATION_SOURCE_LABELS: tuple[str, ...] = (*BUSINESS_SCENARIO_LABELS, "baseline", "fallback")
 
 
 def _dedupe(values: list[str]) -> list[str]:
@@ -48,9 +49,8 @@ class PolicyReoptimizationContext:
     def __post_init__(self) -> None:
         if not isinstance(self.source_version, ScenarioVersion):
             raise ValueError("source_version must be a ScenarioVersion")
-        source_labels = (*BUSINESS_SCENARIO_LABELS, "baseline", "fallback")
-        if self.source_version.label not in source_labels:
-            raise ValueError(f"source_version.label must be one of {source_labels}")
+        if self.source_version.label not in REOPTIMIZATION_SOURCE_LABELS:
+            raise ValueError(f"source_version.label must be one of {REOPTIMIZATION_SOURCE_LABELS}")
         _validate_ref_mapping(self.comparable_refs, "comparable_refs")
         _validate_ref_mapping(self.justification_refs, "justification_refs")
 
