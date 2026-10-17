@@ -1,0 +1,93 @@
+[HOME]/Library/CloudStorage/Dropbox/Learning/Code/trip-planner/.venv/lib/python3.14/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 20260407_01, Create account and auth-session tables.
+INFO  [alembic.runtime.migration] Running upgrade  -> 20260407_01, Create account and auth-session tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_01 -> 20260407_02, Create persisted trip table.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_01 -> 20260407_02, Create persisted trip table.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_02 -> 20260407_03, Create persisted saved-scenario and activity-history tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_02 -> 20260407_03, Create persisted saved-scenario and activity-history tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_03 -> 20260408_01, add persisted planning session state
+INFO  [alembic.runtime.migration] Running upgrade 20260407_03 -> 20260408_01, add persisted planning session state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_01 -> 20260408_02, add persisted budget plan and actual-spend state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_01 -> 20260408_02, add persisted budget plan and actual-spend state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_02 -> 20260408_03, add persisted policy import state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_02 -> 20260408_03, add persisted policy import state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_03 -> 20260409_01, add persisted proposal lifecycle state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_03 -> 20260409_01, add persisted proposal lifecycle state
+INFO  [alembic.runtime.migration] Running upgrade 20260409_01 -> 20260410_01, add persisted planner actions
+INFO  [alembic.runtime.migration] Running upgrade 20260409_01 -> 20260410_01, add persisted planner actions
+INFO  [alembic.runtime.migration] Running upgrade 20260410_01 -> 20260412_01, add planner checkpoints and user-visible memory artifacts
+INFO  [alembic.runtime.migration] Running upgrade 20260410_01 -> 20260412_01, add planner checkpoints and user-visible memory artifacts
+INFO  [alembic.runtime.migration] Running upgrade 20260412_01 -> 20260507_01, add selected planning mode to session state
+INFO  [alembic.runtime.migration] Running upgrade 20260412_01 -> 20260507_01, add selected planning mode to session state
+INFO  [alembic.runtime.migration] Running upgrade 20260507_01 -> 20260510_01, add persisted planning ledger entries
+INFO  [alembic.runtime.migration] Running upgrade 20260507_01 -> 20260510_01, add persisted planning ledger entries
+INFO  [alembic.runtime.migration] Running upgrade 20260510_01 -> 20260510_02, add persisted planning notebook items and session focus columns
+INFO  [alembic.runtime.migration] Running upgrade 20260510_01 -> 20260510_02, add persisted planning notebook items and session focus columns
+INFO  [alembic.runtime.migration] Running upgrade 20260510_02 -> 20260512_01, repair planning notebook schema for already-deployed databases
+INFO  [alembic.runtime.migration] Running upgrade 20260510_02 -> 20260512_01, repair planning notebook schema for already-deployed databases
+INFO  [alembic.runtime.migration] Running upgrade 20260512_01 -> 20260921_01, add the trip origin the planner needs to measure a journey
+INFO  [alembic.runtime.migration] Running upgrade 20260512_01 -> 20260921_01, add the trip origin the planner needs to measure a journey
+INFO  [alembic.runtime.migration] Running upgrade 20260921_01 -> 20260921_02, add human-entered trip prices
+INFO  [alembic.runtime.migration] Running upgrade 20260921_01 -> 20260921_02, add human-entered trip prices
+INFO  [alembic.runtime.migration] Running upgrade 20260921_02 -> 20260922_01, record the flight details TPP's fare and cabin rules read on a price
+INFO  [alembic.runtime.migration] Running upgrade 20260921_02 -> 20260922_01, record the flight details TPP's fare and cabin rules read on a price
+INFO  [alembic.runtime.migration] Running upgrade 20260922_01 -> 20260928_01, persist truthful TPP portal handoff preparation state
+INFO  [alembic.runtime.migration] Running upgrade 20260922_01 -> 20260928_01, persist truthful TPP portal handoff preparation state
+INFO  [alembic.runtime.migration] Running upgrade 20260928_01 -> 20261014_01, record a link to the fare a traveller chose, as fare evidence
+INFO  [alembic.runtime.migration] Running upgrade 20260928_01 -> 20261014_01, record a link to the fare a traveller chose, as fare evidence
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 20260407_01, Create account and auth-session tables.
+INFO  [alembic.runtime.migration] Running upgrade  -> 20260407_01, Create account and auth-session tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_01 -> 20260407_02, Create persisted trip table.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_01 -> 20260407_02, Create persisted trip table.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_02 -> 20260407_03, Create persisted saved-scenario and activity-history tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_02 -> 20260407_03, Create persisted saved-scenario and activity-history tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_03 -> 20260408_01, add persisted planning session state
+INFO  [alembic.runtime.migration] Running upgrade 20260407_03 -> 20260408_01, add persisted planning session state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_01 -> 20260408_02, add persisted budget plan and actual-spend state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_01 -> 20260408_02, add persisted budget plan and actual-spend state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_02 -> 20260408_03, add persisted policy import state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_02 -> 20260408_03, add persisted policy import state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_03 -> 20260409_01, add persisted proposal lifecycle state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_03 -> 20260409_01, add persisted proposal lifecycle state
+INFO  [alembic.runtime.migration] Running upgrade 20260409_01 -> 20260410_01, add persisted planner actions
+INFO  [alembic.runtime.migration] Running upgrade 20260409_01 -> 20260410_01, add persisted planner actions
+INFO  [alembic.runtime.migration] Running upgrade 20260410_01 -> 20260412_01, add planner checkpoints and user-visible memory artifacts
+INFO  [alembic.runtime.migration] Running upgrade 20260410_01 -> 20260412_01, add planner checkpoints and user-visible memory artifacts
+INFO  [alembic.runtime.migration] Running upgrade 20260412_01 -> 20260507_01, add selected planning mode to session state
+INFO  [alembic.runtime.migration] Running upgrade 20260412_01 -> 20260507_01, add selected planning mode to session state
+INFO  [alembic.runtime.migration] Running upgrade 20260507_01 -> 20260510_01, add persisted planning ledger entries
+INFO  [alembic.runtime.migration] Running upgrade 20260507_01 -> 20260510_01, add persisted planning ledger entries
+INFO  [alembic.runtime.migration] Running upgrade 20260510_01 -> 20260510_02, add persisted planning notebook items and session focus columns
+INFO  [alembic.runtime.migration] Running upgrade 20260510_01 -> 20260510_02, add persisted planning notebook items and session focus columns
+INFO  [alembic.runtime.migration] Running upgrade 20260510_02 -> 20260512_01, repair planning notebook schema for already-deployed databases
+INFO  [alembic.runtime.migration] Running upgrade 20260510_02 -> 20260512_01, repair planning notebook schema for already-deployed databases
+INFO  [alembic.runtime.migration] Running upgrade 20260512_01 -> 20260921_01, add the trip origin the planner needs to measure a journey
+INFO  [alembic.runtime.migration] Running upgrade 20260512_01 -> 20260921_01, add the trip origin the planner needs to measure a journey
+INFO  [alembic.runtime.migration] Running upgrade 20260921_01 -> 20260921_02, add human-entered trip prices
+INFO  [alembic.runtime.migration] Running upgrade 20260921_01 -> 20260921_02, add human-entered trip prices
+INFO  [alembic.runtime.migration] Running upgrade 20260921_02 -> 20260922_01, record the flight details TPP's fare and cabin rules read on a price
+INFO  [alembic.runtime.migration] Running upgrade 20260921_02 -> 20260922_01, record the flight details TPP's fare and cabin rules read on a price
+INFO  [alembic.runtime.migration] Running upgrade 20260922_01 -> 20260928_01, persist truthful TPP portal handoff preparation state
+INFO  [alembic.runtime.migration] Running upgrade 20260922_01 -> 20260928_01, persist truthful TPP portal handoff preparation state
+INFO  [alembic.runtime.migration] Running upgrade 20260928_01 -> 20261014_01, record a link to the fare a traveller chose, as fare evidence
+INFO  [alembic.runtime.migration] Running upgrade 20260928_01 -> 20261014_01, record a link to the fare a traveller chose, as fare evidence
+Full-product verification results
+- PASS local-leisure-journey: {"planner_runtime": "fallback", "planning_mode": "collaborative", "route_contexts": 1, "scenario_id": "scenario:trip-full-product-leisure-verification-9c5069:1", "trip_id": "trip-full-product-leisure-verification-9c5069", "user_id": "user:ed2433851b6ed7e2"}
+- PASS local-business-journey: {"evaluation_status": "non_compliant", "follow_up_status": "reoptimization_required", "planning_mode": "collaborative", "proposal_id": "proposal:trip-full-product-business-verification-a31dfb", "status_poll": "failed", "trip_id": "trip-full-product-business-verification-a31dfb"}
+- SKIPPED map-provider: {"message": "Fallback map path is expected without live Google Maps credentials.", "missing_env": "VITE_GOOGLE_MAPS_BROWSER_API_KEY", "provider_state": "fallback"}
+- SKIPPED planner-llm: {"data_zone": "synthetic", "fallback_reason": "planner_model_not_configured", "llm_status": "deterministic", "mode": "fallback", "model": null, "provider": null}
+- SKIPPED live-tpp: {"mode": "off", "remediation": "Re-run with `--live-tpp auto` (or `required`) after setting `TPP_BASE_URL` or `TPP_REPO_PATH` to opt into live verification."}
+    remediation: Re-run with `--live-tpp auto` (or `required`) after setting `TPP_BASE_URL` or `TPP_REPO_PATH` to opt into live verification.
+- WARNING uncovered surface: map-provider
+- WARNING uncovered surface: planner-llm
+- WARNING uncovered surface: live-tpp
+product-probe: WORKS 4, PARTIAL 2, BROKEN 0, FABRICATED 1 of 7

@@ -1,0 +1,60 @@
+{
+  "mappings": {
+    "CHECKOUT": "dispatcher-provisioned linked worktree",
+    "HOME": "local user home",
+    "RAW_EVIDENCE": "original immutable evidence outside checkout",
+    "HOST": "local hostname"
+  },
+  "files": {
+    "focused.log": {
+      "raw_file": "final-focused.log",
+      "raw_sha256": "385979088da8b6c1a4de21a0e7cc01120d4d7b0adc9c83da75be7476ab191baa",
+      "published_sha256": "0316f6be47308d011a91b22c3bc57fd9941556e50c679468bf281872e4429057"
+    },
+    "focused.xml": {
+      "raw_file": "final-focused.xml",
+      "raw_sha256": "c5eb27bb9f65fa68953e49c350c4c674677d6a1b53614cd86633fdae6add4d22",
+      "published_sha256": "a1ad31afc26180082e135a4c66b054eee10387bd595ff666f45e7f3e13443c57"
+    },
+    "cli.log": {
+      "raw_file": "final-cli.log",
+      "raw_sha256": "8b93c66dae557400216dd175a6b24e9da00af4baa838df7fb152822b5499930f",
+      "published_sha256": "f248973db7068555ff24659b8fc6751b2273d510a845e678f97a2537daab5864"
+    },
+    "product-probe.json": {
+      "raw_file": "final-product-probe.json",
+      "raw_sha256": "a96721fbdd5307a713da6720026263bcfee85276c4115cd4cbfa2cdaa2b68261",
+      "published_sha256": "a96721fbdd5307a713da6720026263bcfee85276c4115cd4cbfa2cdaa2b68261"
+    },
+    "red.log": {
+      "raw_file": "mutation/red.log",
+      "raw_sha256": "fdcc09b2db9f9036205a94a3d20983cc0ef687e87601ba65cec1e7e837d0f8a3",
+      "published_sha256": "f05c5bd450a9b2339eb8060acb44cb00ff74cb6914eed8f00585a549e37c39d5"
+    },
+    "red.xml": {
+      "raw_file": "mutation/red.xml",
+      "raw_sha256": "36dc24efd3460b19f37a240736fc429d61a3b2f5358a943a659a38808d91ad5c",
+      "published_sha256": "1e3e97c206f32dd8177e35ac72edb115e8b3f59abd105d4d4f959c9e67493fc7"
+    },
+    "green.log": {
+      "raw_file": "mutation/green.log",
+      "raw_sha256": "9cc916e35cca451aa64b713fed5b140e889616db022a17bf8c22bdbac8e134da",
+      "published_sha256": "07de16ec2d0b78efb92e5011bf038338b724ca31a874dc0c9a81ba137870758b"
+    },
+    "green.xml": {
+      "raw_file": "mutation/green.xml",
+      "raw_sha256": "60007df46fca9f90171fc0add6d382b9fbc9bd908ba40c409736b9251b049d85",
+      "published_sha256": "e0094aa68d199ae8bb20234b7c07a6afaed2c60e6d49166aa65e2f9f60d5ed60"
+    },
+    "mutation.json": {
+      "raw_file": "mutation/mutation.json",
+      "raw_sha256": "d0a24084eaaa38e2e46f4edaa659668ca026f13d472efda2d1f5c902521a40d1",
+      "published_sha256": "5334d63a7e6146d7f2f18b48ec4a47eb231653d486350f9675ed7d70cc0bd6d9"
+    },
+    "advisor-error.log": {
+      "raw_file": "advisor-error.log",
+      "raw_sha256": "9134af6274c8b5a36eb0784b9fb13dec5756befa4bf9ba189366a5c1c82e5529",
+      "published_sha256": "f0d8d607d141e9f8dc639eae9137d1808175f7e9d83b931b055f893a37cae065"
+    }
+  }
+}
