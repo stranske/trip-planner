@@ -1,0 +1,17 @@
+[
+  {
+    "file": "1915-ci-recovery.log",
+    "raw_sha256": "8da862a38dbabedc2bb6213501dd344a9d03b520d59d3675d6f1ce5b29d9528e",
+    "published_sha256": "e56d8394868634dc179bd0e4814ece4bb3c827273406c2c1e2411a12834ffe0d"
+  },
+  {
+    "file": "1915-ci-recovery.xml",
+    "raw_sha256": "9532e9ddb03d3722f05f4d36154b8c9fbce6c64b9683b6a43ff43f7fc79871b1",
+    "published_sha256": "bd66b1a33277ede0369ff32ac06af28989c5ab36f6254a54371bf95a407d2bf4"
+  },
+  {
+    "file": "1915-full-product-recovery.log",
+    "raw_sha256": "5e5dfe58753eb68487214462f8caf47cdd504e0dd761df70f950976dd5e4dbb6",
+    "published_sha256": "be6324b56bbf67f5ec575a125b62bffddda686e611a0578ae0e2982a0c2b8cf6"
+  }
+]

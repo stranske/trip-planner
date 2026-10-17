@@ -1,0 +1,20 @@
+{
+  "baseline": "62673c2845ed914bdc8f8d9178e04699f8ce5b39",
+  "baseline_sha256": "676eb734e1cf9a70fbbca39ca42ec6c626a9c932b3eaa9aa0939dadae6117728",
+  "current_sha256": "0ed5a552c07ccf0ccc492466385c795b9d1c6ee659c665c37eb721523ffa4167",
+  "restored_byte_identical": true,
+  "red": {
+    "exit": 1,
+    "tests": 2,
+    "failures": 2,
+    "errors": 0,
+    "skips": 0
+  },
+  "green": {
+    "exit": 0,
+    "tests": 2,
+    "failures": 0,
+    "errors": 0,
+    "skips": 0
+  }
+}

@@ -1151,7 +1151,7 @@ def run_product_journeys(
             expected_follow_up_status = (
                 "resolved"
                 if expected_business_evaluation_status == "compliant"
-                else "reoptimization_required"
+                else "no_scenario_lineage"
             )
             _require(
                 reloaded_proposal["summary"]["follow_up_status"] == expected_follow_up_status,

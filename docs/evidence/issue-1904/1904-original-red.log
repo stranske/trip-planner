@@ -1,0 +1,60 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______ test_native_submit_then_reoptimize_without_injected_source_version ______
+tests/app/test_proposal.py:1005: in test_native_submit_then_reoptimize_without_injected_source_version
+    assert "source_version" in submitted["proposal"]
+E   AssertionError: assert 'source_version' in {'proposal_id': 'proposal:trip-native-lineage-8a8c7e', 'trip_id': 'trip-native-lineage-8a8c7e', 'mode': 'business', 't...e_type': 'employee', 'traveler_experience': 'occasional', 'home_airport': 'Seattle', 'loyalty_programs': [], ...}, ...}
+---------------------------- Captured stderr setup -----------------------------
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 20260407_01, Create account and auth-session tables.
+INFO  [alembic.runtime.migration] Running upgrade  -> 20260407_01, Create account and auth-session tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_01 -> 20260407_02, Create persisted trip table.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_01 -> 20260407_02, Create persisted trip table.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_02 -> 20260407_03, Create persisted saved-scenario and activity-history tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_02 -> 20260407_03, Create persisted saved-scenario and activity-history tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_03 -> 20260408_01, add persisted planning session state
+INFO  [alembic.runtime.migration] Running upgrade 20260407_03 -> 20260408_01, add persisted planning session state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_01 -> 20260408_02, add persisted budget plan and actual-spend state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_01 -> 20260408_02, add persisted budget plan and actual-spend state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_02 -> 20260408_03, add persisted policy import state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_02 -> 20260408_03, add persisted policy import state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_03 -> 20260409_01, add persisted proposal lifecycle state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_03 -> 20260409_01, add persisted proposal lifecycle state
+INFO  [alembic.runtime.migration] Running upgrade 20260409_01 -> 20260410_01, add persisted planner actions
+INFO  [alembic.runtime.migration] Running upgrade 20260409_01 -> 20260410_01, add persisted planner actions
+INFO  [alembic.runtime.migration] Running upgrade 20260410_01 -> 20260412_01, add planner checkpoints and user-visible memory artifacts
+INFO  [alembic.runtime.migration] Running upgrade 20260410_01 -> 20260412_01, add planner checkpoints and user-visible memory artifacts
+INFO  [alembic.runtime.migration] Running upgrade 20260412_01 -> 20260507_01, add selected planning mode to session state
+INFO  [alembic.runtime.migration] Running upgrade 20260412_01 -> 20260507_01, add selected planning mode to session state
+INFO  [alembic.runtime.migration] Running upgrade 20260507_01 -> 20260510_01, add persisted planning ledger entries
+INFO  [alembic.runtime.migration] Running upgrade 20260507_01 -> 20260510_01, add persisted planning ledger entries
+INFO  [alembic.runtime.migration] Running upgrade 20260510_01 -> 20260510_02, add persisted planning notebook items and session focus columns
+INFO  [alembic.runtime.migration] Running upgrade 20260510_01 -> 20260510_02, add persisted planning notebook items and session focus columns
+INFO  [alembic.runtime.migration] Running upgrade 20260510_02 -> 20260512_01, repair planning notebook schema for already-deployed databases
+INFO  [alembic.runtime.migration] Running upgrade 20260510_02 -> 20260512_01, repair planning notebook schema for already-deployed databases
+INFO  [alembic.runtime.migration] Running upgrade 20260512_01 -> 20260921_01, add the trip origin the planner needs to measure a journey
+INFO  [alembic.runtime.migration] Running upgrade 20260512_01 -> 20260921_01, add the trip origin the planner needs to measure a journey
+INFO  [alembic.runtime.migration] Running upgrade 20260921_01 -> 20260921_02, add human-entered trip prices
+INFO  [alembic.runtime.migration] Running upgrade 20260921_01 -> 20260921_02, add human-entered trip prices
+INFO  [alembic.runtime.migration] Running upgrade 20260921_02 -> 20260922_01, record the flight details TPP's fare and cabin rules read on a price
+INFO  [alembic.runtime.migration] Running upgrade 20260921_02 -> 20260922_01, record the flight details TPP's fare and cabin rules read on a price
+INFO  [alembic.runtime.migration] Running upgrade 20260922_01 -> 20260928_01, persist truthful TPP portal handoff preparation state
+INFO  [alembic.runtime.migration] Running upgrade 20260922_01 -> 20260928_01, persist truthful TPP portal handoff preparation state
+INFO  [alembic.runtime.migration] Running upgrade 20260928_01 -> 20261014_01, record a link to the fare a traveller chose, as fare evidence
+INFO  [alembic.runtime.migration] Running upgrade 20260928_01 -> 20261014_01, record a link to the fare a traveller chose, as fare evidence
+=============================== warnings summary ===============================
+../../../../../Library/CloudStorage/Dropbox/Learning/Code/trip-planner/.venv/lib/python3.14/site-packages/fastapi/testclient.py:1
+  <repo-venv>/lib/python3.14/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/app/test_proposal.py::test_native_submit_then_reoptimize_without_injected_source_version
+  <repo-venv>/lib/python3.14/site-packages/alembic/config.py:612: DeprecationWarning: No path_separator found in configuration; falling back to legacy splitting on spaces, commas, and colons for prepend_sys_path.  Consider adding path_separator=os to Alembic config.
+    util.warn_deprecated(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/app/test_proposal.py::test_native_submit_then_reoptimize_without_injected_source_version
+1 failed, 2 warnings in 0.95s

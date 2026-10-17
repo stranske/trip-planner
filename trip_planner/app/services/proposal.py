@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, TypeGuard
 from uuid import uuid4
 
 from pydantic import TypeAdapter, ValidationError
@@ -57,6 +57,7 @@ from trip_planner.integrations.tpp.portal_handoff import (
     snapshot_hash,
 )
 from trip_planner.integrations.tpp.portal_receipt_client import OwnerPortalReceiptClient
+from trip_planner.integrations.tpp.reoptimization import REOPTIMIZATION_SOURCE_LABELS
 from trip_planner.persistence.models.account import UserAccount
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
@@ -561,6 +562,67 @@ def _public_portal_handoff(value: dict[str, Any] | None) -> dict[str, Any] | Non
     return {key: value.get(key) for key in public_keys if key in value}
 
 
+def _no_scenario_lineage_follow_up() -> dict[str, Any]:
+    return {
+        "status": "no_scenario_lineage",
+        "path": "manual_review",
+        "title": "Plan a scenario before reoptimization",
+        "summary": "This submission has no saved scenario lineage. Plan a scenario and submit it before reoptimizing.",
+        "recommended_action": "materialize_scenario",
+        "recommended_label": "Plan a scenario",
+    }
+
+
+def _supported_source_version(payload: Any) -> TypeGuard[dict[str, Any]]:
+    return isinstance(payload, dict) and payload.get("label") in REOPTIMIZATION_SOURCE_LABELS
+
+
+def _non_compliant_follow_up(
+    preferred_alternatives: list[Any], proposal_payload: dict[str, Any]
+) -> dict[str, Any]:
+    alternative = preferred_alternatives[0] if preferred_alternatives else None
+    follow_up = {
+        "status": "reoptimization_required",
+        "path": "reoptimization",
+        "title": "Reoptimization path required",
+        "summary": (
+            alternative.get("summary")
+            if isinstance(alternative, dict) and alternative.get("summary")
+            else "The current proposal is non-compliant. Rebuild it around a policy-safe alternative."
+        ),
+        "recommended_action": "reoptimize",
+        "recommended_label": "Reoptimize plan",
+        "selected_alternative": alternative if isinstance(alternative, dict) else None,
+    }
+    if not _supported_source_version(proposal_payload.get("source_version")):
+        follow_up.update(_no_scenario_lineage_follow_up())
+    return follow_up
+
+
+def _apply_persisted_follow_up(
+    follow_up: dict[str, Any], persisted_follow_up: dict[str, Any] | None
+) -> dict[str, Any]:
+    if persisted_follow_up and persisted_follow_up.get("manual"):
+        for key in (
+            "status",
+            "path",
+            "title",
+            "summary",
+            "recommended_action",
+            "recommended_label",
+            "selected_alternative",
+            "reoptimization_plan",
+            "notes",
+            "updated_at",
+        ):
+            if key in persisted_follow_up and persisted_follow_up[key] not in (None, ""):
+                follow_up[key] = persisted_follow_up[key]
+        if persisted_follow_up.get("requested_exception") is not None:
+            follow_up["requested_exception"] = persisted_follow_up["requested_exception"]
+
+    return follow_up
+
+
 def _derive_follow_up_state(
     *,
     proposal_payload: dict[str, Any],
@@ -588,20 +650,7 @@ def _derive_follow_up_state(
             "recommended_label": "Advance to approval",
         }
     elif status == "non_compliant":
-        alternative = preferred_alternatives[0] if preferred_alternatives else None
-        follow_up = {
-            "status": "reoptimization_required",
-            "path": "reoptimization",
-            "title": "Reoptimization path required",
-            "summary": (
-                alternative.get("summary")
-                if isinstance(alternative, dict) and alternative.get("summary")
-                else "The current proposal is non-compliant. Rebuild it around a policy-safe alternative."
-            ),
-            "recommended_action": "reoptimize",
-            "recommended_label": "Reoptimize plan",
-            "selected_alternative": alternative if isinstance(alternative, dict) else None,
-        }
+        follow_up = _non_compliant_follow_up(preferred_alternatives, proposal_payload)
     elif status == "exception_required":
         follow_up = {
             "status": "exception_requested" if requested_exception else "exception_required",
@@ -643,25 +692,7 @@ def _derive_follow_up_state(
     follow_up["selected_alternative"] = follow_up.get("selected_alternative")
     follow_up["notes"] = []
 
-    if persisted_follow_up and persisted_follow_up.get("manual"):
-        for key in (
-            "status",
-            "path",
-            "title",
-            "summary",
-            "recommended_action",
-            "recommended_label",
-            "selected_alternative",
-            "reoptimization_plan",
-            "notes",
-            "updated_at",
-        ):
-            if key in persisted_follow_up and persisted_follow_up[key] not in (None, ""):
-                follow_up[key] = persisted_follow_up[key]
-        if persisted_follow_up.get("requested_exception") is not None:
-            follow_up["requested_exception"] = persisted_follow_up["requested_exception"]
-
-    return follow_up
+    return _apply_persisted_follow_up(follow_up, persisted_follow_up)
 
 
 def _submission_outcome(*, state: Any, queue_state: Any, error_category: Any) -> str:
@@ -770,6 +801,12 @@ _FOLLOW_UP_STATUSES_USING_EXISTING_PATH = {"approval_pending", "resolved"}
 def _resolved_follow_up_payload(record: PersistedProposalState) -> dict[str, Any]:
     follow_up = dict(record.summary.get("follow_up") or {})
     if follow_up:
+        if follow_up.get("status") in {
+            "reoptimization_required",
+            "reoptimized",
+        } and not _supported_source_version(record.proposal_payload.get("source_version")):
+            follow_up.update(_no_scenario_lineage_follow_up())
+            follow_up.pop("reoptimization_plan", None)
         return follow_up
     return _derive_follow_up_state(
         proposal_payload=dict(record.proposal_payload),
@@ -783,7 +820,7 @@ def _resolve_manual_follow_up_path(*, existing_follow_up: dict[str, Any], status
         return _FOLLOW_UP_PATH_BY_STATUS[status]
     if status in _FOLLOW_UP_STATUSES_USING_EXISTING_PATH:
         existing_path = existing_follow_up.get("path")
-        if existing_path in {"approval", "exception", "reoptimization"}:
+        if existing_path in {"approval", "exception", "reoptimization", "manual_review"}:
             return str(existing_path)
         raise ValueError(
             f"Cannot store follow-up status '{status}' without an existing follow-up path."
@@ -953,6 +990,14 @@ def _bind_portal_handoff_evaluation_snapshot(
 
 def _serialize_proposal_state(record: PersistedProposalState) -> dict[str, Any]:
     follow_up = _resolved_follow_up_payload(record)
+    summary = dict(record.summary)
+    if follow_up != summary.get("follow_up"):
+        summary = _build_summary(
+            submission_record=dict(record.submission_record),
+            evaluation_record=dict(record.evaluation_record),
+            proposal_payload=dict(record.proposal_payload),
+            persisted_follow_up=follow_up,
+        )
     return {
         "proposal_state_id": record.proposal_state_id,
         "trip_id": record.trip_id,
@@ -967,7 +1012,7 @@ def _serialize_proposal_state(record: PersistedProposalState) -> dict[str, Any]:
         "proposal": dict(record.proposal_payload),
         "submission": dict(record.submission_record),
         "evaluation": dict(record.evaluation_record),
-        "summary": dict(record.summary),
+        "summary": summary,
         "follow_up": follow_up,
         "portal_handoff": _public_portal_handoff(record.portal_handoff),
     }
@@ -1458,13 +1503,53 @@ def _booking_channel_from_workspace(workspace: dict[str, Any]) -> str:
     return "workspace"
 
 
+def _submission_source_version(
+    workspace: dict[str, Any], scenario_id: str | None, trip_id: str
+) -> dict[str, Any] | None:
+    """Resolve only the selected persisted version; caller lineage is not authoritative."""
+    if scenario_id is None:
+        return None
+    session = workspace.get("session")
+    current_saved_id = (
+        session.get("current_saved_scenario_id") if isinstance(session, dict) else None
+    )
+    ordered = sorted(
+        (saved for saved in workspace.get("saved_scenarios") or [] if isinstance(saved, dict)),
+        key=lambda saved: (
+            saved.get("saved_scenario_id") != scenario_id,
+            saved.get("saved_scenario_id") != current_saved_id,
+        ),
+    )
+    for saved in ordered:
+        for version in saved.get("versions") or []:
+            if not isinstance(version, dict) or version.get("version_id") != saved.get(
+                "current_version_id"
+            ):
+                continue
+            refs = version.get("snapshot_refs")
+            if not isinstance(refs, dict):
+                continue
+            if scenario_id not in (
+                saved.get("saved_scenario_id"),
+                refs.get("itinerary_scenario_id"),
+            ):
+                continue
+            resolved = ScenarioVersion.from_dict(version)
+            if resolved.trip_id != trip_id or resolved.saved_scenario_id != saved.get(
+                "saved_scenario_id"
+            ):
+                raise ValueError("Saved scenario lineage must belong to this trip.")
+            return resolved.to_dict() if resolved.label in REOPTIMIZATION_SOURCE_LABELS else None
+    return None
+
+
 def build_workspace_submission_proposal(
     db_session: Session,
     *,
     user: AuthenticatedUser,
     trip_id: str,
     scenario_id: str | None = None,
-) -> tuple[TripPlanProposal, str]:
+) -> tuple[dict[str, Any], str]:
     """Build a costed proposal from the persisted workspace, not a policy preview.
 
     Returns the proposal and the id of the scenario it was built for. The scenario id is
@@ -1581,7 +1666,11 @@ def build_workspace_submission_proposal(
         approval_notes=["Submitted from the workspace Policy tab."],
         constraint_set_id=constraint_set_id,
     )
-    return proposal, resolved_scenario_id
+    proposal_payload = proposal.to_dict()
+    source_version = _submission_source_version(workspace, resolved_scenario_id, trip_id)
+    if source_version is not None:
+        proposal_payload["source_version"] = source_version
+    return proposal_payload, resolved_scenario_id
 
 
 def get_workspace_proposal_payload(
@@ -1614,7 +1703,7 @@ def get_workspace_proposal_payload(
             )
     return {
         "proposal_state": serialized,
-        "summary": dict(proposal_state.summary),
+        "summary": serialized["summary"],
     }
 
 
@@ -1634,20 +1723,19 @@ def submit_workspace_proposal_for_trip(
 
     from trip_planner.app.services.policy import get_workspace_policy_payload
 
-    proposal, resolved_scenario_id = build_workspace_submission_proposal(
+    proposal_payload, resolved_scenario_id = build_workspace_submission_proposal(
         db_session,
         user=user,
         trip_id=trip_id,
         scenario_id=scenario_id,
     )
-    proposal_payload = proposal.to_dict()
     policy_payload = get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
     policy_state = policy_payload.get("policy_state")
     organization_id = ""
     if isinstance(policy_state, dict):
         organization_id = str(policy_state.get("organization_id") or "")
 
-    proposal_id = proposal.proposal_id
+    proposal_id = str(proposal_payload["proposal_id"])
     request_payload = TPPRequestEnvelope(
         operation="submit_proposal",
         request_id=f"submit-proposal:{uuid4().hex}",
@@ -1744,8 +1832,9 @@ def save_workspace_proposal_submission(
         summary={},
     )
     stored_proposal_payload = proposal.to_dict()
-    if isinstance(proposal_payload.get("source_version"), dict):
-        stored_proposal_payload["source_version"] = dict(proposal_payload["source_version"])
+    source_version = _submission_source_version(workspace, scenario_id, trip_id)
+    if source_version is not None:
+        stored_proposal_payload["source_version"] = source_version
 
     record.owner_profile_id = _owner_profile_id(trip_record)
     record.proposal_id = proposal.proposal_id
@@ -2155,26 +2244,26 @@ def save_workspace_proposal_reoptimize(
     if not evaluation_payload:
         raise ValueError("Proposal reoptimization requires a stored policy evaluation result.")
     source_version_payload = proposal_payload.get("source_version")
-    if not isinstance(source_version_payload, dict):
-        raise ValueError("Proposal reoptimization requires proposal.source_version context.")
-
-    plan = TPPReoptimizationService().plan_reoptimization(
-        TripPlanProposal.from_dict(proposal_payload),
-        PolicyEvaluationResult.from_dict(evaluation_payload),
-        PolicyReoptimizationContext(
-            source_version=ScenarioVersion.from_dict(source_version_payload),
-            comparable_refs=comparable_refs,
-            justification_refs=justification_refs,
-        ),
-    )
-
     follow_up = _resolved_follow_up_payload(existing)
     follow_up["manual"] = True
-    follow_up["reoptimization_plan"] = plan.to_dict()
-    follow_up["status"] = "reoptimized"
-    follow_up["path"] = "reoptimization"
-    follow_up["title"] = follow_up.get("title") or "Reoptimization plan ready"
-    follow_up["summary"] = follow_up.get("summary") or plan.target_title
+    if _supported_source_version(source_version_payload):
+        plan = TPPReoptimizationService().plan_reoptimization(
+            TripPlanProposal.from_dict(proposal_payload),
+            PolicyEvaluationResult.from_dict(evaluation_payload),
+            PolicyReoptimizationContext(
+                source_version=ScenarioVersion.from_dict(source_version_payload),
+                comparable_refs=comparable_refs,
+                justification_refs=justification_refs,
+            ),
+        )
+        follow_up["reoptimization_plan"] = plan.to_dict()
+        follow_up["status"] = "reoptimized"
+        follow_up["path"] = "reoptimization"
+        follow_up["title"] = follow_up.get("title") or "Reoptimization plan ready"
+        follow_up["summary"] = follow_up.get("summary") or plan.target_title
+    else:
+        follow_up.pop("reoptimization_plan", None)
+        follow_up.update(_no_scenario_lineage_follow_up())
     follow_up["updated_at"] = _now_iso()
 
     existing.summary = _build_summary(

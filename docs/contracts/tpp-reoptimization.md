@@ -36,3 +36,30 @@ The plan can then materialize:
 - a `ScenarioComparison` via `build_comparison(...)`
 
 That keeps the reaction step inspectable before later issues wire it into full business orchestration.
+
+## Native submission lineage
+
+The Policy-tab submission builder resolves the selected scenario's current persisted
+`ScenarioVersion` from the owned workspace. Both its request payload and stored proposal
+carry `source_version`; generic submission persistence independently derives it from the
+validated scenario ID rather than trusting caller-supplied lineage. The version is a
+submission-time snapshot: later scenario edits and application restarts do not change the
+source version used by the reoptimization plan. Saved baseline/fallback versions can be
+source snapshots; generated target labels remain `compliant_first`/`exception_nearest`.
+
+When no persisted version matches the selected scenario (including a trip-level submission
+without a materialized scenario), a non-compliant verdict exposes
+`follow_up.status = no_scenario_lineage`, `path = manual_review`, and
+`recommended_action = materialize_scenario`. `POST /api/workspace/{trip_id}/proposal/reoptimize`
+returns HTTP 200 with that same explicit disposition and no `reoptimization_plan`. Plan and
+save a scenario, then resubmit before requesting a plan; an unrelated bootstrap or
+caller-provided version is not substituted.
+
+Local gates: `pytest tests/app/test_proposal.py::test_native_submit_then_reoptimize_without_injected_source_version`
+and `pytest tests/app/test_proposal.py::test_proposal_state_persists_across_create_app_restart`.
+The native test materializes the scenario through the public saved-scenarios API and submits
+through `/proposal/submit`; it never injects proposal lineage. Controlled TPP responses prove
+planner persistence and routing, not deployed cross-repository approval. Raw JUnit and
+serialized production removal/restoration evidence are retained in `docs/evidence/issue-1904/`.
+
+When several saved scenarios share an itinerary ID, lineage follows the current saved scenario; an explicit saved-scenario ID takes precedence. `REOPTIMIZATION_SOURCE_LABELS` defines the supported source labels at storage, follow-up and reoptimization boundaries. Unsupported `in_trip_revision` snapshots, including older persisted records, receive the no-lineage disposition rather than an advertised operation ending in HTTP400.

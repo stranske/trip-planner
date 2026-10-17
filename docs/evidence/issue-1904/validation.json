@@ -1,0 +1,93 @@
+{
+  "baseline_revision": "47173b69d1c2d420d21983abd172e4b821038266",
+  "source_hashes": {
+    "trip_planner/app/services/proposal.py": "676eb734e1cf9a70fbbca39ca42ec6c626a9c932b3eaa9aa0939dadae6117728",
+    "trip_planner/integrations/tpp/reoptimization.py": "1c6bd3653e89352855f6dd7a9008f0a4531180909c1441b4a26c252b82451ba7",
+    "tests/app/test_proposal.py": "e94754ab18e7bc4f086997f53ce4e4b85f353590a156c28fbc517f41fc5134d0"
+  },
+  "normalization": "Original captures retained outside repository in automation run; published captures normalize checkout/runtime/evidence paths and JUnit hostname. Raw execution results/counts retained.",
+  "artifacts": [
+    {
+      "file": "1904-original-red.xml",
+      "original_sha256": "59d2fdc56f2730ed268a457082e2fa948115741ddd1c7a6a2a1f3862f13fb173",
+      "published_sha256": "c5727ea3c7c5c4c135bc2c482afdc2324cbd106fd31fe88931c6db45eba0f828"
+    },
+    {
+      "file": "1904-builder-red.xml",
+      "original_sha256": "2d9f0d319f7fd23b6a55944fba2e2daaa422905c40fd655c91b004a2ff9d1d52",
+      "published_sha256": "828ed3d2494be303cdd0efc476c85ee08384649f473ab694ae472c62b658b7ba"
+    },
+    {
+      "file": "1904-restored.xml",
+      "original_sha256": "c5837d2ee5eca041c5fa4f17935f28ca6cfdf802fac6d52368f0fbf18f086a3d",
+      "published_sha256": "003e10d6c084658644bd7ab768a6bd961f8e65811994b303024948ae9479584c"
+    },
+    {
+      "file": "1904-builder-restored.xml",
+      "original_sha256": "2cb5a01d8e055b2beac2dfd4937b092a0384499449d4805a2a4299790c1f5f04",
+      "published_sha256": "0eb3f0f501da9aa615fe551955fac51cb0f0976b582531c7597aaaa1f734a0e3"
+    },
+    {
+      "file": "1904-green.xml",
+      "original_sha256": "18dfcbe396e51c73bdd1ee912fedf0794d18df498a47a7b2ac1b83a6bb82972e",
+      "published_sha256": "31630663643caca7379826ad199bc66d2a0e9975902d4a2bd7e7fee72ace9ac3"
+    },
+    {
+      "file": "1904-restored.log",
+      "original_sha256": "6c4c2af5538cd54fe5838c75f6d99b903bb5aca29f504e907ec9b33ef361bf76",
+      "published_sha256": "d6c6d01da30439db9dbb41df248c362f6549e1ced4c57ed14523622d3e922462"
+    },
+    {
+      "file": "1904-builder-restored.log",
+      "original_sha256": "3e66a95c14379c521061d3f3c88523eedf83958d1eae416e64c27f338a40dbe8",
+      "published_sha256": "bcd1e13dfff37bf7e0baa4232a51a0c7ab2d1ccdc0adf59610f41cfb3c567b33"
+    },
+    {
+      "file": "1904-green.log",
+      "original_sha256": "b535590b82abf362a652bd64d31236c55da9396b713e9e25d3f6e020ad61e4ab",
+      "published_sha256": "1c381302828fc130a9943f6288a8d142a04350039071c6cc14113bf0c42c911e"
+    },
+    {
+      "file": "1904-mypy.log",
+      "original_sha256": "acb95be999ab9419706b6508a3108bbbbadadc551a8deadaeef8711a7837660e",
+      "published_sha256": "acb95be999ab9419706b6508a3108bbbbadadc551a8deadaeef8711a7837660e"
+    },
+    {
+      "file": "1904-ruff.log",
+      "original_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "published_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "file": "1904-builder-red.log",
+      "original_sha256": "7107459c0726cc56b1e0ee094ca4297f6ce6f759b6f2b239edfbdde745a8e41b",
+      "published_sha256": "6a456d97aafe24aa884514ab20342d871a3a76258d0123943da696f9e177b1d8"
+    },
+    {
+      "file": "1904-original-red.log",
+      "original_sha256": "202106bd4c38270eb9676237f74d80f90544e0bdca446e3aafd9305570cbb38d",
+      "published_sha256": "a9dd4b292bd747b4b661e821bd61cd6aa6d611b90bccf82291f72cd8b8afe827"
+    },
+    {
+      "file": "1904-causal.json",
+      "original_sha256": "7aa5187a9842c890adccc14bb770005911f0a82308370c4690dd997220e39185",
+      "published_sha256": "b50cdce145601c862211a41dc37aca89108bcabe33fc43b6a9de1943d3a37db9"
+    },
+    {
+      "file": "1904-proof.py",
+      "original_sha256": "f9c3032f92d7db3f25395a72dd4d3d80700e3edcc3c1f7469e6a9de49b3ac2d9",
+      "published_sha256": "620105210abd9952f3ec0f6c721044ebb95e792b41737bd615f458250c160e04",
+      "transformation": "portable root/interpreter/full revision/historical hash rewrite; rerun successfully"
+    }
+  ],
+  "limits": "Controlled TPP transport responses; no live deployed approval, provider verdict or postmerge original acceptance claimed.",
+  "runtime": {
+    "python": "3.14.3",
+    "pytest": "9.1.1",
+    "ruff": "0.15.20",
+    "mypy": "2.2.0",
+    "hosted_versions": "Separate; local tooling is not represented as the hosted pins."
+  },
+  "portable_script": "1904-proof.py derives checkout root, uses sys.executable, pins the full baseline and checks its historical SHA256; replay output is external. The script itself is a portable rewrite of the executed capture harness, and was rerun successfully.",
+  "complexity": "Extracted follow-up construction and persisted overlay without changing their semantics; changed functions constrained to 25.",
+  "evidence_revision": "Historical initial delivery04b4f7dee8e3bcd124fe2740ad8a0115f27262f8; later CI and review recovery have separate receipts. Current review hashes/counts are in review-recovery.json."
+}
