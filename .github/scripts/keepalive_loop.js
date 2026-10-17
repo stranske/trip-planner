@@ -3,105 +3,6 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { rateLimitExpired } = require('./rate_limit_receipt');
-const { execFile } = require('child_process');
-const { extractIssueNumberFromPull } = require('./source_context');
-
-// Use the same extractor for the stop decision and the pre-agent runner. A
-// missing interpreter/extractor is an error, never evidence of zero gates.
-async function extractAcceptanceCommands(markdown) {
-  const stdout = await new Promise((resolve, reject) => {
-    const child = execFile(process.env.PYTHON || 'python3', [
-      path.resolve(__dirname, '../../scripts/runner_lib/acceptance_gate.py'), '--extract',
-    ], { encoding: 'utf8', timeout: 30000 }, (error, output, stderr) => {
-      if (error) {
-        reject(new Error(`Acceptance gate extraction failed: ${error.message || stderr}`));
-      } else {
-        resolve(output);
-      }
-    });
-    child.stdin.on('error', (error) => {
-      reject(new Error(`Acceptance gate extraction failed: ${error.message}`));
-    });
-    child.stdin.end(markdown);
-  });
-  return JSON.parse(stdout);
-}
-
-async function acceptanceGatePlan({ github, context, pr, state }) {
-  const issueNumber = extractIssueNumberFromPull(pr);
-  // Deliberately bypass the API cache: edits must affect this verify round.
-  const markdown = issueNumber
-    ? (await github.rest.issues.get({ ...context.repo, issue_number: issueNumber })).data.body || ''
-    : pr.body || '';
-  const commands = await extractAcceptanceCommands(markdown);
-  const sourceHash = crypto.createHash('sha256').update(JSON.stringify(commands)).digest('hex');
-  const previous = state?.deterministic_gates;
-  const current = previous?.head_sha === pr.head.sha && previous?.source_hash === sourceHash;
-  const results = current && Array.isArray(previous.results) ? previous.results : [];
-  const passed = commands.filter(command => results.some(result =>
-    result.criterion === command.criterion && result.command === command.command && result.exit_code === 0
-  )).length;
-  return {
-    markdown, commands, head_sha: pr.head.sha, source_hash: sourceHash,
-    results, passed, total: commands.length, complete: passed === commands.length,
-  };
-}
-
-function deterministicGatePrompt(gates) {
-  if (!gates) return '';
-  const failures = gates.commands.filter(command => !gates.results.some(result =>
-    result.command === command.command && result.criterion === command.criterion && result.exit_code === 0
-  ));
-  const details = failures.map(command => {
-    const result = gates.results.find(item => item.command === command.command && item.criterion === command.criterion);
-    return `${command.command} (exit ${result?.exit_code ?? 'not run on this head/criteria'})\n${result?.output || ''}`;
-  });
-  return [
-    `Deterministic gates: ${gates.passed}/${gates.total} passed`, ...details,
-    'Current source acceptance criteria (only passing deterministic gates may be checked):',
-    parseScopeTasksAcceptanceSections(gates.markdown).acceptance || '',
-  ].join('\n\n');
-}
-
-function renderDeterministicGates(body, gates) {
-  const passed = gates.commands.filter(command => gates.results.some(result =>
-    result.command === command.command && result.criterion === command.criterion && result.exit_code === 0
-  )).length;
-  const line = `Deterministic gates: ${passed}/${gates.commands.length} passed`;
-  const details = gates.commands.map(command => {
-    const result = gates.results.find(item => item.command === command.command && item.criterion === command.criterion);
-    return `Criterion ${command.criterion + 1}: ${result?.exit_code === 0 ? 'PASS' : 'FAIL'} — \`${command.command}\` (exit ${result?.exit_code ?? 'missing'})`;
-  });
-  const report = [line, ...details].join('\n');
-  body = body.replace(/(?:\n)?^Deterministic gates: \d+\/\d+ passed[^\S\n]*\n?(?:Criterion \d+:.*\n?)*/gm, '').trimEnd();
-  // Only a passing result can leave a named acceptance checkbox checked.
-  // Preserve manual-only criteria and never auto-check them from test output.
-  let inAcceptance = false;
-  let acceptanceLevel = 0;
-  const lines = body.split('\n');
-  for (let index = 0; index < lines.length; index++) {
-    const heading = lines[index].match(/^(#{1,6})\s+(.+)/);
-    if (heading) {
-      if (/^Acceptance criteria\s*$/i.test(heading[2])) {
-        inAcceptance = true;
-        acceptanceLevel = heading[1].length;
-      } else if (heading[1].length <= acceptanceLevel) inAcceptance = false;
-    }
-    if (!inAcceptance || !/^\s*(?:[-*+]|\d+[.)])\s+\[[xX]\]/.test(lines[index])) continue;
-    let end = index + 1;
-    while (end < lines.length && !/^\s*(?:[-*+]|\d+[.)])\s+\[[ xX]\]|^#{1,6}\s/.test(lines[end])) end++;
-    const criterion = lines.slice(index, end).join('\n');
-    const matched = gates.commands.filter(command => criterion.includes(command.command));
-    if (matched.some(command => !gates.results.some(result =>
-      result.command === command.command && result.criterion === command.criterion && result.exit_code === 0
-    ))) lines[index] = lines[index].replace(/\[[xX]\]/, '[ ]');
-  }
-  body = lines.join('\n');
-  const end = '<!-- auto-status-summary:end -->';
-  if (body.includes(end)) return body.replace(end, `${report}\n\n${end}`);
-  return `${body}\n\n${report}\n`;
-}
 
 const {
   parseScopeTasksAcceptanceSections,
@@ -112,17 +13,9 @@ const {
 const { getGithubApiCache } = require('./github-api-cache-client');
 const {
   loadKeepaliveState,
-  formatStateComment: encodeStateComment,
+  formatStateComment,
   upsertStateCommentBody,
 } = require('./keepalive_state');
-
-function formatStateComment(state) {
-  // Captured test output can contain HTML comment delimiters. Escape embedded
-  // closers in the JSON so they cannot truncate the persisted state comment.
-  const encoded = encodeStateComment(state);
-  const end = encoded.lastIndexOf(' -->');
-  return encoded.slice(0, end).replace(/-->/g, '--\\u003e') + encoded.slice(end);
-}
 const { resolvePromptMode } = require('./keepalive_prompt_routing');
 const { classifyError, ERROR_CATEGORIES } = require('./error_classifier');
 const { formatFailureComment } = require('./failure_comment_formatter');
@@ -149,88 +42,6 @@ try {
 const ATTEMPT_HISTORY_LIMIT = 20;
 const ATTEMPTED_TASK_LIMIT = 20;
 const AUTOMATION_ATTENTION_LABELS = ['agent:needs-attention'];
-
-/** Classify captured provider output, independently of GitHub API quota deferral. */
-function classifyCompletion(output, exitCode, producedWork = false) {
-  if (producedWork === true) return 'progressed';
-  const text = String(output || '');
-  // Retry timing alone also occurs on connection and service failures; require
-  // an explicit quota or HTTP 429 signal before rotating away from a provider.
-  if (Number(exitCode) === 429 ||
-      /\b(?:HTTP(?:\/\d(?:\.\d)?)?\s*[:=]?\s*429|you['’]ve\s+hit\s+your\s+usage\s+limits?|rate[ -]?limit(?:s|ed)?\s+exceeded|usage\s+limits?\s+exceeded|quota\s+exceeded|insufficient_quota)\b/i.test(text)) {
-    return 'rate_limited';
-  }
-  if (exitCode !== undefined && exitCode !== null && exitCode !== '' && Number(exitCode) !== 0) {
-    return 'failed';
-  }
-  // The writer reconciles this success with measured branch/checklist progress.
-  return text.trim() ? 'progressed' : 'no_progress';
-}
-
-/** Read the latest terminal record bound to its authoritative runner reservation. */
-async function loadLatestCompletion({ github, context, prNumber }) {
-  if (!github.paginate || !github.rest?.issues?.listComments) return null;
-  const comments = await github.paginate(github.rest.issues.listComments, {
-    ...context.repo, issue_number: prNumber, per_page: 100,
-  });
-  const trustedAuthors = new Set([
-    'chatgpt-codex-connector', 'chatgpt-codex-connector[bot]', 'github-actions[bot]',
-    'stranske', 'stranske-automation-bot',
-  ]);
-  const reservations = new Map();
-  const receipts = new Map();
-  const legacy = new Map();
-  for (const comment of [...comments].sort((a, b) => Number(b.id) - Number(a.id))) {
-    const author = String(comment.user?.login || '').toLowerCase();
-    if (!trustedAuthors.has(author) &&
-        !['OWNER', 'MEMBER', 'COLLABORATOR'].includes(comment.author_association)) continue;
-    const marker = /<!--\s*runner-(reservation|completion|dispatch):([a-z0-9_-]+):(\d+):v1\s+(.*?)\s*-->/s
-      .exec(comment.body || '');
-    if (!marker || Number(marker[3]) !== prNumber) continue;
-    const [, kind, provider, , encoded] = marker;
-    const newestReservation = kind === 'reservation' && !reservations.has(provider);
-    // A corrupt newest reservation still supersedes older evidence, just as in
-    // runner_lib. Never fall back to an older completed attempt in that case.
-    if (newestReservation) reservations.set(provider, {});
-    let payload;
-    try {
-      payload = JSON.parse(encoded.startsWith('base64:')
-        ? Buffer.from(encoded.slice(7), 'base64').toString('utf8') : encoded);
-    } catch { continue; }
-    if (payload?.provider !== provider) continue;
-    if (kind === 'reservation') {
-      if (newestReservation) reservations.set(provider, payload);
-    } else if (kind === 'dispatch') {
-      if (!legacy.has(provider)) legacy.set(provider, payload);
-    } else if (payload.schema === 'runner-completion-receipt/v1' &&
-        payload.record?.reservation_id === payload.reservation_id &&
-        payload.record?.provider === provider && payload.record?.pr_number === prNumber) {
-      const key = `${provider}:${payload.reservation_id}`;
-      if (!receipts.has(key)) receipts.set(key, payload.record);
-    }
-  }
-  const records = [];
-  let newestPendingAt = 0;
-  for (const provider of new Set([...reservations.keys(), ...legacy.keys()])) {
-    const reservation = reservations.get(provider) || legacy.get(provider);
-    if (reservation.pr_number !== prNumber) continue;
-    const record = receipts.get(`${provider}:${reservation.reservation_id}`) || reservation;
-    if (record.status === 'pending') {
-      newestPendingAt = Math.max(newestPendingAt, Date.parse(record.started_at) || 0);
-    }
-    if (['completed', 'error'].includes(record.status) && Number.isFinite(Date.parse(record.completed_at))) {
-      records.push(record);
-    }
-  }
-  const latest = records.sort((a, b) => Date.parse(b.completed_at) - Date.parse(a.completed_at))[0];
-  // An in-flight newer reservation must not expose an older provider's success
-  // as fresh cleanup evidence, or replay an old rate-limit decision.
-  if (!latest || Date.parse(latest.completed_at) < newestPendingAt) return null;
-  const progressedAt = Math.max(0, ...records.filter(r => r.completion?.reason === 'progressed')
-    .map(r => Date.parse(r.completed_at)));
-  return { ...latest, rate_limit_receipts: records.filter(r =>
-    r.completion?.reason === 'rate_limited' && Date.parse(r.completed_at) > progressedAt) };
-}
 
 const TIMEOUT_VARIABLE_NAMES = [
   'WORKFLOW_TIMEOUT_DEFAULT',
@@ -2706,7 +2517,7 @@ async function checkRateLimitStatus({ github: rawGithub, core, minRequired = 50 
   return result;
 }
 
-async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload: overridePayload, overridePrNumber, forceRetry, deterministicGatesEnabled = false }) {
+async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload: overridePayload, overridePrNumber, forceRetry }) {
   // Wrap github client with rate-limit-aware retry for all API calls
   let github;
   try {
@@ -2937,58 +2748,11 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
       trace: config.trace,
     });
     const state = stateResult.state || {};
-    let completion = null;
-    try {
-      completion = await loadLatestCompletion({ github, context, prNumber });
-      const completionReason = completion?.completion?.reason;
-      const backoffs = completion?.rate_limit_receipts || [];
-      const expired = backoffs.filter(record => rateLimitExpired(record));
-      const active = backoffs.filter(record => !rateLimitExpired(record));
-      const drained = completionReason === 'progressed' ||
-        (expired.length > 0 && active.length === 0);
-      const clearTried = labels.filter(label => label.startsWith('agents:tried-') &&
-        (completionReason === 'progressed' || expired.some(record =>
-          label === `agents:tried-${record.provider}`)));
-      for (const label of clearTried) {
-        try {
-          await github.rest.issues.removeLabel({
-            ...context.repo, issue_number: prNumber, name: label,
-          });
-          labels.splice(labels.indexOf(label), 1);
-        } catch (error) {
-          // A missing tried-* label must not abort rate-limit label reconciliation.
-          if (error?.status !== 404) throw error;
-        }
-      }
-      for (const record of expired) {
-        core?.info?.(`rate_limited receipt expired; ${record.provider} eligible`);
-      }
-      if (completionReason === 'rate_limited' && !drained && !labels.includes('agent:rate-limited')) {
-        await github.rest.issues.addLabels({
-          ...context.repo, issue_number: prNumber, labels: ['agent:rate-limited'],
-        });
-      } else if (drained && active.length === 0 && labels.includes('agent:rate-limited')) {
-        try {
-          await github.rest.issues.removeLabel({
-            ...context.repo, issue_number: prNumber, name: 'agent:rate-limited',
-          });
-        } catch (error) {
-          // A missing rate-limited marker must not abort receipt reconciliation.
-          if (error?.status !== 404) throw error;
-        }
-      }
-    } catch (error) {
-      core?.warning?.(`Could not reconcile provider completion: ${error.message}`);
-    }
-    // Only callers with the pre-agent execution step may enable this contract.
-    // Consumer event hubs activate it when their corresponding runner is shipped.
-    const deterministicGates = deterministicGatesEnabled && allTasksDone && tasksPresent
-      ? await acceptanceGatePlan({ github, context, pr, state }) : null;
 
     // agent:auto delegation — resolve actual agent via policy after state is available
     if (agentRoutingMode === 'auto') {
       try {
-        const { decideNextAgent, fetchRouteWeights, resolveRoundKind, DEFAULT_ROUTE_WEIGHTS_URL } =
+        const { decideNextAgent, loadRouteWeights, resolveRoundKind, DEFAULT_ROUTE_WEIGHTS_URL } =
           require('./agent_delegation_policy.js');
         const { loadAgentRegistry } = require('./agent_registry.js');
         const registry = loadAgentRegistry();
@@ -3008,13 +2772,12 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
           new RegExp(`^  run-${key}:`, 'm').test(workflowText)
         ));
         const routeWeightsUrl = process.env.ROUTE_WEIGHTS_URL || DEFAULT_ROUTE_WEIGHTS_URL;
-        const routeWeights = await fetchRouteWeights({ url: routeWeightsUrl });
+        const routeWeights = await loadRouteWeights({ url: routeWeightsUrl });
         const roundKind = resolveRoundKind({ labels, state });
         const decision = decideNextAgent({
           // Include PR identity so empty/legacy keepalive state still seeds
           // exploration from the live PR rather than the degenerate seed 0.
           state: { ...state, pr_number: prNumber },
-          completion,
           labels: labels.map(String),
           secrets,
           registry,
@@ -3024,31 +2787,6 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
           core,
         });
         if (decision.agent) {
-          if (decision.shouldSwitch && !pausedByLabel && !humanBlocked && !runCapZero && keepaliveEnabled) {
-            await github.rest.issues.addLabels({
-              ...context.repo, issue_number: prNumber,
-              labels: [`agents:tried-${decision.previousAgent}`],
-            });
-            // Preserve one concrete route label alongside agent:auto. Always apply
-            // the new agent even when the previous label is already absent: nesting
-            // the add behind a previous-label match left agent:auto-only PRs without
-            // a concrete route after a rate-limit switch from the completion provider.
-            if (decision.previousAgent) {
-              try {
-                await github.rest.issues.removeLabel({
-                  ...context.repo, issue_number: prNumber,
-                  name: `agent:${decision.previousAgent}`,
-                });
-              } catch (error) {
-                // A missing previous-agent label must not abort the same-evaluate
-                // switch: otherwise rate_limited catch clears the decided agent.
-                if (error?.status !== 404) throw error;
-              }
-            }
-            await github.rest.issues.addLabels({
-              ...context.repo, issue_number: prNumber, labels: [`agent:${decision.agent}`],
-            });
-          }
           agentType = decision.agent;
           delegationReason = decision.reason;
           delegationShouldSwitch = Boolean(decision.shouldSwitch);
@@ -3063,7 +2801,7 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
           }
         } else {
           core?.warning?.(`Delegation policy returned no agent: ${decision.reason}`);
-          if (['multiple-agent-labels', 'rate-limited-no-alternatives'].includes(decision.reason)) {
+          if (decision.reason === 'multiple-agent-labels') {
             agentType = '';
             hasAgentLabel = false;
             keepaliveEnabled = false;
@@ -3075,13 +2813,6 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
         }
       } catch (err) {
         core?.warning?.(`Delegation policy failed, keeping ${agentType}: ${err.message}`);
-        if (completion?.completion?.reason === 'rate_limited') {
-          // Never turn a policy or label-write error into a retry of the provider
-          // whose authoritative completion just reported a quota failure.
-          agentType = '';
-          delegationReason = 'rate-limited-delegation-failed';
-          delegationShouldSwitch = false;
-        }
       }
     }
 
@@ -3207,10 +2938,7 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
     const shouldStopForMaxIterations = reachedMaxIterations && !forceRetry;
 
     // Build task appendix for the agent prompt (after state load for reconciliation info)
-    const taskAppendix = [
-      deterministicGatePrompt(deterministicGates),
-      buildTaskAppendix(normalisedSections, checkboxCounts, state, { prBody: pr.body }),
-    ].filter(Boolean).join('\n\n');
+    const taskAppendix = buildTaskAppendix(normalisedSections, checkboxCounts, state, { prBody: pr.body });
 
     // Check for merge conflicts - this takes priority over other work
     let conflictResult = { hasConflict: false };
@@ -3259,9 +2987,6 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
     } else if (hasDefinitiveConflict && hasAgentLabel && keepaliveEnabled) {
       action = 'conflict';
       reason = `merge-conflict-${conflictResult.primarySource || 'detected'}`;
-    } else if (['rate-limited-no-alternatives', 'rate-limited-delegation-failed'].includes(delegationReason)) {
-      action = 'wait';
-      reason = delegationReason;
     } else if (runnerUnavailable) {
       action = 'skip';
       reason = `no-runner-for-agent:${agentType}`;
@@ -3361,9 +3086,6 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
           reason = gateNormalized ? 'gate-not-success' : 'gate-pending';
         }
       }
-    } else if (deterministicGates && !deterministicGates.complete) {
-      action = 'run';
-      reason = 'verify-acceptance';
     } else if (allComplete) {
       if (needsVerification) {
         action = 'run';
@@ -3516,7 +3238,6 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
       delegationSource,
       policyVersion,
       taskAppendix,
-      deterministicGates,
       keepaliveEnabled,
       stateCommentId: stateResult.commentId || 0,
       state,
@@ -3782,19 +3503,6 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
 
     const previousFailure = previousState?.failure || {};
     const prBody = await fetchPrBody({ github, context, prNumber, core });
-    // Revalidate a stop immediately before publishing completion/merge routing.
-    // The evaluated head or live source issue can change before this job runs.
-    if (toBool(inputs.deterministic_gates_enabled, false) && action === 'stop' && reason === 'tasks-complete') {
-      const { data: livePr } = await github.rest.pulls.get({ ...context.repo, pull_number: prNumber });
-      const gates = await acceptanceGatePlan({ github, context, pr: livePr, state: previousState });
-      if (!gates.complete) {
-        action = 'wait';
-        reason = 'deterministic-gates-pending';
-        await github.rest.pulls.update({
-          ...context.repo, pull_number: prNumber, body: renderDeterministicGates(livePr.body || '', gates),
-        });
-      }
-    }
     const focusSections = prBody ? parseKeepaliveChecklistSections(prBody) : {};
     const focusItems = extractChecklistItems(focusSections.tasks || focusSections.acceptance || '');
     const focusUnchecked = focusItems.filter((item) => !item.checked);
@@ -4656,7 +4364,6 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
       attempted_tasks: attemptedTasks,
       last_focus: focusTask || '',
       verification,
-      deterministic_gates: previousState?.deterministic_gates,
       keepalive_enabled: keepaliveEnabled,
       autofix_enabled: autofixEnabled,
       timeout: {
@@ -5580,24 +5287,6 @@ async function markAgentRunning({ github: rawGithub, context, core, inputs }) {
 
   // Preserve state from previous summary (don't modify state while running)
   const preservedState = previousState || {};
-  if (inputs.deterministic_gates) {
-    const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: prNumber });
-    const gates = await acceptanceGatePlan({
-      github, context, pr, state: { deterministic_gates: inputs.deterministic_gates },
-    });
-    if (pr.head.sha !== inputs.deterministic_gates.head_sha ||
-        gates.source_hash !== inputs.deterministic_gates.source_hash) {
-      core?.warning('PR head or source acceptance criteria changed; skipping stale deterministic gate persistence');
-    } else {
-      preservedState.deterministic_gates = {
-        head_sha: gates.head_sha, source_hash: gates.source_hash, results: gates.results,
-      };
-      await github.rest.pulls.update({
-        ...context.repo, pull_number: prNumber, body: renderDeterministicGates(pr.body || '', gates),
-      });
-      summaryLines.push('', `Deterministic gates: ${gates.passed}/${gates.total} passed`);
-    }
-  }
   preservedState.running = true;
   preservedState.running_since = new Date().toISOString();
   const runningRunId = context.runId || process.env.GITHUB_RUN_ID || '';
@@ -6205,10 +5894,6 @@ function resolveIndependentVerifier({
 
 module.exports = {
   resolveIndependentVerifier,
-  classifyCompletion,
-  loadLatestCompletion,
-  acceptanceGatePlan,
-  renderDeterministicGates,
   countCheckboxes,
   cascadeParentCheckboxes,
   parseConfig,
