@@ -12,4 +12,4 @@ tests/integrations/test_canonical_state_seam.py: 2 warnings
     util.warn_deprecated(
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-113 passed, 110 warnings in 20.28s
+113 passed, 110 warnings in 20.43s

@@ -3,7 +3,7 @@ F                                                                        [100%]
 ______ test_native_submit_then_reoptimize_without_injected_source_version ______
 tests/app/test_proposal.py:1005: in test_native_submit_then_reoptimize_without_injected_source_version
     assert "source_version" in submitted["proposal"]
-E   AssertionError: assert 'source_version' in {'proposal_id': 'proposal:trip-native-lineage-c49fa7', 'trip_id': 'trip-native-lineage-c49fa7', 'mode': 'business', 't...e_type': 'employee', 'traveler_experience': 'occasional', 'home_airport': 'Seattle', 'loyalty_programs': [], ...}, ...}
+E   AssertionError: assert 'source_version' in {'proposal_id': 'proposal:trip-native-lineage-8a8c7e', 'trip_id': 'trip-native-lineage-8a8c7e', 'mode': 'business', 't...e_type': 'employee', 'traveler_experience': 'occasional', 'home_airport': 'Seattle', 'loyalty_programs': [], ...}, ...}
 ---------------------------- Captured stderr setup -----------------------------
 INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
 INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
@@ -57,4 +57,4 @@ tests/app/test_proposal.py::test_native_submit_then_reoptimize_without_injected_
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 =========================== short test summary info ============================
 FAILED tests/app/test_proposal.py::test_native_submit_then_reoptimize_without_injected_source_version
-1 failed, 2 warnings in 0.96s
+1 failed, 2 warnings in 0.95s

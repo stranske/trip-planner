@@ -572,6 +572,52 @@ def _no_scenario_lineage_follow_up() -> dict[str, Any]:
     }
 
 
+def _non_compliant_follow_up(
+    preferred_alternatives: list[Any], proposal_payload: dict[str, Any]
+) -> dict[str, Any]:
+    alternative = preferred_alternatives[0] if preferred_alternatives else None
+    follow_up = {
+        "status": "reoptimization_required",
+        "path": "reoptimization",
+        "title": "Reoptimization path required",
+        "summary": (
+            alternative.get("summary")
+            if isinstance(alternative, dict) and alternative.get("summary")
+            else "The current proposal is non-compliant. Rebuild it around a policy-safe alternative."
+        ),
+        "recommended_action": "reoptimize",
+        "recommended_label": "Reoptimize plan",
+        "selected_alternative": alternative if isinstance(alternative, dict) else None,
+    }
+    if not isinstance(proposal_payload.get("source_version"), dict):
+        follow_up.update(_no_scenario_lineage_follow_up())
+    return follow_up
+
+
+def _apply_persisted_follow_up(
+    follow_up: dict[str, Any], persisted_follow_up: dict[str, Any] | None
+) -> dict[str, Any]:
+    if persisted_follow_up and persisted_follow_up.get("manual"):
+        for key in (
+            "status",
+            "path",
+            "title",
+            "summary",
+            "recommended_action",
+            "recommended_label",
+            "selected_alternative",
+            "reoptimization_plan",
+            "notes",
+            "updated_at",
+        ):
+            if key in persisted_follow_up and persisted_follow_up[key] not in (None, ""):
+                follow_up[key] = persisted_follow_up[key]
+        if persisted_follow_up.get("requested_exception") is not None:
+            follow_up["requested_exception"] = persisted_follow_up["requested_exception"]
+
+    return follow_up
+
+
 def _derive_follow_up_state(
     *,
     proposal_payload: dict[str, Any],
@@ -599,22 +645,7 @@ def _derive_follow_up_state(
             "recommended_label": "Advance to approval",
         }
     elif status == "non_compliant":
-        alternative = preferred_alternatives[0] if preferred_alternatives else None
-        follow_up = {
-            "status": "reoptimization_required",
-            "path": "reoptimization",
-            "title": "Reoptimization path required",
-            "summary": (
-                alternative.get("summary")
-                if isinstance(alternative, dict) and alternative.get("summary")
-                else "The current proposal is non-compliant. Rebuild it around a policy-safe alternative."
-            ),
-            "recommended_action": "reoptimize",
-            "recommended_label": "Reoptimize plan",
-            "selected_alternative": alternative if isinstance(alternative, dict) else None,
-        }
-        if not isinstance(proposal_payload.get("source_version"), dict):
-            follow_up.update(_no_scenario_lineage_follow_up())
+        follow_up = _non_compliant_follow_up(preferred_alternatives, proposal_payload)
     elif status == "exception_required":
         follow_up = {
             "status": "exception_requested" if requested_exception else "exception_required",
@@ -656,25 +687,7 @@ def _derive_follow_up_state(
     follow_up["selected_alternative"] = follow_up.get("selected_alternative")
     follow_up["notes"] = []
 
-    if persisted_follow_up and persisted_follow_up.get("manual"):
-        for key in (
-            "status",
-            "path",
-            "title",
-            "summary",
-            "recommended_action",
-            "recommended_label",
-            "selected_alternative",
-            "reoptimization_plan",
-            "notes",
-            "updated_at",
-        ):
-            if key in persisted_follow_up and persisted_follow_up[key] not in (None, ""):
-                follow_up[key] = persisted_follow_up[key]
-        if persisted_follow_up.get("requested_exception") is not None:
-            follow_up["requested_exception"] = persisted_follow_up["requested_exception"]
-
-    return follow_up
+    return _apply_persisted_follow_up(follow_up, persisted_follow_up)
 
 
 def _submission_outcome(*, state: Any, queue_state: Any, error_category: Any) -> str:
