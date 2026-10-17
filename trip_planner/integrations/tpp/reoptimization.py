@@ -48,8 +48,9 @@ class PolicyReoptimizationContext:
     def __post_init__(self) -> None:
         if not isinstance(self.source_version, ScenarioVersion):
             raise ValueError("source_version must be a ScenarioVersion")
-        if self.source_version.label not in BUSINESS_SCENARIO_LABELS:
-            raise ValueError(f"source_version.label must be one of {BUSINESS_SCENARIO_LABELS}")
+        source_labels = (*BUSINESS_SCENARIO_LABELS, "baseline", "fallback")
+        if self.source_version.label not in source_labels:
+            raise ValueError(f"source_version.label must be one of {source_labels}")
         _validate_ref_mapping(self.comparable_refs, "comparable_refs")
         _validate_ref_mapping(self.justification_refs, "justification_refs")
 

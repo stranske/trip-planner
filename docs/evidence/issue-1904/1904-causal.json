@@ -1,0 +1,79 @@
+{
+  "source_sha256": "9e067db2f6eef94660ab11806461cb7a97da64a1a5de0f60d3d7ffa7a96f744c",
+  "restored_byte_identical": true,
+  "rows": [
+    {
+      "mutation": "Remove native builder lineage assignment",
+      "result": {
+        "argv": [
+          "<repo-venv>/bin/python",
+          "-m",
+          "pytest",
+          "tests/app/test_proposal.py::test_native_submit_then_reoptimize_without_injected_source_version",
+          "-q",
+          "--tb=short",
+          "--junitxml=<run-evidence>/1904-builder-red.xml"
+        ],
+        "exit": 1,
+        "tests": 1,
+        "failures": 1,
+        "errors": 0,
+        "skips": 0
+      }
+    },
+    {
+      "restored": {
+        "argv": [
+          "<repo-venv>/bin/python",
+          "-m",
+          "pytest",
+          "tests/app/test_proposal.py::test_native_submit_then_reoptimize_without_injected_source_version",
+          "-q",
+          "--tb=short",
+          "--junitxml=<run-evidence>/1904-builder-restored.xml"
+        ],
+        "exit": 0,
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skips": 0
+      }
+    },
+    {
+      "mutation": "Actual original production proposal module",
+      "source_sha256": "7bb55167a363aae24c5bba3e1388681b901b4a0cb4db85c88ebd09c8efa68a09",
+      "result": {
+        "argv": [
+          "<repo-venv>/bin/python",
+          "-m",
+          "pytest",
+          "tests/app/test_proposal.py::test_native_submit_then_reoptimize_without_injected_source_version",
+          "-q",
+          "--tb=short",
+          "--junitxml=<run-evidence>/1904-original-red.xml"
+        ],
+        "exit": 1,
+        "tests": 1,
+        "failures": 1,
+        "errors": 0,
+        "skips": 0
+      }
+    }
+  ],
+  "final": {
+    "argv": [
+      "<repo-venv>/bin/python",
+      "-m",
+      "pytest",
+      "tests/app/test_proposal.py::test_native_submit_then_reoptimize_without_injected_source_version",
+      "-q",
+      "--tb=short",
+      "--junitxml=<run-evidence>/1904-restored.xml"
+    ],
+    "exit": 0,
+    "tests": 1,
+    "failures": 0,
+    "errors": 0,
+    "skips": 0
+  }
+}

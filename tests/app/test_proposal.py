@@ -909,100 +909,202 @@ def test_workspace_proposal_evaluation_derives_reoptimization_follow_up(client: 
     )
     assert evaluated.status_code == 200
     follow_up = evaluated.json()["proposal_state"]["follow_up"]
-    assert follow_up["status"] == "reoptimization_required"
-    assert follow_up["recommended_action"] == "reoptimize"
+    assert follow_up["status"] == "no_scenario_lineage"
+    assert follow_up["recommended_action"] == "materialize_scenario"
     assert follow_up["alternatives"][0]["category"] == "lodging"
     assert follow_up["selected_alternative"]["summary"] == "Use a compliant downtown property"
 
 
-def test_non_compliant_reoptimize_surfaces_plan_in_workspace_reload(
-    client: TestClient,
-) -> None:
+def _native_non_compliant_submission(
+    client: TestClient, *, destination: str = "Chicago"
+) -> tuple[str, dict]:
+    from tests.app.tpp_intercept import seed_policy
+
     created = client.post(
         "/api/trips",
         json={
-            "title": "Reoptimization plan workspace",
-            "summary": "Persist reoptimization output after a non-compliant policy result.",
+            "title": "Native lineage",
+            "summary": "Persist native reoptimization lineage.",
             "mode": "business",
             "trip_frame": {
+                "origin": "Seattle",
                 "start_date": "2026-05-04",
                 "end_date": "2026-05-06",
                 "duration_days": 3,
-                "primary_regions": ["Chicago"],
+                "primary_regions": [destination],
             },
         },
     )
+    assert created.status_code == 201, created.text
     trip_id = created.json()["trip"]["trip_id"]
-    proposal_id = f"proposal:{trip_id}"
-
-    reoptimize_fixture = _load_fixture("reoptimization", "non_compliant_manual_review.json")
-    proposal_payload = reoptimize_fixture["proposal"]
-    proposal_payload["trip_id"] = trip_id
-    proposal_payload["proposal_id"] = proposal_id
-    proposal_payload["source_version"]["trip_id"] = trip_id
-
-    submission_fixture = _load_fixture("proposal_submit_deferred.json")
-    submission_fixture["request"]["trip_id"] = trip_id
-    submission_fixture["request"]["proposal_id"] = proposal_id
-    submission_fixture["request"]["payload"]["proposal_ref"] = proposal_id
-    submitted = client.put(
-        f"/api/workspace/{trip_id}/proposal",
-        json={
-            "proposal": proposal_payload,
-            "request": submission_fixture["request"],
-            "response": submission_fixture["response"],
-            "proposal_version": "proposal-v3",
-            "scenario_id": "scenario-a",
-        },
+    seed_policy(client, trip_id)
+    priced = client.put(
+        f"/api/workspace/{trip_id}/prices",
+        json={"component": "transport", "amount": 620.0, "currency": "USD"},
     )
-    assert submitted.status_code == 200
-
-    evaluation_fixture = _load_fixture("results", "non_compliant_evaluation.json")
-    evaluation_fixture["request"]["trip_id"] = trip_id
-    evaluation_fixture["request"]["proposal_id"] = proposal_id
-    result_payload = evaluation_fixture["response"]["result_payload"]
-    result_payload["trip_id"] = trip_id
-    result_payload["proposal_id"] = proposal_id
-    result_payload["proposal_version"] = "proposal-v3"
-    result_payload["evaluation_result"] = reoptimize_fixture["evaluation_result"]
-    result_payload["evaluation_result"]["proposal_id"] = proposal_id
-
+    assert priced.status_code == 200, priced.text
+    workspace = client.get(f"/api/workspace/{trip_id}?debug=true").json()
+    scenario_rows = workspace["runtime_scenario_comparison"]["scenarios"]
+    if scenario_rows:
+        # Materialize a genuine scenario through the public persistence API; never inject
+        # proposal.source_version or edit the stored proposal record.
+        refs = dict(workspace["saved_scenarios"][0]["versions"][0]["snapshot_refs"])
+        refs["itinerary_scenario_id"] = scenario_rows[0]["scenario_id"]
+        refs["policy_state_id"] = workspace["policy_state"]["policy_state_id"]
+        saved = client.post(
+            f"/api/trips/{trip_id}/saved-scenarios",
+            json={
+                "title": "Selected business route",
+                "label": "compliant_first",
+                "snapshot_refs": refs,
+            },
+        )
+        assert saved.status_code == 201, saved.text
+        workspace = client.get(f"/api/workspace/{trip_id}?debug=true").json()
+    submitted = client.post(f"/api/workspace/{trip_id}/proposal/submit", json={})
+    assert submitted.status_code == 200, submitted.text
+    fixture = _load_fixture("results", "non_compliant_evaluation.json")
+    fixture["request"]["trip_id"] = trip_id
+    fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    result = fixture["response"]["result_payload"]
+    result.update(trip_id=trip_id, proposal_id=f"proposal:{trip_id}", proposal_version="v1")
+    result["execution_id"] = submitted.json()["proposal_state"]["execution_id"]
+    result["scenario_id"] = submitted.json()["proposal_state"]["scenario_id"]
+    result["evaluation_result"]["proposal_id"] = f"proposal:{trip_id}"
     evaluated = client.put(
         f"/api/workspace/{trip_id}/proposal/evaluation",
         json={
-            "request": evaluation_fixture["request"],
-            "response": evaluation_fixture["response"],
-            "proposal_version": "proposal-v3",
-            "scenario_id": "scenario-a",
+            "request": fixture["request"],
+            "response": fixture["response"],
+            "proposal_version": "v1",
+            "scenario_id": submitted.json()["proposal_state"]["scenario_id"],
         },
     )
-    assert evaluated.status_code == 200
+    assert evaluated.status_code == 200, evaluated.text
+    return trip_id, workspace
 
-    reoptimized = client.post(
-        f"/api/workspace/{trip_id}/proposal/reoptimize",
-        json={
-            "comparable_refs": reoptimize_fixture["comparable_refs"],
-            "justification_refs": reoptimize_fixture["justification_refs"],
-        },
+
+def test_native_submit_then_reoptimize_without_injected_source_version(
+    tpp_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import trip_planner.app.services.proposal as service
+
+    monkeypatch.setenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", "true")
+    built = []
+    original = service.build_workspace_submission_proposal
+
+    def observe(*args, **kwargs):
+        result = original(*args, **kwargs)
+        built.append(result[0])
+        return result
+
+    monkeypatch.setattr(service, "build_workspace_submission_proposal", observe)
+    trip_id, workspace = _native_non_compliant_submission(tpp_client)
+    submitted = tpp_client.get(f"/api/workspace/{trip_id}/proposal").json()["proposal_state"]
+    assert "source_version" in submitted["proposal"]
+    source = submitted["proposal"]["source_version"]
+    assert built[0].get("source_version") == source
+    assert source["trip_id"] == trip_id
+    saved = next(
+        s
+        for s in workspace["saved_scenarios"]
+        if s["saved_scenario_id"] == source["saved_scenario_id"]
     )
-    assert reoptimized.status_code == 200
+    assert source == next(
+        v for v in saved["versions"] if v["version_id"] == saved["current_version_id"]
+    )
+    reoptimized = tpp_client.post(f"/api/workspace/{trip_id}/proposal/reoptimize", json={})
+    assert reoptimized.status_code == 200, reoptimized.text
     plan = reoptimized.json()["summary"]["follow_up"]["reoptimization_plan"]
-    assert plan["reaction_kind"] in (
+    assert plan["source_version"] == source
+    assert plan["reaction_kind"] in {
         "rerank",
         "narrow_candidates",
         "regenerate_scenario",
         "manual_review",
         "create_exception_candidate",
-    )
-    assert plan["candidate_categories"]
+    }
+    reloaded = tpp_client.get(f"/api/workspace/{trip_id}?debug=true").json()["proposal_state"]
+    assert reloaded["summary"]["follow_up"]["reoptimization_plan"] == plan
 
-    workspace = client.get(f"/api/workspace/{trip_id}")
-    assert workspace.status_code == 200
-    reloaded_plan = workspace.json()["proposal_state"]["summary"]["follow_up"][
-        "reoptimization_plan"
-    ]
-    assert reloaded_plan["reaction_kind"] == plan["reaction_kind"]
-    assert reloaded_plan["candidate_categories"]
+
+def test_submission_derives_lineage_instead_of_trusting_caller(
+    tpp_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", "true")
+    trip_id, _ = _native_non_compliant_submission(tpp_client)
+    existing = tpp_client.get(f"/api/workspace/{trip_id}/proposal").json()["proposal_state"]
+    original_source = existing["proposal"]["source_version"]
+    payload = dict(existing["proposal"])
+    payload["source_version"] = {
+        **original_source,
+        "trip_id": "foreign-trip",
+        "version_id": "forged-version",
+    }
+    fixture = _load_fixture("proposal_submit_deferred.json")
+    fixture["request"]["trip_id"] = trip_id
+    fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+    response = tpp_client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": payload,
+            "request": fixture["request"],
+            "response": fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": existing["scenario_id"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["proposal_state"]["proposal"]["source_version"] == original_source
+
+
+def test_reoptimization_uses_the_submitted_version_after_scenario_changes(
+    tpp_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from trip_planner.persistence.models.scenario import PersistedSavedScenario
+
+    monkeypatch.setenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", "true")
+    trip_id, _ = _native_non_compliant_submission(tpp_client)
+    source = tpp_client.get(f"/api/workspace/{trip_id}/proposal").json()["proposal_state"][
+        "proposal"
+    ]["source_version"]
+    with get_session_factory()() as session:
+        saved = session.get(PersistedSavedScenario, source["saved_scenario_id"])
+        assert saved is not None
+        newer = {**saved.versions[0], "version_id": saved.current_version_id + "-new"}
+        saved.versions = [*saved.versions, newer]
+        saved.current_version_id = newer["version_id"]
+        session.commit()
+    response = tpp_client.post(f"/api/workspace/{trip_id}/proposal/reoptimize", json={})
+    assert response.status_code == 200, response.text
+    assert (
+        response.json()["summary"]["follow_up"]["reoptimization_plan"]["source_version"] == source
+    )
+
+
+def test_trip_level_reoptimization_returns_no_scenario_lineage(
+    tpp_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", "true")
+    trip_id, workspace = _native_non_compliant_submission(
+        tpp_client, destination="Zzqxwv Nonexistent Place"
+    )
+    assert workspace["runtime_scenario_comparison"]["scenarios"] == []
+    state = tpp_client.get(f"/api/workspace/{trip_id}/proposal").json()["proposal_state"]
+    assert "source_version" not in state["proposal"]
+    assert state["follow_up"]["status"] == "no_scenario_lineage"
+    assert state["follow_up"]["recommended_action"] == "materialize_scenario"
+    response = tpp_client.post(f"/api/workspace/{trip_id}/proposal/reoptimize", json={})
+    assert response.status_code == 200, response.text
+    follow_up = response.json()["summary"]["follow_up"]
+    assert follow_up["status"] == "no_scenario_lineage"
+    assert "reoptimization_plan" not in follow_up
+    assert (
+        tpp_client.get(f"/api/workspace/{trip_id}/proposal").json()["summary"]["follow_up"]
+        == follow_up
+    )
 
 
 @pytest.mark.parametrize("score", [0.68, None])
@@ -1656,7 +1758,7 @@ def test_workspace_proposal_follow_up_patch_preserves_existing_path_for_resolved
     assert updated.status_code == 200
     payload = updated.json()["proposal_state"]
     assert payload["follow_up"]["status"] == "resolved"
-    assert payload["follow_up"]["path"] == "reoptimization"
+    assert payload["follow_up"]["path"] == "manual_review"
 
 
 def test_workspace_proposal_get_derives_follow_up_when_legacy_summary_is_missing(
@@ -2331,7 +2433,7 @@ def test_workspace_proposal_refresh_polls_live_status_and_persists_evaluation(
     assert payload["evaluation_status"] == "succeeded"
     assert payload["summary"]["submission_requires_polling"] is False
     assert payload["summary"]["evaluation_transport_status"] == "succeeded"
-    assert payload["follow_up"]["status"] == "reoptimization_required"
+    assert payload["follow_up"]["status"] == "no_scenario_lineage"
     assert payload["follow_up"]["selected_alternative"]["summary"] == (
         "Use a compliant downtown property"
     )
@@ -2916,37 +3018,32 @@ def test_failed_evaluation_error_and_retry_fields_are_persisted_and_reloadable(
 def test_proposal_state_persists_across_create_app_restart(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Issue #1187 task-list item: proposal state persists across a
-    ``create_app()`` restart.
+    from tests.app.tpp_intercept import _blocked_response
+    from trip_planner.integrations.tpp import TPPResponseEnvelope
+    import trip_planner.app.services.policy as policy_service
 
-    The live-tpp verification captured for PR #1190 demonstrated a
-    successful lifecycle PASS, but did not prove that proposal state
-    survives a trip-planner app restart against the same backing DB. This
-    test closes that gap by:
-
-    1. Creating the app instance, submitting a proposal + its evaluation,
-       and asserting the lifecycle landed on disk via a workspace GET.
-    2. Closing the first TestClient (drops the SQLAlchemy session factory
-       reference and exits the FastAPI lifespan).
-    3. Building a *fresh* ``create_app()`` instance against the **same**
-       SQLite file (no ``reset_database_state``), opening a new TestClient,
-       and asserting the same workspace GET returns the proposal +
-       evaluation exactly as persisted by the first app instance.
-
-    A regression where proposal state is held only in process memory (e.g.
-    a non-persistent cache layer accidentally promoted to the proposal
-    source-of-truth) would surface here as a 404 / empty proposal payload
-    from the second app instance.
-    """
-    db_path = tmp_path / "restart-persistence.db"
-    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'restart.db'}")
     monkeypatch.setenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", "true")
-    reset_database_state()
+    monkeypatch.setenv("TPP_BASE_URL", "http://tpp.invalid")
+    monkeypatch.setenv("TPP_ACCESS_TOKEN", "test-token-long-enough")
+    monkeypatch.setenv("TPP_ORGANIZATION_ID", "org-acme")
+    monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
+    monkeypatch.setattr(
+        tpp_client_module.HTTPTPPIntegrationClient,
+        "submit_proposal",
+        lambda self, request: _blocked_response(request),
+    )
 
-    # ---- First app instance: submit + evaluate a proposal. ------------------
-    app_first = create_app()
-    with TestClient(app_first) as client_first:
-        client_first.post(
+    def policy_response(request, _response_payload, *, trip_plan_payload):
+        fixture = _load_fixture("policy", "standard_policy_sync.json")["response"]
+        fixture["request_id"] = request.request_id
+        fixture["correlation_id"] = request.correlation_id.to_dict()
+        return TPPResponseEnvelope.from_dict(fixture)
+
+    monkeypatch.setattr(policy_service, "_resolve_policy_response", policy_response)
+    reset_database_state()
+    with TestClient(create_app()) as first:
+        signed_up = first.post(
             "/api/auth/signup",
             json={
                 "email": "restart@example.com",
@@ -2954,102 +3051,27 @@ def test_proposal_state_persists_across_create_app_restart(
                 "display_name": "Restart Owner",
             },
         )
-        created = client_first.post(
-            "/api/trips",
-            json={
-                "title": "Restart-persistence proposal",
-                "summary": "Proves proposal state survives create_app() restart.",
-                "mode": "business",
-                "trip_frame": {
-                    "start_date": "2026-05-04",
-                    "end_date": "2026-05-06",
-                    "duration_days": 3,
-                    "primary_regions": ["Chicago"],
-                },
-            },
+        assert signed_up.status_code == 201, signed_up.text
+        trip_id, _ = _native_non_compliant_submission(first)
+        response = first.post(f"/api/workspace/{trip_id}/proposal/reoptimize", json={})
+        assert response.status_code == 200, response.text
+        before = response.json()["proposal_state"]
+        source = before["proposal"]["source_version"]
+        plan = before["summary"]["follow_up"]["reoptimization_plan"]
+        assert plan["source_version"] == source
+    # Recreate the engine/session factory after the first app has shut down.
+    reset_database_state()
+    with TestClient(create_app()) as second:
+        login = second.post(
+            "/api/auth/login", json={"email": "restart@example.com", "password": "password123"}
         )
-        trip_id = created.json()["trip"]["trip_id"]
-
-        submission_fixture = _load_fixture("proposal_submit_deferred.json")
-        submission_fixture["request"]["trip_id"] = trip_id
-        submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
-        submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
-
-        submitted = client_first.put(
-            f"/api/workspace/{trip_id}/proposal",
-            json={
-                "proposal": _proposal_payload(trip_id),
-                "request": submission_fixture["request"],
-                "response": submission_fixture["response"],
-                "proposal_version": "proposal-v3",
-                "scenario_id": "scenario-a",
-            },
-        )
-        assert submitted.status_code == 200
-
-        evaluation_fixture = _load_fixture("results", "approved_evaluation.json")
-        evaluation_fixture["request"]["trip_id"] = trip_id
-        evaluation_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
-        evaluation_fixture["response"]["result_payload"]["trip_id"] = trip_id
-        evaluation_fixture["response"]["result_payload"]["proposal_id"] = f"proposal:{trip_id}"
-        evaluation_fixture["response"]["result_payload"]["evaluation_result"][
-            "proposal_id"
-        ] = f"proposal:{trip_id}"
-
-        evaluated = client_first.put(
-            f"/api/workspace/{trip_id}/proposal/evaluation",
-            json={
-                "request": evaluation_fixture["request"],
-                "response": evaluation_fixture["response"],
-                "proposal_version": "proposal-v3",
-                "scenario_id": "scenario-a",
-            },
-        )
-        assert evaluated.status_code == 200
-
-        first_app_view = client_first.get(f"/api/workspace/{trip_id}/proposal").json()
-        first_evaluation_id = first_app_view["proposal_state"]["evaluation"]["evaluation_result"][
-            "evaluation_id"
-        ]
-        first_evaluation_status = first_app_view["proposal_state"]["evaluation"][
-            "evaluation_result"
-        ]["status"]
-
-    # Confirm the SQLite file actually exists on disk before we restart.
-    assert db_path.exists(), "first app instance did not persist the DB file"
-
-    # ---- Second app instance against the SAME DB (no reset). ----------------
-    # If proposal state were held only in process memory or a non-persistent
-    # cache, the second client below would see an empty / 404 proposal
-    # payload, which is exactly the regression this test guards against.
-    app_second = create_app()
-    with TestClient(app_second) as client_second:
-        # Sign in as the same user (the persisted account survives the
-        # restart along with the proposal).
-        signin = client_second.post(
-            "/api/auth/login",
-            json={"email": "restart@example.com", "password": "password123"},
-        )
-        assert signin.status_code == 200, signin.text
-
-        reloaded = client_second.get(f"/api/workspace/{trip_id}/proposal")
-        assert reloaded.status_code == 200, reloaded.text
-        reloaded_payload = reloaded.json()
-
-        # Exact-value match across the restart — proposal_id, evaluation
-        # status, evaluation_id, and the persisted summary must all be
-        # identical between the two app instances.
-        assert (
-            reloaded_payload["proposal_state"]["proposal"]["proposal_id"] == f"proposal:{trip_id}"
-        )
-        assert (
-            reloaded_payload["proposal_state"]["evaluation"]["evaluation_result"]["evaluation_id"]
-            == first_evaluation_id
-        )
-        assert (
-            reloaded_payload["proposal_state"]["evaluation"]["evaluation_result"]["status"]
-            == first_evaluation_status
-        )
-        assert reloaded_payload["proposal_state"]["summary"]["submission_status"] == "deferred"
-
+        assert login.status_code == 200, login.text
+        response = second.get(f"/api/workspace/{trip_id}/proposal")
+        assert response.status_code == 200, response.text
+        after = response.json()["proposal_state"]
+        assert after["proposal"]["source_version"] == source
+        assert after["summary"]["follow_up"]["reoptimization_plan"] == plan
+        assert source["trip_id"] == trip_id
+        assert plan["source_version"]["saved_scenario_id"] == source["saved_scenario_id"]
+        assert after["evaluation"] == before["evaluation"]
     reset_database_state()
