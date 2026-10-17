@@ -48,6 +48,8 @@ from tools.verifier_capture_obligation_manifest import (
     build_capture_reassembly_contract,
     record_capture_obligations,
 )
+from tools.verifier_artifact_capture import load_artifact_capture
+from tools.verifier_capture_obligation_manifest import parse_context_source_coverage
 from tools.verifier_semantic_acceptance import canonical_digest
 from tools.verifier_semantic_execution import MAX_NATIVE_SECONDS, execute_semantic_matrix
 from tools.verifier_semantic_rules import prepare_residual_all_input, prepare_reviewed_execution
@@ -5633,7 +5635,7 @@ def _classify_evidence_options(acceptance: str) -> list[set[str]]:
 
 @lru_cache(maxsize=512)
 def _cached_evidence_options(
-    acceptance: str, classifier: Callable[..., set[str]]
+    acceptance: str, classifier: Callable[..., set[str]]  # noqa: ARG001 - cache key identity
 ) -> tuple[frozenset[str], ...]:
     # The classifier identity invalidates results if a caller substitutes it.
     return tuple(frozenset(option) for option in _classify_evidence_options(acceptance))
@@ -5729,6 +5731,25 @@ def build_prompt_inputs(context: str, diff: str | None, *, lossless: bool = Fals
     diff_text = diff.strip() if diff and diff.strip() else ""
     sections = _split_verifier_context(context_text) if context_text else None
     reasons: list[str] = []
+    source_coverage = parse_context_source_coverage(context_text) or {}
+    raw_inventory = source_coverage.get("artifact_capture_inventory")
+    if (
+        not lossless
+        and isinstance(raw_inventory, list)
+        and any(
+            isinstance(archive, dict)
+            and isinstance(archive.get("members"), list)
+            and any(
+                isinstance(member, dict) and member.get("status") == "captured"
+                for member in archive["members"]
+            )
+            for archive in raw_inventory
+        )
+    ):
+        reasons.append(
+            "Raw captured artifact bytes require semantic native execution; "
+            "the legacy prompt does not contain every artifact."
+        )
     acceptance_source_discovery = _acceptance_discovery_coverage(sections)
     if acceptance_source_discovery in {"truncated", "unavailable"}:
         reasons.append(
@@ -6833,6 +6854,26 @@ def _coerce_response_content(content: object) -> str:
             return f"<unserializable {type(content).__name__}>"
 
 
+def _parse_semantic_evaluation_payload(content: str) -> EvaluationPayload:
+    """Accept one JSON value, optionally enclosed in one complete Markdown fence.
+
+    Only the transport envelope is normalized. The caller retains the original
+    raw response for provenance, and strict schema validation remains unchanged.
+    Surrounding prose, multiple blocks, invalid JSON and unknown fields fail.
+    """
+    text = content.strip()
+    fenced = re.fullmatch(
+        r"(?P<opening>`{3,})(?:json)?[ \t]*\r?\n(?P<payload>.*?)\r?\n(?P<closing>`{3,})",
+        text,
+        re.DOTALL,
+    )
+    if fenced is not None:
+        if len(fenced.group("closing")) < len(fenced.group("opening")):
+            raise ValueError("semantic response closing fence is shorter than its opening fence")
+        text = fenced.group("payload")
+    return EvaluationPayload.model_validate(json.loads(text), strict=True, extra="forbid")
+
+
 def _parse_llm_response(
     content: object, provider: str, *, client: object | None = None
 ) -> EvaluationResult:
@@ -7038,6 +7079,19 @@ def _semantic_envelope_signature(envelope: dict[str, Any]) -> str:
     return hmac.new(key, canonical_digest(envelope).encode(), hashlib.sha256).hexdigest()
 
 
+def _semantic_raw_inputs(context: str, diff: str | None) -> dict[str, bytes]:
+    raw = {"context": context.encode("utf-8")}
+    if diff is not None:
+        raw["diff"] = diff.encode("utf-8")
+    directory = os.environ.get("VERIFIER_EVIDENCE_CAPTURE_DIR")
+    if directory:
+        artifacts, _ = load_artifact_capture(
+            parse_context_source_coverage(context) or {}, Path(directory)
+        )
+        raw.update(artifacts)
+    return raw
+
+
 def _semantic_capture(context: str, diff: str | None) -> dict[str, Any]:
     """Create the complete-capture identity used by the semantic execution path."""
     head = os.environ.get("PR_HEAD_SHA", "")
@@ -7055,6 +7109,13 @@ def _semantic_capture(context: str, diff: str | None) -> dict[str, Any]:
     gaps.extend(str(item) for item in manifest["gaps"])
     coverage = build_prompt_inputs(context, diff, lossless=True).coverage
     gaps.extend(f"prompt:{item}" for item in coverage.reasons)
+    try:
+        raw_inputs = {
+            name: hashlib.sha256(value).hexdigest()
+            for name, value in _semantic_raw_inputs(context, diff).items()
+        }
+    except (OSError, ValueError) as exc:
+        gaps.append(f"artifact_raw_capture:{exc}")
     governing = hashlib.sha256(context.encode()).hexdigest()
     capture_id = canonical_digest({"head": head, "governing": governing, "raw_inputs": raw_inputs})
     return {
@@ -7151,9 +7212,7 @@ def _evaluate_pr_multiple_semantic(
         slots, clients, authenticated = _semantic_slots_and_clients(
             _build_semantic_clients(model1, model2), model1, model2, configured
         )
-        raw_bytes = {"context": context.encode()}
-        if diff is not None:
-            raw_bytes["diff"] = diff.encode()
+        raw_bytes = _semantic_raw_inputs(context, diff)
         prepared = prepare_reviewed_execution(capture, raw_bytes)
         if prepared is None:
             prepared = prepare_residual_all_input(capture, raw_bytes)
@@ -7233,9 +7292,7 @@ def _evaluate_pr_multiple_semantic(
             raw: str | bytes, _slot: dict[str, Any], _package: dict[str, Any]
         ) -> dict[str, Any]:
             content = raw.decode() if isinstance(raw, bytes) else raw
-            payload = EvaluationPayload.model_validate(
-                json.loads(content), strict=True, extra="forbid"
-            )
+            payload = _parse_semantic_evaluation_payload(content)
             return {
                 "verdict": payload.verdict,
                 "findings": list(payload.concerns),
