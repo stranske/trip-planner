@@ -1,0 +1,25 @@
+Traceback (most recent call last):
+  File "[HOME]/.codex/orchestrator-mirror/capability_advisor.py", line 5598, in <module>
+    raise SystemExit(main(sys.argv[1:]))
+                     ^^^^^^^^^^^^^^^^^^
+  File "[HOME]/.codex/orchestrator-mirror/capability_advisor.py", line 5579, in main
+    result = advise(
+             ^^^^^^^
+  File "[HOME]/.codex/orchestrator-mirror/capability_advisor.py", line 591, in advise
+    caps = capabilities.load_declared(path or capabilities.REG)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "[HOME]/.codex/orchestrator-mirror.generation-86c5bb9be024471facb234ebdd498b3a/capabilities.py", line 2303, in load_declared
+    capabilities = load(path, create=False)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "[HOME]/.codex/orchestrator-mirror.generation-86c5bb9be024471facb234ebdd498b3a/capabilities.py", line 2227, in load
+    with _locked(path, shared=True):
+  File "/opt/anaconda3/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "[HOME]/.codex/orchestrator-mirror.generation-86c5bb9be024471facb234ebdd498b3a/capabilities.py", line 1285, in _locked
+    with lock_path.open("a+") as handle:
+         ^^^^^^^^^^^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.12/pathlib.py", line 1013, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted: '[HOME]/.codex/orchestrator/capabilities.json.lock'

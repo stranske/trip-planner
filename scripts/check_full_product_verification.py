@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
+import re
 import json
 import os
 import shlex
@@ -215,9 +217,18 @@ def _signup(client: TestClient) -> str:
     return response.json()["user"]["user_id"]
 
 
-def _create_trip(client: TestClient, *, mode: str, title: str, region: str) -> str:
+def _create_trip(
+    client: TestClient,
+    *,
+    mode: str,
+    title: str,
+    region: str,
+    traveler_count: int | None = None,
+    duration_days: int = 3,
+) -> str:
     start_date = date.today() + timedelta(days=45)
-    end_date = start_date + timedelta(days=2)
+    end_date = start_date + timedelta(days=duration_days - 1)
+    party_count = traveler_count if traveler_count is not None else (3 if mode == "business" else 1)
     response = client.post(
         "/api/trips",
         json={
@@ -227,11 +238,11 @@ def _create_trip(client: TestClient, *, mode: str, title: str, region: str) -> s
             "trip_frame": {
                 "start_date": start_date.isoformat(),
                 "end_date": end_date.isoformat(),
-                "duration_days": 3,
+                "duration_days": duration_days,
                 "primary_regions": [region],
                 "traveler_party": {
-                    "kind": "team" if mode == "business" else "solo",
-                    "traveler_count": 3 if mode == "business" else 1,
+                    "kind": "team" if party_count > 1 else "solo",
+                    "traveler_count": party_count,
                     "notes": "Created by full-product verification.",
                 },
             },
@@ -1196,6 +1207,289 @@ def run_product_journeys(
         return results
 
 
+# These are product observations, not a replacement for the strict journey gate.
+CONTRACT_VERDICTS = ("WORKS", "PARTIAL", "BROKEN", "FABRICATED")
+
+
+def _observe(
+    client: TestClient, evidence: dict[str, Any], method: str, path: str, **kwargs: Any
+) -> dict[str, Any]:
+    response = client.request(method, path, **kwargs)
+    try:
+        body = response.json()
+    except ValueError:
+        body = {"text": response.text}
+    evidence.setdefault("requests", []).append(
+        {"method": method, "path": path, "status": response.status_code, "body": body}
+    )
+    _require(
+        200 <= response.status_code < 300,
+        "contract route failed",
+        status=response.status_code,
+        path=path,
+    )
+    return body
+
+
+def _probe_identity(client: TestClient, evidence: dict[str, Any]) -> str:
+    user_id = _signup(client)
+    evidence["signup_user_id"] = user_id
+    session = _observe(client, evidence, "GET", "/api/auth/session")
+    email = session["user"]["email"]
+    _observe(client, evidence, "POST", "/api/auth/logout")
+    login = _observe(
+        client,
+        evidence,
+        "POST",
+        "/api/auth/login",
+        json={"email": email, "password": "password123"},
+    )
+    _observe(client, evidence, "GET", "/api/trips")
+    persisted = _observe(client, evidence, "GET", "/api/auth/session")
+    return (
+        "WORKS"
+        if login["user"]["user_id"] == persisted["user"]["user_id"] == user_id
+        else "PARTIAL"
+    )
+
+
+def _probe_trips(client: TestClient, evidence: dict[str, Any]) -> str:
+    complete = []
+    for region, count, days in (("Chicago", 1, 1), ("Reykjavik, Iceland", 8, 14)):
+        title = f"Contract business purpose {region}"
+        trip_id = _create_trip(
+            client,
+            mode="business",
+            title=title,
+            region=region,
+            traveler_count=count,
+            duration_days=days,
+        )
+        trip = _observe(client, evidence, "GET", f"/api/trips/{trip_id}")["trip"]
+        frame = trip["trip_frame"]
+        complete.append(
+            trip["title"] == title
+            and trip["mode"] == "business"
+            and frame["primary_regions"] == [region]
+            and frame["traveler_party"]["traveler_count"] == count
+            and frame["duration_days"] == days
+            and frame["start_date"] == (date.today() + timedelta(days=45)).isoformat()
+            and frame["end_date"] == (date.today() + timedelta(days=44 + days)).isoformat()
+        )
+    return "WORKS" if all(complete) else "PARTIAL"
+
+
+def _comparison_figures(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            key: row.get("metrics", {}).get(key)
+            for key in ("estimated_total", "travel_minutes", "transfers")
+        }
+        for row in sorted(payload.get("scenarios", []), key=lambda row: row["rank"])
+    ]
+
+
+def _probe_comparison(client: TestClient, evidence: dict[str, Any]) -> str:
+    pairs = {}
+    for determinant, inputs in (
+        ("destination", (("Chicago", 1), ("Reykjavik, Iceland", 1))),
+        ("party", (("Chicago", 1), ("Chicago", 8))),
+    ):
+        observations = []
+        for region, count in inputs:
+            trip_id = _create_trip(
+                client,
+                mode="business",
+                title="Contract comparison",
+                region=region,
+                traveler_count=count,
+            )
+            payload = _observe(
+                client, evidence, "GET", f"/api/workspace/{trip_id}/scenarios/compare"
+            )
+            observations.append(
+                {"destination": region, "party": count, "figures": _comparison_figures(payload)}
+            )
+        pairs[determinant] = observations
+    evidence["pairs"] = pairs
+    if any(not observation["figures"] for pair in pairs.values() for observation in pair):
+        return "PARTIAL"
+    moved = [pair[0]["figures"] != pair[1]["figures"] for pair in pairs.values()]
+    # Cross-pair comparison is essential: HTTP success cannot detect fabricated figures.
+    if not any(moved):
+        return "FABRICATED"
+    return "WORKS" if all(moved) else "PARTIAL"
+
+
+def _probe_planner(client: TestClient, evidence: dict[str, Any]) -> str:
+    replies = []
+    runtimes = []
+    for message in ("Cancel my trip. I no longer want to travel.", "zxqv 923 glorb?!"):
+        trip_id = _create_trip(client, mode="business", title="Contract planner", region="Chicago")
+        payload = _observe(
+            client, evidence, "POST", f"/api/planner/{trip_id}/turns", json={"message": message}
+        )
+        reply = next(
+            item["content"]
+            for item in reversed(payload["messages"])
+            if item["role"] in {"assistant", "planner"}
+        )
+        replies.append(reply)
+        runtimes.append(payload.get("runtime", {}))
+    evidence["replies"] = replies
+    evidence["reply_sha256"] = [hashlib.sha256(reply.encode()).hexdigest() for reply in replies]
+    evidence["runtimes"] = runtimes
+    if not all(replies):
+        return "PARTIAL"
+    if replies[0].encode() == replies[1].encode():
+        return "FABRICATED"
+    if any(runtime.get("mode") == "fallback" for runtime in runtimes):
+        return "PARTIAL"
+    # An echoed user message is not an acknowledgement of cancellation.
+    acknowledged = re.search(
+        r"(?:cancel(?:led|ed|ling)|won.t (?:book|plan)|stop(?:ped)? planning)",
+        replies[0],
+        re.IGNORECASE,
+    )
+    return "WORKS" if acknowledged else "PARTIAL"
+
+
+def _import_probe_policy(
+    client: TestClient, evidence: dict[str, Any], trip_id: str, *, restrictive: bool = False
+) -> dict[str, Any]:
+    response = copy.deepcopy(_fixture("policy", "standard_policy_sync.json")["response"])
+    rules = response["result_payload"]["constraint_set"]
+    if restrictive:
+        rules["airfare_rules"]["max_cabin"] = "economy"
+        rules["lodging_rules"]["max_nightly_rate_usd"] = 125
+    return _observe(
+        client,
+        evidence,
+        "PUT",
+        f"/api/workspace/{trip_id}/policy",
+        json={
+            "request": _prepared_policy_request(trip_id),
+            "response": response,
+            "source_kind": "tpp_sync",
+            "tags": ["contract-probe-local"],
+        },
+    )
+
+
+def _probe_policy(client: TestClient, evidence: dict[str, Any]) -> str:
+    complete = []
+    for restrictive in (False, True):
+        trip_id = _create_trip(client, mode="business", title="Contract policy", region="Chicago")
+        payload = _import_probe_policy(client, evidence, trip_id, restrictive=restrictive)
+        state = payload.get("policy_state") or {}
+        constraints = state.get("constraint_set") or {}
+        complete.append(
+            bool(constraints.get("policy_id"))
+            and state.get("sync_status") == "current"
+            and constraints.get("airfare_rules", {}).get("max_cabin")
+            == ("economy" if restrictive else "premium_economy")
+            and constraints.get("lodging_rules", {}).get("max_nightly_rate_usd")
+            == (125 if restrictive else 325)
+        )
+    return "WORKS" if all(complete) else "PARTIAL"
+
+
+def _submit_probe_proposal(
+    client: TestClient, evidence: dict[str, Any], *, airport: str
+) -> tuple[str, dict[str, Any]]:
+    trip_id = _create_trip(client, mode="business", title="Contract approval", region="Chicago")
+    _import_probe_policy(client, evidence, trip_id, restrictive=airport == "KEF")
+    proposal = _proposal_payload(trip_id)
+    proposal["traveler_context"]["home_airport"] = airport
+    payload = _observe(
+        client,
+        evidence,
+        "PUT",
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": proposal,
+            "request": _prepared_submission_request(trip_id, proposal["proposal_id"]),
+            "response": _fixture("proposal_submit_deferred.json")["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    return trip_id, payload
+
+
+def _probe_proposal(client: TestClient, evidence: dict[str, Any]) -> str:
+    complete = []
+    for airport in ("ORD", "KEF"):
+        _, payload = _submit_probe_proposal(client, evidence, airport=airport)
+        state = payload.get("proposal_state") or {}
+        complete.append(bool(state.get("execution_id")))
+    return "WORKS" if all(complete) else "PARTIAL"
+
+
+def _probe_packet(client: TestClient, evidence: dict[str, Any]) -> str:
+    trip_id, payload = _submit_probe_proposal(client, evidence, airport="ORD")
+    proposal_id = _proposal_payload(trip_id)["proposal_id"]
+    execution_id = payload["proposal_state"]["execution_id"]
+    _observe(
+        client,
+        evidence,
+        "PUT",
+        f"/api/workspace/{trip_id}/proposal/evaluation",
+        json={
+            "request": _prepared_evaluation_request(trip_id, proposal_id, execution_id),
+            "response": _prepared_evaluation_response(trip_id, proposal_id, execution_id),
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    workspace = _observe(client, evidence, "GET", f"/api/workspace/{trip_id}")
+    evidence["packet_state"] = workspace.get("proposal_state")
+    evidence["print_export_observation"] = (
+        "Not exercised: ApprovalPacket is a browser component, not an HTTP packet route. "
+        "This offline TestClient probe observes persisted packet inputs only."
+    )
+    # Do not promote backend readiness into proof that a browser printed/exported a document.
+    return "PARTIAL" if workspace.get("proposal_state") else "BROKEN"
+
+
+def run_contract_report() -> list[dict[str, Any]]:
+    rows = []
+    probes = (
+        _probe_identity,
+        _probe_trips,
+        _probe_comparison,
+        _probe_planner,
+        _probe_policy,
+        _probe_proposal,
+        _probe_packet,
+    )
+    with (
+        tempfile.TemporaryDirectory(prefix="trip-planner-contract.") as tmpdir,
+        _temporary_database_url(f"sqlite:///{Path(tmpdir) / 'contract.db'}"),
+        _force_planner_fallback_runtime(),
+        _enable_local_fixture_envelopes(),
+    ):
+        reset_database_state()
+        ensure_database_ready()
+        with TestClient(create_app()) as client:
+            for index, probe in enumerate(probes, 1):
+                evidence: dict[str, Any] = {"transport": "TestClient; local TPP fixture envelopes"}
+                try:
+                    verdict = probe(client, evidence)
+                except Exception as exc:
+                    verdict = "BROKEN"
+                    evidence["exception"] = {"type": type(exc).__name__, "message": str(exc)}
+                rows.append({"id": f"TP{index}", "verdict": verdict, "evidence": evidence})
+    return rows
+
+
+def contract_headline(rows: list[dict[str, Any]]) -> str:
+    counts = ", ".join(
+        f"{word} {sum(row['verdict'] == word for row in rows)}" for word in CONTRACT_VERDICTS
+    )
+    return f"product-probe: {counts} of {len(rows)}"
+
+
 def _print_results(results: list[CheckResult]) -> None:
     print("Full-product verification results")
     for result in results:
@@ -1229,7 +1523,24 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Skip the live backend/frontend smoke layer and run only product journeys.",
     )
+    parser.add_argument(
+        "--contract-report",
+        type=Path,
+        help="Write seven product observations; negative verdicts exit zero.",
+    )
     args = parser.parse_args(argv)
+    if args.contract_report is not None:
+        # Keep the existing strict gate behavior outside report mode. A journey failure
+        # must never prevent the independent contract observations from being collected.
+        try:
+            _print_results(run_product_journeys(live_tpp=args.live_tpp))
+        except Exception as exc:
+            print(f"Existing product journey failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        rows = run_contract_report()
+        args.contract_report.parent.mkdir(parents=True, exist_ok=True)
+        args.contract_report.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
+        print(contract_headline(rows))
+        return 0
     try:
         results = []
         if not args.skip_frontend_smoke:

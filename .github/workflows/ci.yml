@@ -18,6 +18,7 @@ name: CI
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -104,3 +105,28 @@ jobs:
 
       - name: Run required signup and workspace browser journey
         run: ./scripts/run_two_trip_ui_canary.sh
+
+  product-probe:
+    name: Product contract observations
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.14'
+      - name: Install backend dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Observe product contract (report only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/check_full_product_verification.py --live-tpp off --contract-report product-probe.json | tee product-probe.log
+          grep '^product-probe:' product-probe.log >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload observed verdicts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-probe
+          path: product-probe.json
+          if-no-files-found: error
