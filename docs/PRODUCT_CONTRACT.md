@@ -8,7 +8,16 @@ Enable a business traveller to plan a trip and hand it to Travel-Plan-Permission
 Sign up → create business trip → compare options → message planner → check policy → submit proposal → print/export approval packet.
 
 ## Core functions
-| id | a user can … and sees … | entry point | probe (how to exercise it; vary these determinants) | status 2026-09-20 |
+
+The values below remain the **2026-09-20 baseline**, not current main readings.
+The latest main run's `product-probe` artifact is authoritative; no hosted reading
+is claimed by this baseline. Run locally with
+`python scripts/check_full_product_verification.py --live-tpp off --contract-report product-probe.json`.
+The offline probe uses real application routes with local TPP fixture envelopes.
+TP7 reports PARTIAL when only packet inputs are observed: browser print/export
+requires a separate browser observation and is not proved by backend readiness.
+
+| id | a user can … and sees … | entry point | probe (how to exercise it; vary these determinants) | status (product-probe.json, latest main run) |
 |---|---|---|---|---|
 | TP1 | a traveller can sign up or sign in and sees a session that survives navigation | `POST /api/auth/signup`, `POST /api/auth/login`, `GET /api/auth/session` | vary fresh signup and existing-account login; navigate/create request then read session | WORKS |
 | TP2 | a traveller can create a business trip and sees persisted destination, dates, party and purpose | `/trips/new` → `POST /api/trips` | POST trips with different destination, dates, party and purpose; read each trip | WORKS |

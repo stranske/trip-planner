@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="2" time="2.739" timestamp="2026-10-17T05:29:58.713336-05:00" hostname="[HOST]"><testcase classname="tests.scripts.test_check_full_product_verification" name="test_product_probe_report_marks_constant_figures_fabricated[constant-figures]" time="1.642"><failure message="AssertionError: assert 'WORKS' == 'FABRICATED'&#10;  &#10;  - FABRICATED&#10;  + WORKS">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x10b56e2c0&gt;
+vary = False
+
+    @pytest.mark.parametrize("vary", [False, True], ids=["constant-figures", "varying-figures"])
+    def test_product_probe_report_marks_constant_figures_fabricated(monkeypatch, vary):
+        from trip_planner.app.services import workspace
+    
+        original = workspace._build_runtime_scenario_search_for_trip
+    
+        def scenario_engine(**kwargs):
+            result = original(**kwargs)
+            record = kwargs["record"]
+            multiplier = 1
+            if vary:
+                multiplier += 10 if "Reykjavik" in record.primary_regions[0] else 0
+                multiplier += record.traveler_count
+            for row in result["scenarios"]:
+                row["scenario_summary"].update(
+                    estimated_total={"currency": "USD", "typical_amount": 100 * multiplier},
+                    total_travel_minutes=60 * multiplier,
+                    total_transfer_count=multiplier,
+                )
+            return result
+    
+        monkeypatch.setattr(workspace, "_build_runtime_scenario_search_for_trip", scenario_engine)
+        rows = verifier.run_contract_report()
+        comparison = next(row for row in rows if row["id"] == "TP3")
+&gt;       assert comparison["verdict"] == ("WORKS" if vary else "FABRICATED")
+E       AssertionError: assert 'WORKS' == 'FABRICATED'
+E         
+E         - FABRICATED
+E         + WORKS
+
+tests/scripts/test_check_full_product_verification.py:519: AssertionError</failure></testcase><testcase classname="tests.scripts.test_check_full_product_verification" name="test_product_probe_report_marks_constant_figures_fabricated[varying-figures]" time="0.416" /></testsuite></testsuites>

@@ -490,3 +490,88 @@ def test_live_negative_journey_requires_completed_policy_refusal(error_category:
             verifier._assert_business_verification_outcomes(
                 local, expected_evaluation_status="non_compliant", live_details=live
             )
+
+
+@pytest.mark.parametrize("vary", [False, True], ids=["constant-figures", "varying-figures"])
+def test_product_probe_report_marks_constant_figures_fabricated(monkeypatch, vary):
+    from trip_planner.app.services import workspace
+
+    original = workspace._build_runtime_scenario_search_for_trip
+
+    def scenario_engine(**kwargs):
+        result = original(**kwargs)
+        record = kwargs["record"]
+        multiplier = 1
+        if vary:
+            multiplier += 10 if "Reykjavik" in record.primary_regions[0] else 0
+            multiplier += record.traveler_count
+        for row in result["scenarios"]:
+            row["scenario_summary"].update(
+                estimated_total={"currency": "USD", "typical_amount": 100 * multiplier},
+                total_travel_minutes=60 * multiplier,
+                total_transfer_count=multiplier,
+            )
+        return result
+
+    monkeypatch.setattr(workspace, "_build_runtime_scenario_search_for_trip", scenario_engine)
+    rows = verifier.run_contract_report()
+    comparison = next(row for row in rows if row["id"] == "TP3")
+    assert comparison["verdict"] == ("WORKS" if vary else "FABRICATED")
+    pairs = comparison["evidence"]["pairs"]
+    assert set(pairs) == {"destination", "party"}
+    assert [item["destination"] for item in pairs["destination"]] == [
+        "Chicago",
+        "Reykjavik, Iceland",
+    ]
+    assert [item["party"] for item in pairs["party"]] == [1, 8]
+    assert all(item["figures"] for pair in pairs.values() for item in pair)
+    assert all(request["status"] == 200 for request in comparison["evidence"]["requests"])
+
+
+def test_product_probe_report_lists_every_contract_id():
+    import re
+
+    contract = (verifier.REPO_ROOT / "docs/PRODUCT_CONTRACT.md").read_text()
+    ids = re.findall(r"^\| (TP\d+) \|", contract, re.MULTILINE)
+    rows = verifier.run_contract_report()
+    assert [row["id"] for row in rows] == ids
+    assert len(rows) == 7
+    assert all(row["verdict"] in verifier.CONTRACT_VERDICTS and row["evidence"] for row in rows)
+    planner = rows[3]
+    assert planner["verdict"] in {"PARTIAL", "FABRICATED"}
+    assert len(planner["evidence"]["reply_sha256"]) == 2
+    assert all(item["mode"] == "fallback" for item in planner["evidence"]["runtimes"])
+
+
+def test_contract_report_survives_negative_journey_and_keeps_exit_zero(
+    monkeypatch, tmp_path, capsys
+):
+    import json
+
+    def failed_journey(**kwargs):
+        raise verifier.VerificationFailure("deliberately failed strict journey")
+
+    monkeypatch.setattr(verifier, "run_product_journeys", failed_journey)
+    target = tmp_path / "product-probe.json"
+    assert verifier.main(["--live-tpp", "off", "--contract-report", str(target)]) == 0
+    rows = json.loads(target.read_text())
+    assert len(rows) == 7
+    assert verifier.contract_headline(rows) in capsys.readouterr().out
+
+
+def test_contract_report_captures_route_failure_and_continues(monkeypatch):
+    from fastapi.testclient import TestClient
+    import httpx
+
+    original = TestClient.request
+
+    def failed_request(self, method, url, **kwargs):
+        if str(url).endswith("/scenarios/compare"):
+            return httpx.Response(503, json={"detail": "probe transport unavailable"})
+        return original(self, method, url, **kwargs)
+
+    monkeypatch.setattr(TestClient, "request", failed_request)
+    rows = verifier.run_contract_report()
+    assert rows[2]["verdict"] == "BROKEN"
+    assert rows[2]["evidence"]["requests"][0]["status"] == 503
+    assert rows[6]["evidence"]["requests"]

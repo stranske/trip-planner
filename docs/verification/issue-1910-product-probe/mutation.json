@@ -1,0 +1,34 @@
+{
+  "baseline": "47173b69d1c2d420d21983abd172e4b821038266",
+  "commands": [
+    [
+      "[HOME]/Library/CloudStorage/Dropbox/Learning/Code/trip-planner/.venv/bin/python",
+      "-m",
+      "pytest",
+      "tests/scripts/test_check_full_product_verification.py::test_product_probe_report_marks_constant_figures_fabricated",
+      "-q",
+      "--junitxml=[RAW_EVIDENCE]/mutation/red.xml"
+    ],
+    [
+      "[HOME]/Library/CloudStorage/Dropbox/Learning/Code/trip-planner/.venv/bin/python",
+      "-m",
+      "pytest",
+      "tests/scripts/test_check_full_product_verification.py::test_product_probe_report_marks_constant_figures_fabricated",
+      "-q",
+      "--junitxml=[RAW_EVIDENCE]/mutation/green.xml"
+    ]
+  ],
+  "original_sha256": "5d691dcb21fc0f01100cc7aef192c966651635e1b11d806bc72aceee4a40c44f",
+  "mutated_sha256": "979f28058e91769fc1168ddc74c5d89b4002daab5d23c2c660929bcb62d488e2",
+  "restored_sha256": "5d691dcb21fc0f01100cc7aef192c966651635e1b11d806bc72aceee4a40c44f",
+  "red": {
+    "tests": 2,
+    "failures": 1,
+    "errors": 0
+  },
+  "green": {
+    "tests": 2,
+    "failures": 0,
+    "errors": 0
+  }
+}
