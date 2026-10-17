@@ -2153,8 +2153,14 @@ def test_workspace_endpoint_surfaces_reoptimization_follow_up_for_non_compliant_
     assert response.status_code == 200
     payload = response.json()
     assert payload["proposal_state"]["follow_up"]["status"] == "no_scenario_lineage"
-    assert payload["planner_panel_state"]["next_step_actions"][0]["action_kind"] == "materialize_scenario"
-    assert payload["planner_panel_state"]["outputs"][-1]["title"] == "Plan a scenario before reoptimization"
+    assert (
+        payload["planner_panel_state"]["next_step_actions"][0]["action_kind"]
+        == "materialize_scenario"
+    )
+    assert (
+        payload["planner_panel_state"]["outputs"][-1]["title"]
+        == "Plan a scenario before reoptimization"
+    )
 
 
 def test_workspace_endpoint_surfaces_exception_follow_up_for_live_policy_results(
