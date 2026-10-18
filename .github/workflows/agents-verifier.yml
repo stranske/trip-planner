@@ -83,6 +83,7 @@ jobs:
        contains(fromJSON('["verify:checkbox", "verify:evaluate", "verify:compare"]'), github.event.label.name))
     permissions:
       contents: read
+      issues: read
       pull-requests: read
     runs-on: ubuntu-latest
     outputs:
@@ -95,6 +96,7 @@ jobs:
       fingerprint_should_run: ${{ steps.fingerprint.outputs.should_run || 'true' }}
       fingerprint_reason: ${{ steps.fingerprint.outputs.reason }}
       fingerprint_current_hash: ${{ steps.fingerprint.outputs.current_hash }}
+      plan_source_sha256: ${{ steps.check.outputs.plan_source_sha256 }}
     steps:
       - name: Checkout retry helpers
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -105,7 +107,10 @@ jobs:
             .github/actions/setup-api-client
             .github/scripts/error_classifier.js
             .github/scripts/github-api-with-retry.js
+            .github/scripts/issue_scope_parser.js
+            .github/scripts/source_context.js
             .github/scripts/token_load_balancer.js
+            .github/scripts/verifier_plan_fingerprint.js
             scripts/state_fingerprint.py
           sparse-checkout-cone-mode: false
       - name: Setup API client
@@ -116,7 +121,7 @@ jobs:
 
       - name: Check trigger conditions
         id: check
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const fs = require('fs');
@@ -138,6 +143,25 @@ jobs:
               minRemaining: 50,
             });
             github = balancedGithub;
+            const { verifierPlanSourceFingerprint } = require('./.github/scripts/verifier_plan_fingerprint.js');
+
+            async function setPlanSourceFingerprint(pull) {
+              try {
+                const digest = await verifierPlanSourceFingerprint({
+                  github,
+                  withRetry,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull,
+                });
+                core.setOutput('plan_source_sha256', digest);
+                return true;
+              } catch (err) {
+                core.setFailed(`Failed to fingerprint verifier plan sources: ${err.message}`);
+                core.setOutput('should_run', 'false');
+                return false;
+              }
+            }
 
             // Handle workflow_dispatch trigger
             if (context.eventName === 'workflow_dispatch') {
@@ -160,6 +184,8 @@ jobs:
                   core.setOutput('should_run', 'false');
                   return;
                 }
+
+                if (!(await setPlanSourceFingerprint(pr))) return;
 
                 const logMsg = `Manual dispatch: PR #${prNumber}, mode=${mode}`;
                 core.info(`${logMsg}, model=${model}, model2=${model2}, provider=${provider}`);
@@ -203,6 +229,26 @@ jobs:
               return;
             }
 
+            // Fetch the current merged body instead of trusting the event snapshot.
+            // Criteria changes are detected on the next normal verify:* label or
+            // workflow_dispatch invocation; edits alone do not trigger this workflow.
+            let currentPr;
+            try {
+              ({ data: currentPr } = await withRetry((client) => client.rest.pulls.get({
+                ...context.repo,
+                pull_number: pr.number,
+              })));
+            } catch (err) {
+              core.setFailed(`Failed to refresh PR #${pr.number} before fingerprinting: ${err.message}`);
+              core.setOutput('should_run', 'false');
+              return;
+            }
+            if (!currentPr.merged) {
+              core.setOutput('should_run', 'false');
+              return;
+            }
+            if (!(await setPlanSourceFingerprint(currentPr))) return;
+
             core.info(`Verifier triggered with mode: ${mode}`);
             core.setOutput('should_run', 'true');
             core.setOutput('mode', mode);
@@ -229,6 +275,7 @@ jobs:
           VERIFY_MODEL2: ${{ steps.check.outputs.model2 }}
           VERIFY_PROVIDER: ${{ steps.check.outputs.provider }}
           VERIFY_EVIDENCE_PROFILE: ${{ inputs.evidence_profile || 'standard' }}
+          VERIFIER_PLAN_SOURCE_SHA256: ${{ steps.check.outputs.plan_source_sha256 }}
         run: |
           python - <<'PY' > /tmp/state-fingerprint-inputs.json
           import hashlib
@@ -238,6 +285,9 @@ jobs:
           import urllib.request
 
           repo = os.environ["GITHUB_REPOSITORY"]
+          plan_source_sha256 = os.environ.get("VERIFIER_PLAN_SOURCE_SHA256", "")
+          if len(plan_source_sha256) != 64 or any(ch not in "0123456789abcdef" for ch in plan_source_sha256):
+              raise SystemExit("Missing or invalid verifier plan-source fingerprint")
           token = os.environ["GITHUB_TOKEN"]
           pr_number = os.environ["PR_NUMBER"]
           headers = {
@@ -284,6 +334,7 @@ jobs:
           ).hexdigest()
           payload = {
               "pr_number": int(pr_number),
+              "plan_source_sha256": plan_source_sha256,
               "head_sha": pr.get("head", {}).get("sha", ""),
               "diff_hash": diff_hash,
               "mode": os.environ.get("VERIFY_MODE", ""),
@@ -330,7 +381,7 @@ jobs:
     uses: stranske/Workflows/.github/workflows/reusable-agents-verifier.yml@main
     with:
       # CI workflows to wait for before running verifier
-      ci_workflows: '["ci.yml", "pr-00-gate.yml"]'
+      ci_workflows: '["ci.yml"]'
       # Verification mode from label or manual input
       mode: ${{ needs.check.outputs.mode }}
       # PR number from label trigger
@@ -385,3 +436,116 @@ jobs:
             --workflow "${GITHUB_WORKFLOW}" \
             --hash "$FINGERPRINT_HASH" \
             --storage pr-comment
+
+  acceptance-gates:
+    name: Prepare acceptance commands or required merge CI gate
+    needs: verifier
+    if: needs.verifier.outputs.should_run == 'true' && needs.verifier.outputs.verdict == 'UNVERIFIABLE_INPUT'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout trusted gate runner
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: stranske/Workflows
+          ref: ${{ needs.verifier.outputs.workflows_ref }}
+          path: gate-runner
+          persist-credentials: false
+          sparse-checkout: scripts/runner_lib
+      - name: Download trusted plans
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verifier-closure-plans-${{ github.run_id }}
+          path: closure-plans
+      - name: Checkout immutable merge commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verifier.outputs.target_sha }}
+          path: acceptance-head
+          persist-credentials: false
+      - name: Run acceptance commands without workflow secrets
+        timeout-minutes: 30
+        run: |
+          python3 - <<'PY'
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
+          results = []
+          for index, plan in enumerate(json.loads(Path('closure-plans/plans.json').read_text())):
+              if plan.get('plan_error'):
+                  continue
+              if plan.get('gate_source') == 'required-ci' and not plan['commands']:
+                  results.append({**plan, 'results': []})
+                  continue
+              source = Path(f'/tmp/closure-plan-{index}.json')
+              output = Path(f'/tmp/closure-result-{index}.json')
+              source.write_text(json.dumps(plan))
+              subprocess.run([sys.executable, 'gate-runner/scripts/runner_lib/acceptance_gate.py',
+                  '--prepare', '--plan', str(source), '--cwd', 'acceptance-head',
+                  '--output', str(output)], check=True)
+              results.append(json.loads(output.read_text()))
+          Path('closure-results.json').write_text(json.dumps(results))
+          PY
+      - name: Upload merge gate results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verifier-closure-results-${{ github.run_id }}
+          path: closure-results.json
+          retention-days: 14
+
+  close-sources:
+    name: Apply verified source issue closure rule
+    needs: [verifier, acceptance-gates]
+    if: >-
+      always() && needs.verifier.result == 'success' &&
+      needs.verifier.outputs.should_run == 'true' &&
+      needs.verifier.outputs.verdict != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+      actions: read
+    steps:
+      - name: Checkout trusted closure code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: stranske/Workflows
+          ref: ${{ needs.verifier.outputs.workflows_ref }}
+          persist-credentials: false
+      - name: Download closure plans
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verifier-closure-plans-${{ github.run_id }}
+          path: closure-plans
+      - name: Download merge gate results
+        if: needs.verifier.outputs.verdict == 'UNVERIFIABLE_INPUT' && needs.acceptance-gates.result == 'success'
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verifier-closure-results-${{ github.run_id }}
+          path: closure-results
+      - name: Close eligible source issues with rule receipt
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          VERDICT: ${{ needs.verifier.outputs.verdict }}
+          TARGET_SHA: ${{ needs.verifier.outputs.target_sha }}
+          PR_NUMBER: ${{ needs.verifier.outputs.pr_number }}
+          CI_WORKFLOWS: '["ci.yml"]'
+        with:
+          script: |
+            const fs = require('fs');
+            const { queryVerifierCiResults } = require('./.github/scripts/verifier_ci_query.js');
+            const { closeVerifiedSources } = require('./.github/scripts/verifier_closure.js');
+            const workflows = JSON.parse(process.env.CI_WORKFLOWS).map(workflow_id => ({ workflow_id }));
+            const ci = await queryVerifierCiResults({ github, context, core,
+              targetSha: process.env.TARGET_SHA, workflows, includeHeadSha: true });
+            const resultsPath = 'closure-results/closure-results.json';
+            const closed = await closeVerifiedSources({ github, context, core,
+              verdict: process.env.VERDICT, mergeSha: process.env.TARGET_SHA,
+              prNumber: Number(process.env.PR_NUMBER), ci,
+              plans: JSON.parse(fs.readFileSync('closure-plans/plans.json', 'utf8')),
+              results: fs.existsSync(resultsPath) ? JSON.parse(fs.readFileSync(resultsPath, 'utf8')) : [] });
+            core.info(`Closed source issues: ${closed.join(', ') || 'none'}`);
