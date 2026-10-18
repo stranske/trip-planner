@@ -336,3 +336,5 @@ These design commitments are still missing, partial, or not yet verified in a li
 2. The **Docs-only** rows in each section identify items that are design commitments but not yet scheduled work.
 3. **Partial** rows identify items where code exists but is seeded/fixture-backed — these are the next implementation lane.
 4. The **Summary: Remaining Follow-Up Claims** section lists the highest-priority gaps that should become new issues or verification tasks.
+
+Map SDK selection: real-adapter mocked-library interaction/cleanup/failure/scenario coverage in `frontend/src/components/maps/TripMap.test.tsx` (issue #1905). Live provider deployment remains unverified.

@@ -781,3 +781,18 @@ describe("mapSurface", () => {
     expect(observedReady.workspaceView.confidence.level).toBe("high");
   });
 });
+
+
+it("only resolves source-backed stop locations; option schematic coordinates stay unlocated", () => {
+  const model = buildTripMapSurfaceModel({
+    activeScenario: kyotoBaselineScenario, bundles: [kyotoAnchorBundle],
+    feasibilitySummary: routeAttentionFeasibility, tripPrimaryRegions: ["Kyoto"], tripMode: "leisure",
+    policyPosture: null, activeScope: "regional", selectedSegmentId: null,
+  });
+  const stops = model.markers.filter((marker) => marker.kind === "stop");
+  expect(stops.length).toBeGreaterThan(0);
+  expect(stops.every((marker) => marker.providerLocationQuery === marker.label)).toBe(true);
+  const options = model.markers.filter((marker) => marker.kind !== "stop");
+  expect(options.length).toBeGreaterThan(0);
+  expect(options.every((marker) => !marker.providerLocationQuery)).toBe(true);
+});

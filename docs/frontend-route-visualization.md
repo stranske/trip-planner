@@ -42,3 +42,18 @@ Issue `#559` adds visualization-oriented shell surfaces that consume route and f
 - Leisure regional loop: low-friction base with one regional excursion.
 - Scenic transit route: higher transfer load because route delight is part of the traveler objective.
 - Business constrained-window route: meeting timing and arrival certainty dominate the route presentation.
+
+### SDK marker selection and unlocated options
+
+The live adapter uses the same canonical marker IDs and selection panel as the
+schematic. Named route-stop labels are resolved through the provider geocoder;
+only finite, valid latitude/longitude results position those stop markers. Option
+bundles lack authoritative locations and remain in bounded accessible companion
+controls, including after the SDK is ready. Schematic `x`/`y` values never position
+an SDK marker. SDK `gmp-click` events select the canonical detail and linked-note
+panel; disposal removes listeners, marker map bindings and route polylines.
+
+Mocked-library tests mount the real adapter without `providerLoadState`; they
+cover selection, ready scenario changes, cleanup, load failure and geocode failure.
+This is adapter behavior proof, not evidence of a live Google Maps deployment.
+API lifecycle follows the Google [Advanced Markers reference](https://developers.google.com/maps/documentation/javascript/reference/advanced-markers).

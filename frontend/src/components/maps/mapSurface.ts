@@ -69,6 +69,8 @@ export type MapMarker = {
   y: number;
   emphasized: boolean;
   focusCues: MapFocusCue[];
+  /** Source-backed route place to resolve with the provider; schematic x/y are never geographic. */
+  providerLocationQuery?: string | null;
 };
 
 export type RouteSegment = {
@@ -401,6 +403,7 @@ function buildMarkers({
     sourceId: stop.sourceId,
     kind: "stop" as const,
     label: stop.label,
+    providerLocationQuery: stop.label,
     summary: index === 0 ? "Route origin" : index === routeStops.length - 1 ? "Route destination" : "Route stop",
     detail: stop.description,
     x: stop.x,
@@ -417,6 +420,7 @@ function buildMarkers({
       sourceId: bundle.bundle_id,
       kind,
       label: bundle.title,
+      providerLocationQuery: null,
       summary: `${bundle.option_count} option(s) anchored to ${destinations}`,
       detail: bundle.summary,
       x: coordinate.x + markerIndex * 3,
