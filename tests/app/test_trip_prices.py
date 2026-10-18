@@ -224,3 +224,133 @@ def test_the_workspace_header_advances_once_a_price_is_entered(client: TestClien
     assert after["next_step"]["title"] == "Submit for approval"
     assert after["user_summary"]["headline"].startswith("Prices entered for 1 item(s).")
     assert "Nothing has been planned" not in after["user_summary"]["headline"]
+
+
+_PRICE_EVIDENCE = {
+    "component": "transport",
+    "amount": 620.0,
+    "currency": "USD",
+    "lowest_amount": 500.0,
+    "evidence_attested": True,
+    "cabin_class": "economy",
+    "flight_hours": 4.0,
+}
+
+
+def _approved_price_verdict(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, trip_id: str
+) -> dict:
+    """Use the existing fixture response seam; this is not live TPP evidence."""
+    from tests.app.test_proposal import _load_fixture, _proposal_payload
+
+    monkeypatch.setenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", "true")
+    submission = _load_fixture("proposal_submit_deferred.json")
+    submission["request"].update(trip_id=trip_id, proposal_id=f"proposal:{trip_id}")
+    submission["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+    response = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": submission["request"],
+            "response": submission["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert response.status_code == 200, response.text
+    evaluation = _load_fixture("results", "approved_evaluation.json")
+    evaluation["request"].update(trip_id=trip_id, proposal_id=f"proposal:{trip_id}")
+    result = evaluation["response"]["result_payload"]
+    result.update(trip_id=trip_id, proposal_id=f"proposal:{trip_id}")
+    result["evaluation_result"]["proposal_id"] = f"proposal:{trip_id}"
+    response = client.put(
+        f"/api/workspace/{trip_id}/proposal/evaluation",
+        json={
+            "request": evaluation["request"],
+            "response": evaluation["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert response.status_code == 200, response.text
+    state = client.get(f"/api/workspace/{trip_id}").json()["proposal_state"]
+    assert state["summary"]["approval_ready"] is True
+    return state
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"amount": 6200.0},
+        {"currency": "EUR"},
+        {"lowest_amount": 450.0},
+        {"evidence_attested": False},
+        {"cabin_class": "first"},
+        {"flight_hours": 9.0},
+        {"amount": None},
+        {"component": "lodging", "amount": 200.0},
+    ],
+)
+def test_material_price_edit_invalidates_saved_verdict(client, monkeypatch, change):
+    trip_id = _create_trip(client)
+    assert client.put(f"/api/workspace/{trip_id}/prices", json=_PRICE_EVIDENCE).status_code == 200
+    _approved_price_verdict(client, monkeypatch, trip_id)
+    changed = client.put(f"/api/workspace/{trip_id}/prices", json={**_PRICE_EVIDENCE, **change})
+    assert changed.status_code == 200, changed.text
+    assert client.get(f"/api/workspace/{trip_id}").json()["proposal_state"] is None
+    # Only a new policy evaluation for the changed evidence restores readiness.
+    if change.get("amount", 1) is not None:
+        _approved_price_verdict(client, monkeypatch, trip_id)
+
+
+def test_noop_price_save_does_not_invalidate_verdict(client, monkeypatch):
+    trip_id = _create_trip(client)
+    client.put(f"/api/workspace/{trip_id}/prices", json=_PRICE_EVIDENCE)
+    before = _approved_price_verdict(client, monkeypatch, trip_id)
+    for extra in [{}, {"note": "same fare, clearer description"}]:
+        assert (
+            client.put(
+                f"/api/workspace/{trip_id}/prices", json={**_PRICE_EVIDENCE, **extra}
+            ).status_code
+            == 200
+        )
+        after = client.get(f"/api/workspace/{trip_id}").json()["proposal_state"]
+        assert after["summary"]["approval_ready"] is True
+        assert after["evaluation"] == before["evaluation"]
+
+
+def test_late_saved_verdict_is_stale_for_changed_price_evidence(client, monkeypatch):
+    from trip_planner.persistence.db import get_session_factory
+    from trip_planner.persistence.models.trip_price import PersistedTripPrice
+
+    trip_id = _create_trip(client)
+    client.put(f"/api/workspace/{trip_id}/prices", json=_PRICE_EVIDENCE)
+    _approved_price_verdict(client, monkeypatch, trip_id)
+    # Model a late proposal write that raced the edit's transactional deletion.
+    with get_session_factory()() as session:
+        price = session.query(PersistedTripPrice).filter_by(trip_id=trip_id).one()
+        price.amount = 6200
+        session.commit()
+    state = client.get(f"/api/workspace/{trip_id}").json()["proposal_state"]
+    assert state["summary"]["approval_ready"] is False
+    assert state["summary"]["evaluation_result_status"] == "stale"
+    assert state["evaluation"]["evaluation_result"] is None
+
+
+def test_price_invalidation_rolls_back_with_a_failed_commit(client, monkeypatch):
+    from sqlalchemy.orm import Session
+
+    trip_id = _create_trip(client)
+    client.put(f"/api/workspace/{trip_id}/prices", json=_PRICE_EVIDENCE)
+    _approved_price_verdict(client, monkeypatch, trip_id)
+
+    def fail_commit(self):
+        raise RuntimeError("injected price commit failure")
+
+    with monkeypatch.context() as failure:
+        failure.setattr(Session, "commit", fail_commit)
+        with pytest.raises(RuntimeError, match="injected price commit failure"):
+            client.put(f"/api/workspace/{trip_id}/prices", json={**_PRICE_EVIDENCE, "amount": 7000})
+    state = client.get(f"/api/workspace/{trip_id}").json()["proposal_state"]
+    assert state["summary"]["approval_ready"] is True
+    assert client.get(f"/api/workspace/{trip_id}/prices").json()["total"]["typical_amount"] == 620

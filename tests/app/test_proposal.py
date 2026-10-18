@@ -251,10 +251,35 @@ def test_workspace_proposal_submission_and_evaluation_persist(
             "scenario_id": "scenario-a",
         },
     )
-    assert refreshed_evaluation.status_code == 200
+    # A late evaluation cannot recreate the verdict deleted with the price change.
+    assert refreshed_evaluation.status_code == 404
+    assert client.get(f"/api/workspace/{trip_id}/proposal").json()["proposal_state"] is None
     still_stale = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
     assert still_stale.status_code == 409
     assert "Run the policy check again" in still_stale.json()["detail"]
+
+    # Explicitly submit the current evidence before accepting a fresh evaluation.
+    resubmitted = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": submission_fixture["request"],
+            "response": submission_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert resubmitted.status_code == 200
+    reevaluated = client.put(
+        f"/api/workspace/{trip_id}/proposal/evaluation",
+        json={
+            "request": evaluation_fixture["request"],
+            "response": evaluation_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert reevaluated.status_code == 200
 
     reloaded = client.get(f"/api/workspace/{trip_id}/proposal")
     assert reloaded.status_code == 200

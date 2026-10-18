@@ -1750,12 +1750,19 @@ function WorkspacePageContent({
           : {}),
       });
       setTripPrices(next);
+      // Until the authoritative refresh succeeds, do not pair new prices with an old verdict.
+      setCurrentWorkspace((current) => ({ ...current, proposal_state: null }));
       // Re-read the workspace so the entered figure reaches Compare and the approval
       // packet in the same interaction, rather than after a reload the traveller has no
       // reason to expect.
       const refreshed = await fetchWorkspace(trip.trip_id);
       startTransition(() => {
         setCurrentWorkspace(refreshed);
+        setProposalStatusMessage(
+          refreshed.proposal_state == null || refreshed.proposal_state.summary.evaluation_result_status === "stale"
+            ? "Needs a new policy check — re-run the policy check before approval."
+            : null
+        );
       });
     } catch (error) {
       setTripPricesError(error instanceof Error ? error.message : "Saving that price failed.");

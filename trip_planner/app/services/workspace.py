@@ -2516,9 +2516,8 @@ def _assemble_persisted_workspace_context(
         .limit(PLANNING_NOTEBOOK_LIMIT)
     ).all()
     feasibility_summary = build_feasibility_summary_payload(persisted_inventory_bundles)
-    entered_prices = build_trip_prices_payload(
-        read_trip_prices_for_owner(db_session, user_id=user.user_id, trip_id=trip_id)
-    )
+    price_rows = read_trip_prices_for_owner(db_session, user_id=user.user_id, trip_id=trip_id)
+    entered_prices = build_trip_prices_payload(price_rows)
     return WorkspaceBuildContext(
         session=(_serialize_session_record(session_record) if session_record is not None else None),
         saved_scenarios=[
@@ -2550,7 +2549,9 @@ def _assemble_persisted_workspace_context(
         budget_state=load_budget_payload_for_workspace(db_session, record=record),
         policy_context=policy_context,
         proposal_context=(
-            get_workspace_proposal_payload(db_session, user=user, trip_id=trip_id)
+            get_workspace_proposal_payload(
+                db_session, user=user, trip_id=trip_id, trip_prices=price_rows
+            )
             if record.mode == "business" or include_debug
             else None
         ),

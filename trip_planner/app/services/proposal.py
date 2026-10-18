@@ -18,6 +18,7 @@ from trip_planner.app.schemas.proposal import (
 from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.app.services.trip_prices import (
     COMPONENT_LABELS,
+    policy_price_evidence,
     read_trip_prices_for_owner,
 )
 from trip_planner.business import (
@@ -1678,6 +1679,7 @@ def get_workspace_proposal_payload(
     *,
     user: AuthenticatedUser,
     trip_id: str,
+    trip_prices: list[PersistedTripPrice] | None = None,
 ) -> dict[str, Any]:
     trip_record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     proposal_state = _get_latest_proposal_state(db_session, trip_id=trip_id, user_id=user.user_id)
@@ -1687,6 +1689,30 @@ def get_workspace_proposal_payload(
             "summary": {"trip_id": trip_id, "status": "missing"},
         }
     serialized = _serialize_proposal_state(proposal_state)
+    evaluated_prices = proposal_state.proposal_payload.get("price_evidence")
+    if evaluated_prices is not None:
+        current_prices = (
+            trip_prices
+            if trip_prices is not None
+            else read_trip_prices_for_owner(db_session, user_id=user.user_id, trip_id=trip_id)
+        )
+        if evaluated_prices != policy_price_evidence(current_prices):
+            # Also reject a late result saved by a request that overlapped a price edit.
+            serialized["evaluation"] = {}
+            serialized["summary"].update(
+                approval_ready=False,
+                evaluation_result_status="stale",
+                submission_requires_polling=False,
+                submission_outcome="stale",
+            )
+            handoff = serialized.get("portal_handoff")
+            if handoff:
+                handoff.update(
+                    receipt_status="stale",
+                    manager_submission_status="unknown",
+                    manager_decision=None,
+                )
+            return {"proposal_state": serialized, "summary": serialized["summary"]}
     handoff = serialized.get("portal_handoff")
     if handoff and handoff.get("receipt_status") == "current":
         current_snapshot = _portal_handoff_snapshot(
@@ -1832,6 +1858,7 @@ def save_workspace_proposal_submission(
         summary={},
     )
     stored_proposal_payload = proposal.to_dict()
+    stored_proposal_payload["price_evidence"] = policy_price_evidence(trip_prices)
     source_version = _submission_source_version(workspace, scenario_id, trip_id)
     if source_version is not None:
         stored_proposal_payload["source_version"] = source_version

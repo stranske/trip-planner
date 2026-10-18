@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { useLoaderData } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import * as workspaceApi from "../api/workspace";
+
 import { ApiClientError } from "../lib/api/errors";
 import {
   answerPlannerDecision,
@@ -4985,6 +4987,55 @@ describe("WorkspacePage", () => {
     expect(compareTab).toHaveAttribute("tabindex", "0");
     expect(planTab).toHaveAttribute("tabindex", "-1");
   });
+  it("opens a packet requiring a fresh check for a stale saved verdict", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        trip_record: { ...workspacePayload.trip_record, trip: { ...workspacePayload.trip_record.trip, mode: "business" } },
+        proposal_state: {
+          ...workspacePayload.proposal_state!,
+          summary: {
+            ...workspacePayload.proposal_state!.summary,
+            approval_ready: false, evaluation_result_status: "stale", submission_outcome: "stale",
+          },
+        },
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+    renderWorkspacePage();
+    await selectWorkspaceTab("Policy");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Open approval packet from Policy tab" }));
+    expect(within(screen.getByTestId("approval-packet-document")).getByTestId("approval-packet-verdict"))
+      .toHaveTextContent("Needs a new policy check");
+  });
+
+  it("clears the prior verdict after saving prices even if workspace refresh fails", async () => {
+    const prices = {
+      components: [{ component: "transport", label: "Flights and ground travel", currency: "USD", typical_amount: 620, note: "", price_source: null }],
+      total: null, priced_component_count: 1, unpriced_component_count: 0,
+    };
+    const fetchPrices = vi.spyOn(workspaceApi, "fetchTripPrices").mockResolvedValue(prices);
+    const savePrice = vi.spyOn(workspaceApi, "saveTripPrice").mockResolvedValue(prices);
+    mockedFetchWorkspace.mockRejectedValueOnce(new Error("workspace refresh unavailable"));
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        trip_record: { ...workspacePayload.trip_record, trip: { ...workspacePayload.trip_record.trip, mode: "business" } },
+        proposal_state: { ...workspacePayload.proposal_state!, summary: { ...workspacePayload.proposal_state!.summary, evaluation_result_status: "compliant", approval_ready: true } },
+      }), trips: Promise.resolve(tripComparisonPayload),
+    });
+    try {
+      renderWorkspacePage();
+      await selectWorkspaceTab("Budget");
+      await userEvent.setup().click(await screen.findByRole("button", { name: "Update Flights and ground travel" }));
+      await waitFor(() => expect(savePrice).toHaveBeenCalled());
+      await selectWorkspaceTab("Policy");
+      expect(screen.queryByText("Reviewed — policy passed")).not.toBeInTheDocument();
+    } finally {
+      fetchPrices.mockRestore(); savePrice.mockRestore();
+    }
+  });
+
 });
 
 async function completePortalAnswers() {

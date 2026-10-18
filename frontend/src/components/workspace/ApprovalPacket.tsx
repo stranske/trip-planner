@@ -33,9 +33,12 @@ type PolicyResult = {
 function describePolicyResult(workspace: WorkspaceData): PolicyResult {
   const proposal = workspace.proposal_state;
   if (proposal == null) {
-    return { label: "Not yet submitted to the travel policy service", reasons: [] };
+    return { label: "Needs a new policy check — re-run the policy check before approval", reasons: [] };
   }
   const summary = proposal.summary;
+  if (summary.evaluation_result_status === "stale" || summary.submission_outcome === "stale") {
+    return { label: "Needs a new policy check — re-run the policy check before approval", reasons: [] };
+  }
   const verdictStatus =
     proposal.evaluation?.evaluation_result?.status ?? summary.evaluation_result_status ?? null;
 
