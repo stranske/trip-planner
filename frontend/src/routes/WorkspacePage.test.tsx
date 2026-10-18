@@ -5020,6 +5020,13 @@ describe("WorkspacePage", () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
         ...workspacePayload,
+        view_model: {
+          user_summary: { trip_title: "Trip", trip_mode: "business", mode_label: "Business trip", status: "ready", headline: "Old approval-ready headline", decided: [], uncertain: [] },
+          next_step: { title: "Advance to approval", summary: "Old approved next step", action_label: "Approve", action_target: "approval-packet", blocked: false },
+          panel_visibility: { show_budget_panel: true, show_policy_posture: true, show_proposal_panel: true, show_approval_readiness_panel: true },
+          policy_presentation: { active_policy_state: true, posture_label: "Approval-ready", approval_status_label: "Ready for approval", next_step_label: "Advance to approval", summary: "Old policy passed" },
+          business_summary: null, debug_state: { sections: {} },
+        },
         trip_record: { ...workspacePayload.trip_record, trip: { ...workspacePayload.trip_record.trip, mode: "business" } },
         proposal_state: { ...workspacePayload.proposal_state!, summary: { ...workspacePayload.proposal_state!.summary, evaluation_result_status: "compliant", approval_ready: true } },
       }), trips: Promise.resolve(tripComparisonPayload),
@@ -5031,9 +5038,62 @@ describe("WorkspacePage", () => {
       await waitFor(() => expect(savePrice).toHaveBeenCalled());
       await selectWorkspaceTab("Policy");
       expect(screen.queryByText("Reviewed — policy passed")).not.toBeInTheDocument();
+      expect(screen.queryByText("Approval-ready")).not.toBeInTheDocument();
+      expect(screen.queryByText("Advance to approval")).not.toBeInTheDocument();
+      expect(screen.queryByText("Old approval-ready headline")).not.toBeInTheDocument();
     } finally {
       fetchPrices.mockRestore(); savePrice.mockRestore();
     }
+  });
+
+
+  it("cancels a prepared handoff when a price save starts", async () => {
+    const pending = deferred<WorkspaceProposalHandoffResponse>();
+    const prices = { components: [{ component: "transport", label: "Flights and ground travel", currency: "USD", typical_amount: 620, note: "", price_source: null }], total: null, priced_component_count: 1, unpriced_component_count: 0 };
+    const fetchPrices = vi.spyOn(workspaceApi, "fetchTripPrices").mockResolvedValue(prices);
+    const savePrice = vi.spyOn(workspaceApi, "saveTripPrice").mockResolvedValue(prices);
+    mockedFetchWorkspace.mockResolvedValue({ ...workspacePayload, proposal_state: null, view_model: null });
+    mockedPrepareWorkspaceProposalHandoff.mockReturnValue(pending.promise);
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve({
+      ...workspacePayload, proposal_state: { ...workspacePayload.proposal_state!, summary: { ...workspacePayload.proposal_state!.summary, has_saved_verdict: true } },
+    }) });
+    try {
+      renderWorkspacePage(); await selectWorkspaceTab("Policy"); await completePortalAnswers();
+      await userEvent.setup().click(screen.getByRole("button", { name: "Send to my approver" }));
+      expect(mockedPrepareWorkspaceProposalHandoff).toHaveBeenCalledOnce();
+      await selectWorkspaceTab("Budget");
+      await userEvent.setup().click(await screen.findByRole("button", { name: "Update Flights and ground travel" }));
+      await waitFor(() => expect(savePrice).toHaveBeenCalled());
+      await act(async () => { pending.resolve({ action_url: "https://tpp.example/portal/handoff", method: "POST", fields: { traveler_name: "Morgan Planner" }, handoff: { status: "prepared", manager_submission_status: "unknown", manager_decision: null } }); });
+      expect(mockedSubmitTppPortalHandoff).not.toHaveBeenCalled();
+    } finally { fetchPrices.mockRestore(); savePrice.mockRestore(); }
+  });
+
+
+  it("ignores a pre-save policy refresh response after prices are saved", async () => {
+    const pending = deferred<WorkspaceData["proposal_state"]>();
+    const prices = { components: [{ component: "transport", label: "Flights and ground travel", currency: "USD", typical_amount: 620, note: "", price_source: null }], total: null, priced_component_count: 1, unpriced_component_count: 0 };
+    const fetchPrices = vi.spyOn(workspaceApi, "fetchTripPrices").mockResolvedValue(prices);
+    const savePrice = vi.spyOn(workspaceApi, "saveTripPrice").mockResolvedValue(prices);
+    mockedFetchWorkspace.mockResolvedValue({ ...workspacePayload, proposal_state: null, view_model: null });
+    mockedRefreshWorkspaceProposalStatus.mockReturnValue(pending.promise);
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve({
+      ...workspacePayload, proposal_state: {
+        ...workspacePayload.proposal_state!, submission_status: "deferred", evaluation_status: null, follow_up: null,
+        summary: { ...workspacePayload.proposal_state!.summary, submission_status: "deferred", submission_requires_polling: true, evaluation_result_status: null, approval_ready: false, follow_up_status: undefined },
+      },
+    }) });
+    try {
+      renderWorkspacePage(); await selectWorkspaceTab("Policy");
+      await userEvent.setup().click(screen.getByRole("button", { name: "Refresh live status" }));
+      expect(mockedRefreshWorkspaceProposalStatus).toHaveBeenCalledOnce();
+      await selectWorkspaceTab("Budget");
+      await userEvent.setup().click(await screen.findByRole("button", { name: "Update Flights and ground travel" }));
+      await waitFor(() => expect(savePrice).toHaveBeenCalled());
+      await act(async () => { pending.resolve({ ...workspacePayload.proposal_state!, summary: { ...workspacePayload.proposal_state!.summary, evaluation_result_status: "compliant", approval_ready: true } }); });
+      await selectWorkspaceTab("Policy");
+      expect(screen.queryByText("Reviewed — policy passed")).not.toBeInTheDocument();
+    } finally { fetchPrices.mockRestore(); savePrice.mockRestore(); }
   });
 
 });

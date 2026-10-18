@@ -335,6 +335,14 @@ def test_late_saved_verdict_is_stale_for_changed_price_evidence(client, monkeypa
     assert state["summary"]["approval_ready"] is False
     assert state["summary"]["evaluation_result_status"] == "stale"
     assert state["evaluation"]["evaluation_result"] is None
+    assert state["follow_up"]["status"] == "stale"
+    assert state["summary"]["follow_up_status"] == "stale"
+    assert "Re-run" in state["summary"]["highlights"][0]
+    from trip_planner.persistence.models.proposal import PersistedProposalState
+
+    with get_session_factory()() as session:
+        saved = session.query(PersistedProposalState).filter_by(trip_id=trip_id).one()
+        assert saved.summary["follow_up"]["status"] == "resolved"
 
 
 def test_price_invalidation_rolls_back_with_a_failed_commit(client, monkeypatch):

@@ -826,6 +826,9 @@ function deriveProposalLifecyclePresentation(
   followUp: NonNullable<WorkspaceData["proposal_state"]>["follow_up"]
 ): ProposalLifecyclePresentation {
   const summary = proposalState.summary;
+  if (summary.evaluation_result_status === "stale" || summary.submission_outcome === "stale") {
+    return { state: "pending", readinessLabel: "Needs a new policy check", title: "Needs a new policy check", summary: "Prices changed. Re-run the policy check before approval." };
+  }
   const submissionStatus = summary.submission_status ?? proposalState.submission_status;
   const evaluationTransportStatus =
     summary.evaluation_transport_status ?? proposalState.evaluation_status;
@@ -1732,6 +1735,12 @@ function WorkspacePageContent({
     note: string,
     fareDetail?: FareDetail
   ) {
+    proposalRefreshVersion.current += 1;
+    setProposalBusyLabel(null);
+    if (portalHandoffAttempt.current !== null) {
+      portalHandoffAttempt.current.cancelled = true;
+      portalHandoffAttempt.current = null;
+    }
     setTripPricesError(null);
     setTripPricesBusy(true);
     try {
@@ -1751,7 +1760,7 @@ function WorkspacePageContent({
       });
       setTripPrices(next);
       // Until the authoritative refresh succeeds, do not pair new prices with an old verdict.
-      setCurrentWorkspace((current) => ({ ...current, proposal_state: null }));
+      setCurrentWorkspace((current) => ({ ...current, proposal_state: null, view_model: null }));
       // Re-read the workspace so the entered figure reaches Compare and the approval
       // packet in the same interaction, rather than after a reload the traveller has no
       // reason to expect.

@@ -1,0 +1,349 @@
+2026-10-18 source1902/PR1922 bounded recovery. All native reservations terminal and exclusive source/PR claims held before recovery.
+Hosted3.12/3.13 failures: two parameter cases in tests/integration/test_saved_portal_handoff.py expected old retained metadata after an edit. Local exact file reproduced both failures; updated to atomic deletion semantics (fresh read returns None).
+Review findings: cancel pre-save refresh/portal actions, clear stale view_model labels, and replace resolved follow-up presentation while preserving stored history.
+
+Exact pre-repair reproduction:
+...........................FF........................................... [ 80%]
+.................                                                        [100%]
+=================================== FAILURES ===================================
+_ test_saved_flight_facts_prefill_the_form_without_inventing_airfare[attested-business-quote] _
+
+saved_portal_handoff = (<sqlalchemy.orm.session.Session object at 0x10c98d010>, AuthenticatedUser(user_id='portal-contract-owner', email='por...3de3aad829f26d135a88caac427d8837289b8e23a4', 'prepared_at': '2026-10-18T13:26:41.914104Z', 'status': 'prepared', ...}})
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11b449be0>
+
+    @pytest.mark.parametrize(
+        "saved_portal_handoff",
+        [
+            {
+                "lowest_amount": 350.0,
+                "cabin_class": "business",
+                "flight_hours": 8.5,
+                "evidence_attested": True,
+            },
+            {
+                "lowest_amount": 0.0,
+                "cabin_class": "economy",
+                "flight_hours": 1.0,
+                "evidence_attested": False,
+            },
+        ],
+        indirect=True,
+        ids=["attested-business-quote", "unattested-zero-lowest-fare"],
+    )
+    def test_saved_flight_facts_prefill_the_form_without_inventing_airfare(
+        saved_portal_handoff, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        session, user, trip_id, first_form = saved_portal_handoff
+        price = session.get(PersistedTripPrice, f"trip-price:{trip_id}:transport")
+        assert price is not None
+        expected_flight_fields = {
+            "lowest_cost_roundtrip": f"{price.lowest_amount:.2f}",
+            "lowest_fare": f"{price.lowest_amount:.2f}",
+            "cabin_class": price.cabin_class,
+            "flight_duration_hours": str(price.flight_hours),
+            "fare_evidence_attached": "true" if price.evidence_attested else "false",
+        }
+        saved_metadata = deepcopy(first_form["handoff"])
+        session.expire_all()
+    
+        # Once checked and saved, preparing the browser body needs no new policy call.
+        def unexpected_policy_call(*args, **kwargs):
+            pytest.fail("Preparing the form must use the saved verdict and price facts")
+    
+        monkeypatch.setattr(
+            "trip_planner.app.services.proposal.HTTPTPPIntegrationClient",
+            unexpected_policy_call,
+        )
+        response = Response()
+        form = prepare_workspace_proposal_portal_handoff(
+            trip_id=trip_id,
+            _payload=WorkspaceProposalHandoffRequest(),
+            response=response,
+            user=user,
+            db_session=session,
+        ).model_dump()
+    
+        assert form["action_url"] == "https://tpp.example/portal/handoff"
+        assert form["method"] == "POST"
+        assert response.headers["cache-control"] == "no-store"
+        assert form["fields"].items() >= expected_flight_fields.items()
+        # The persisted transport amount can include ground travel, so it is not airfare.
+        assert {"selected_fare", "flight_cost", "flight_pref_outbound.roundtrip_cost"}.isdisjoint(
+            form["fields"]
+        )
+        assert "USD 430.00" in form["fields"]["notes"]
+        assert form["handoff"] == saved_metadata
+        assert form == first_form
+        assert "source_snapshot" not in form["handoff"]
+    
+        # Withdrawing those facts invalidates the saved form rather than reusing its prefill.
+        save_trip_price(
+            session,
+            user=user,
+            trip_id=trip_id,
+            component="transport",
+            amount=430.0,
+            note="United.com quote",
+        )
+        with pytest.raises(HTTPException) as rejected:
+            prepare_workspace_proposal_portal_handoff(
+                trip_id=trip_id,
+                _payload=WorkspaceProposalHandoffRequest(),
+                response=Response(),
+                user=user,
+                db_session=session,
+            )
+        assert rejected.value.status_code == 409
+        session.expire_all()
+        assert (
+>           get_workspace_proposal_payload(session, user=user, trip_id=trip_id)["proposal_state"][
+                "portal_handoff"
+            ]
+            == saved_metadata
+        )
+E       TypeError: 'NoneType' object is not subscriptable
+
+tests/integration/test_saved_portal_handoff.py:448: TypeError
+---------------------------- Captured stderr setup -----------------------------
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 20260407_01, Create account and auth-session tables.
+INFO  [alembic.runtime.migration] Running upgrade  -> 20260407_01, Create account and auth-session tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_01 -> 20260407_02, Create persisted trip table.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_01 -> 20260407_02, Create persisted trip table.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_02 -> 20260407_03, Create persisted saved-scenario and activity-history tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_02 -> 20260407_03, Create persisted saved-scenario and activity-history tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_03 -> 20260408_01, add persisted planning session state
+INFO  [alembic.runtime.migration] Running upgrade 20260407_03 -> 20260408_01, add persisted planning session state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_01 -> 20260408_02, add persisted budget plan and actual-spend state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_01 -> 20260408_02, add persisted budget plan and actual-spend state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_02 -> 20260408_03, add persisted policy import state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_02 -> 20260408_03, add persisted policy import state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_03 -> 20260409_01, add persisted proposal lifecycle state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_03 -> 20260409_01, add persisted proposal lifecycle state
+INFO  [alembic.runtime.migration] Running upgrade 20260409_01 -> 20260410_01, add persisted planner actions
+INFO  [alembic.runtime.migration] Running upgrade 20260409_01 -> 20260410_01, add persisted planner actions
+INFO  [alembic.runtime.migration] Running upgrade 20260410_01 -> 20260412_01, add planner checkpoints and user-visible memory artifacts
+INFO  [alembic.runtime.migration] Running upgrade 20260410_01 -> 20260412_01, add planner checkpoints and user-visible memory artifacts
+INFO  [alembic.runtime.migration] Running upgrade 20260412_01 -> 20260507_01, add selected planning mode to session state
+INFO  [alembic.runtime.migration] Running upgrade 20260412_01 -> 20260507_01, add selected planning mode to session state
+INFO  [alembic.runtime.migration] Running upgrade 20260507_01 -> 20260510_01, add persisted planning ledger entries
+INFO  [alembic.runtime.migration] Running upgrade 20260507_01 -> 20260510_01, add persisted planning ledger entries
+INFO  [alembic.runtime.migration] Running upgrade 20260510_01 -> 20260510_02, add persisted planning notebook items and session focus columns
+INFO  [alembic.runtime.migration] Running upgrade 20260510_01 -> 20260510_02, add persisted planning notebook items and session focus columns
+INFO  [alembic.runtime.migration] Running upgrade 20260510_02 -> 20260512_01, repair planning notebook schema for already-deployed databases
+INFO  [alembic.runtime.migration] Running upgrade 20260510_02 -> 20260512_01, repair planning notebook schema for already-deployed databases
+INFO  [alembic.runtime.migration] Running upgrade 20260512_01 -> 20260921_01, add the trip origin the planner needs to measure a journey
+INFO  [alembic.runtime.migration] Running upgrade 20260512_01 -> 20260921_01, add the trip origin the planner needs to measure a journey
+INFO  [alembic.runtime.migration] Running upgrade 20260921_01 -> 20260921_02, add human-entered trip prices
+INFO  [alembic.runtime.migration] Running upgrade 20260921_01 -> 20260921_02, add human-entered trip prices
+INFO  [alembic.runtime.migration] Running upgrade 20260921_02 -> 20260922_01, record the flight details TPP's fare and cabin rules read on a price
+INFO  [alembic.runtime.migration] Running upgrade 20260921_02 -> 20260922_01, record the flight details TPP's fare and cabin rules read on a price
+INFO  [alembic.runtime.migration] Running upgrade 20260922_01 -> 20260928_01, persist truthful TPP portal handoff preparation state
+INFO  [alembic.runtime.migration] Running upgrade 20260922_01 -> 20260928_01, persist truthful TPP portal handoff preparation state
+INFO  [alembic.runtime.migration] Running upgrade 20260928_01 -> 20261014_01, record a link to the fare a traveller chose, as fare evidence
+INFO  [alembic.runtime.migration] Running upgrade 20260928_01 -> 20261014_01, record a link to the fare a traveller chose, as fare evidence
+_ test_saved_flight_facts_prefill_the_form_without_inventing_airfare[unattested-zero-lowest-fare] _
+
+saved_portal_handoff = (<sqlalchemy.orm.session.Session object at 0x10ce863c0>, AuthenticatedUser(user_id='portal-contract-owner', email='por...8b99bb33969b490b76896af7c48faaead6d6943610', 'prepared_at': '2026-10-18T13:26:42.063744Z', 'status': 'prepared', ...}})
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11b145a90>
+
+    @pytest.mark.parametrize(
+        "saved_portal_handoff",
+        [
+            {
+                "lowest_amount": 350.0,
+                "cabin_class": "business",
+                "flight_hours": 8.5,
+                "evidence_attested": True,
+            },
+            {
+                "lowest_amount": 0.0,
+                "cabin_class": "economy",
+                "flight_hours": 1.0,
+                "evidence_attested": False,
+            },
+        ],
+        indirect=True,
+        ids=["attested-business-quote", "unattested-zero-lowest-fare"],
+    )
+    def test_saved_flight_facts_prefill_the_form_without_inventing_airfare(
+        saved_portal_handoff, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        session, user, trip_id, first_form = saved_portal_handoff
+        price = session.get(PersistedTripPrice, f"trip-price:{trip_id}:transport")
+        assert price is not None
+        expected_flight_fields = {
+            "lowest_cost_roundtrip": f"{price.lowest_amount:.2f}",
+            "lowest_fare": f"{price.lowest_amount:.2f}",
+            "cabin_class": price.cabin_class,
+            "flight_duration_hours": str(price.flight_hours),
+            "fare_evidence_attached": "true" if price.evidence_attested else "false",
+        }
+        saved_metadata = deepcopy(first_form["handoff"])
+        session.expire_all()
+    
+        # Once checked and saved, preparing the browser body needs no new policy call.
+        def unexpected_policy_call(*args, **kwargs):
+            pytest.fail("Preparing the form must use the saved verdict and price facts")
+    
+        monkeypatch.setattr(
+            "trip_planner.app.services.proposal.HTTPTPPIntegrationClient",
+            unexpected_policy_call,
+        )
+        response = Response()
+        form = prepare_workspace_proposal_portal_handoff(
+            trip_id=trip_id,
+            _payload=WorkspaceProposalHandoffRequest(),
+            response=response,
+            user=user,
+            db_session=session,
+        ).model_dump()
+    
+        assert form["action_url"] == "https://tpp.example/portal/handoff"
+        assert form["method"] == "POST"
+        assert response.headers["cache-control"] == "no-store"
+        assert form["fields"].items() >= expected_flight_fields.items()
+        # The persisted transport amount can include ground travel, so it is not airfare.
+        assert {"selected_fare", "flight_cost", "flight_pref_outbound.roundtrip_cost"}.isdisjoint(
+            form["fields"]
+        )
+        assert "USD 430.00" in form["fields"]["notes"]
+        assert form["handoff"] == saved_metadata
+        assert form == first_form
+        assert "source_snapshot" not in form["handoff"]
+    
+        # Withdrawing those facts invalidates the saved form rather than reusing its prefill.
+        save_trip_price(
+            session,
+            user=user,
+            trip_id=trip_id,
+            component="transport",
+            amount=430.0,
+            note="United.com quote",
+        )
+        with pytest.raises(HTTPException) as rejected:
+            prepare_workspace_proposal_portal_handoff(
+                trip_id=trip_id,
+                _payload=WorkspaceProposalHandoffRequest(),
+                response=Response(),
+                user=user,
+                db_session=session,
+            )
+        assert rejected.value.status_code == 409
+        session.expire_all()
+        assert (
+>           get_workspace_proposal_payload(session, user=user, trip_id=trip_id)["proposal_state"][
+                "portal_handoff"
+            ]
+            == saved_metadata
+        )
+E       TypeError: 'NoneType' object is not subscriptable
+
+tests/integration/test_saved_portal_handoff.py:448: TypeError
+---------------------------- Captured stderr setup -----------------------------
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 20260407_01, Create account and auth-session tables.
+INFO  [alembic.runtime.migration] Running upgrade  -> 20260407_01, Create account and auth-session tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_01 -> 20260407_02, Create persisted trip table.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_01 -> 20260407_02, Create persisted trip table.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_02 -> 20260407_03, Create persisted saved-scenario and activity-history tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_02 -> 20260407_03, Create persisted saved-scenario and activity-history tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_03 -> 20260408_01, add persisted planning session state
+INFO  [alembic.runtime.migration] Running upgrade 20260407_03 -> 20260408_01, add persisted planning session state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_01 -> 20260408_02, add persisted budget plan and actual-spend state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_01 -> 20260408_02, add persisted budget plan and actual-spend state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_02 -> 20260408_03, add persisted policy import state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_02 -> 20260408_03, add persisted policy import state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_03 -> 20260409_01, add persisted proposal lifecycle state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_03 -> 20260409_01, add persisted proposal lifecycle state
+INFO  [alembic.runtime.migration] Running upgrade 20260409_01 -> 20260410_01, add persisted planner actions
+INFO  [alembic.runtime.migration] Running upgrade 20260409_01 -> 20260410_01, add persisted planner actions
+INFO  [alembic.runtime.migration] Running upgrade 20260410_01 -> 20260412_01, add planner checkpoints and user-visible memory artifacts
+INFO  [alembic.runtime.migration] Running upgrade 20260410_01 -> 20260412_01, add planner checkpoints and user-visible memory artifacts
+INFO  [alembic.runtime.migration] Running upgrade 20260412_01 -> 20260507_01, add selected planning mode to session state
+INFO  [alembic.runtime.migration] Running upgrade 20260412_01 -> 20260507_01, add selected planning mode to session state
+INFO  [alembic.runtime.migration] Running upgrade 20260507_01 -> 20260510_01, add persisted planning ledger entries
+INFO  [alembic.runtime.migration] Running upgrade 20260507_01 -> 20260510_01, add persisted planning ledger entries
+INFO  [alembic.runtime.migration] Running upgrade 20260510_01 -> 20260510_02, add persisted planning notebook items and session focus columns
+INFO  [alembic.runtime.migration] Running upgrade 20260510_01 -> 20260510_02, add persisted planning notebook items and session focus columns
+INFO  [alembic.runtime.migration] Running upgrade 20260510_02 -> 20260512_01, repair planning notebook schema for already-deployed databases
+INFO  [alembic.runtime.migration] Running upgrade 20260510_02 -> 20260512_01, repair planning notebook schema for already-deployed databases
+INFO  [alembic.runtime.migration] Running upgrade 20260512_01 -> 20260921_01, add the trip origin the planner needs to measure a journey
+INFO  [alembic.runtime.migration] Running upgrade 20260512_01 -> 20260921_01, add the trip origin the planner needs to measure a journey
+INFO  [alembic.runtime.migration] Running upgrade 20260921_01 -> 20260921_02, add human-entered trip prices
+INFO  [alembic.runtime.migration] Running upgrade 20260921_01 -> 20260921_02, add human-entered trip prices
+INFO  [alembic.runtime.migration] Running upgrade 20260921_02 -> 20260922_01, record the flight details TPP's fare and cabin rules read on a price
+INFO  [alembic.runtime.migration] Running upgrade 20260921_02 -> 20260922_01, record the flight details TPP's fare and cabin rules read on a price
+INFO  [alembic.runtime.migration] Running upgrade 20260922_01 -> 20260928_01, persist truthful TPP portal handoff preparation state
+INFO  [alembic.runtime.migration] Running upgrade 20260922_01 -> 20260928_01, persist truthful TPP portal handoff preparation state
+INFO  [alembic.runtime.migration] Running upgrade 20260928_01 -> 20261014_01, record a link to the fare a traveller chose, as fare evidence
+INFO  [alembic.runtime.migration] Running upgrade 20260928_01 -> 20261014_01, record a link to the fare a traveller chose, as fare evidence
+=============================== warnings summary ===============================
+tests/integration/test_saved_portal_handoff.py: 89 warnings
+  /Users/teacher/Library/CloudStorage/Dropbox/Learning/Code/trip-planner/.venv/lib/python3.14/site-packages/alembic/config.py:612: DeprecationWarning: No path_separator found in configuration; falling back to legacy splitting on spaces, commas, and colons for prepend_sys_path.  Consider adding path_separator=os to Alembic config.
+    util.warn_deprecated(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/integration/test_saved_portal_handoff.py::test_saved_flight_facts_prefill_the_form_without_inventing_airfare[attested-business-quote]
+FAILED tests/integration/test_saved_portal_handoff.py::test_saved_flight_facts_prefill_the_form_without_inventing_airfare[unattested-zero-lowest-fare]
+2 failed, 87 passed, 89 warnings in 12.04s
+
+Final Python scope and canonical seam:
+........................................................................ [ 20%]
+........................................................................ [ 41%]
+........................................................................ [ 62%]
+........................................................................ [ 82%]
+...........................................................              [100%]
+=============================== warnings summary ===============================
+../../../../../Library/CloudStorage/Dropbox/Learning/Code/trip-planner/.venv/lib/python3.14/site-packages/fastapi/testclient.py:1
+  /Users/teacher/Library/CloudStorage/Dropbox/Learning/Code/trip-planner/.venv/lib/python3.14/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/app/test_trip_prices.py: 20 warnings
+tests/app/test_proposal.py: 98 warnings
+tests/app/test_portal_handoff_flow.py: 138 warnings
+tests/app/test_trips_api.py: 6 warnings
+tests/integration/test_saved_portal_handoff.py: 89 warnings
+tests/integrations/test_canonical_state_seam.py: 2 warnings
+  /Users/teacher/Library/CloudStorage/Dropbox/Learning/Code/trip-planner/.venv/lib/python3.14/site-packages/alembic/config.py:612: DeprecationWarning: No path_separator found in configuration; falling back to legacy splitting on spaces, commas, and colons for prepend_sys_path.  Consider adding path_separator=os to Alembic config.
+    util.warn_deprecated(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+347 passed, 354 warnings in 64.30s (0:01:04)
+
+Full frontend packet/workspace tests before last extra race case:
+
+> trip-planner-frontend@0.1.0 test
+> vitest run --exclude src/smoke/** --exclude e2e/** src/routes/WorkspacePage.test.tsx src/components/workspace/ApprovalPacket.test.tsx
+
+
+ RUN  v4.1.10 /Users/teacher/.codex/automations/pd-workloop-resume/worktrees/trip-planner-issue-1902/frontend
+
+
+ Test Files  2 passed (2)
+      Tests  105 passed (105)
+   Start at  08:28:55
+   Duration  38.58s (transform 508ms, setup 292ms, import 623ms, tests 37.26s, environment 1.60s)
+
+
+Final three race/label controls:
+
+> trip-planner-frontend@0.1.0 test
+> vitest run --exclude src/smoke/** --exclude e2e/** src/routes/WorkspacePage.test.tsx -t pre-save policy refresh|cancels a prepared handoff|clears the prior verdict
+
+
+ RUN  v4.1.10 /Users/teacher/.codex/automations/pd-workloop-resume/worktrees/trip-planner-issue-1902/frontend
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed | 87 skipped (90)
+   Start at  08:30:15
+   Duration  2.84s (transform 370ms, setup 142ms, import 453ms, tests 1.41s, environment 726ms)
+

@@ -1699,7 +1699,20 @@ def get_workspace_proposal_payload(
         if evaluated_prices != policy_price_evidence(current_prices):
             # Also reject a late result saved by a request that overlapped a price edit.
             serialized["evaluation"] = {}
+            guidance = "Prices changed. Re-run the policy check before approval."
+            follow_up = {
+                "status": "stale",
+                "title": "Needs a new policy check",
+                "summary": guidance,
+                "guidance": [guidance],
+            }
+            serialized["follow_up"] = follow_up
             serialized["summary"].update(
+                follow_up=follow_up,
+                follow_up_status="stale",
+                follow_up_title=follow_up["title"],
+                follow_up_summary=guidance,
+                highlights=[guidance],
                 approval_ready=False,
                 evaluation_result_status="stale",
                 submission_requires_polling=False,
