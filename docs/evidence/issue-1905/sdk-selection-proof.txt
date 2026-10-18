@@ -1,0 +1,939 @@
+Issue1905: mocked Google SDK real-adapter proof, no live map/deployment claim.
+Initial handler-disconnect control unexpectedly passed because a linked note selected Oslo before the click. Rejected that control, changed the test to select an unlocated option first, assert Oslo absent, then require the SDK event to change the actual detail panel.
+
+Actual corrected disconnect:
+
+> trip-planner-frontend@0.1.0 test
+> vitest run --exclude src/smoke/** --exclude e2e/** TripMap -t selects canonical marker details and linked notes
+
+
+ RUN  v4.1.10 /Users/teacher/.codex/automations/pd-workloop-resume/worktrees/trip-planner-issue-1905/frontend
+
+ ❯ src/components/maps/TripMap.test.tsx (11 tests | 1 failed | 10 skipped) 220ms
+     × selects canonical marker details and linked notes from an SDK click 220ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 10 skipped (11)
+   Start at  08:24:19
+   Duration  1.02s (transform 80ms, setup 97ms, import 96ms, tests 220ms, environment 512ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/maps/TripMap.test.tsx > real Google Maps adapter > selects canonical marker details and linked notes from an SDK click
+TestingLibraryElementError: Unable to find an accessible element with the role "heading" and name "Oslo"
+
+Here are the accessible roles:
+
+  paragraph:
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"status-label"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p />[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"muted-copy"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"muted-copy"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p />[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"muted-copy"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"scenario-kicker"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p />[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"muted-copy"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p />[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"muted-copy"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"muted-copy"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p />[39m
+
+  Name "":
+  [36m<p />[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"muted-copy"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"muted-copy"[39m
+    [33mdata-testid[39m=[32m"policy-posture"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p />[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"scenario-kicker"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p />[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"scenario-kicker"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p />[39m
+
+  --------------------------------------------------
+  heading:
+
+  Name "Map for Rail-first route":
+  [36m<h2 />[39m
+
+  Name "Map view":
+  [36m<h3 />[39m
+
+  Name "Rail transfer anchors":
+  [36m<h3 />[39m
+
+  Name "Segment focus":
+  [36m<h3 />[39m
+
+  Name "Scenario comparison":
+  [36m<h3 />[39m
+
+  Name "Selected scenario affordances":
+  [36m<h3 />[39m
+
+  Name "Route summary":
+  [36m<h3 />[39m
+
+  Name "Destination context":
+  [36m<h3 />[39m
+
+  Name "Scenario highlights":
+  [36m<h3 />[39m
+
+  Name "Scenario review rail":
+  [36m<h3 />[39m
+
+  Name "Rail-first route":
+  [36m<h4 />[39m
+
+  Name "Fjord-focus route":
+  [36m<h4 />[39m
+
+  --------------------------------------------------
+  button:
+
+  Name "Whole trip":
+  [36m<button[39m
+    [33maria-pressed[39m=[32m"false"[39m
+    [33mclass[39m=[32m"map-scope-button"[39m
+    [33mtitle[39m=[32m"Show the broad outline across all trip anchors."[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Route":
+  [36m<button[39m
+    [33maria-pressed[39m=[32m"true"[39m
+    [33mclass[39m=[32m"map-scope-button map-scope-button-active"[39m
+    [33mtitle[39m=[32m"Show the selected route option and its main travel legs."[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Segment":
+  [36m<button[39m
+    [33maria-pressed[39m=[32m"false"[39m
+    [33mclass[39m=[32m"map-scope-button"[39m
+    [33mtitle[39m=[32m"Focus on one travel leg and nearby planning markers."[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "1. Rail-first route":
+  [36m<button[39m
+    [33maria-pressed[39m=[32m"true"[39m
+    [33mclass[39m=[32m"map-toggle-chip map-toggle-chip-active"[39m
+    [33mtitle[39m=[32m"Preview Rail-first route on the map."[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "2. Fjord-focus route":
+  [36m<button[39m
+    [33maria-pressed[39m=[32m"false"[39m
+    [33mclass[39m=[32m"map-toggle-chip"[39m
+    [33mtitle[39m=[32m"Preview Fjord-focus route on the map."[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "1StockholmWhere the journey starts.":
+  [36m<button[39m
+    [33maria-pressed[39m=[32m"false"[39m
+    [33mclass[39m=[32m"map-stop"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "2OsloStop 2 of 3.":
+  [36m<button[39m
+    [33maria-pressed[39m=[32m"false"[39m
+    [33mclass[39m=[32m"map-stop map-stop-focused"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "3BergenFinal destination.":
+  [36m<button[39m
+    [33maria-pressed[39m=[32m"false"[39m
+    [33mclass[39m=[32m"map-stop"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "transport marker: Rail transfer anchors. 3 option(s) anchored to Stockholm, Oslo, Bergen":
+  [36m<button[39m
+    [33maria-label[39m=[32m"transport marker: Rail transfer anchors. 3 option(s) anchored to Stockholm, Oslo, Bergen"[39m
+    [33maria-pressed[39m=[32m"true"[39m
+    [33mclass[39m=[32m"map-option-marker map-option-marker-transport map-option-marker-selected"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  group:
+
+  Name "Interactive Google map for Rail-first route":
+  [36m<div[39m
+    [33maria-label[39m=[32m"Interactive Google map for Rail-first route"[39m
+    [33mclass[39m=[32m"map-provider-canvas"[39m
+    [33mdata-google-maps-live[39m=[32m"true"[39m
+    [33mdata-provider-surface[39m=[32m"rendered"[39m
+    [33mrole[39m=[32m"group"[39m
+    [33mstyle[39m=[32m"display: block; visibility: visible; position: relative; width: 100%;"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  strong:
+
+  Name "":
+  [36m<strong />[39m
+
+  Name "":
+  [36m<strong />[39m
+
+  Name "":
+  [36m<strong />[39m
+
+  --------------------------------------------------
+  article:
+
+  Name "":
+  [36m<article[39m
+    [33mclass[39m=[32m"decision-card"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<article[39m
+    [33maria-live[39m=[32m"polite"[39m
+    [33mclass[39m=[32m"decision-card map-marker-detail"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<article[39m
+    [33mclass[39m=[32m"decision-card"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<article[39m
+    [33mclass[39m=[32m"decision-card"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<article[39m
+    [33mclass[39m=[32m"decision-card"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<article[39m
+    [33mclass[39m=[32m"decision-card"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<article[39m
+    [33mclass[39m=[32m"decision-card"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<article[39m
+    [33mclass[39m=[32m"decision-card"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<article[39m
+    [33mclass[39m=[32m"decision-card"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  list:
+
+  Name "Linked planning notes":
+  [36m<ul[39m
+    [33maria-label[39m=[32m"Linked planning notes"[39m
+    [33mclass[39m=[32m"map-ledger-focus-list"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<ul[39m
+    [33mclass[39m=[32m"map-highlight-list"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<ul[39m
+    [33mclass[39m=[32m"map-highlight-list"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<ul[39m
+    [33mclass[39m=[32m"map-highlight-list"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  listitem:
+
+  Name "":
+  [36m<li />[39m
+
+  Name "":
+  [36m<li />[39m
+
+  Name "":
+  [36m<li />[39m
+
+  Name "":
+  [36m<li />[39m
+
+  Name "":
+  [36m<li />[39m
+
+  Name "":
+  [36m<li />[39m
+
+  Name "":
+  [36m<li />[39m
+
+  Name "":
+  [36m<li />[39m
+
+  --------------------------------------------------
+  term:
+
+  Name "":
+  [36m<dt />[39m
+
+  Name "":
+  [36m<dt />[39m
+
+  Name "":
+  [36m<dt />[39m
+
+  Name "":
+  [36m<dt />[39m
+
+  --------------------------------------------------
+  definition:
+
+  Name "":
+  [36m<dd />[39m
+
+  Name "":
+  [36m<dd />[39m
+
+  Name "":
+  [36m<dd />[39m
+
+  Name "":
+  [36m<dd />[39m
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<section[39m
+      [33mclass[39m=[32m"status-card map-card"[39m
+    [36m>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"status-label"[39m
+      [36m>[39m
+        [0mTrip map[0m
+      [36m</p>[39m
+      [36m<h2>[39m
+        [0mMap for Rail-first route[0m
+      [36m</h2>[39m
+      [36m<p>[39m
+        [0mA low-friction rail sequence through the main cities.[0m
+      [36m</p>[39m
+      [36m<div[39m
+        [33maria-label[39m=[32m"Map view confidence"[39m
+        [33mclass[39m=[32m"map-provider-banner"[39m
+      [36m>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"map-provider-pill map-confidence-pill-high"[39m
+        [36m>[39m
+          [0mRegional route review[0m
+        [36m</span>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"muted-copy"[39m
+        [36m>[39m
+          [0mShows the selected route option across its regional travel legs and comparison context.[0m
+        [36m</p>[39m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"muted-copy"[39m
+      [36m>[39m
+        [0mHigh confidence: the route has enough map detail for close review.[0m
+      [36m</p>[39m
+      [36m<div[39m
+        [33maria-label[39m=[32m"Map view scope"[39m
+        [33mclass[39m=[32m"map-scope-controls"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-pressed[39m=[32m"false"[39m
+          [33mclass[39m=[32m"map-scope-button"[39m
+          [33mtitle[39m=[32m"Show the broad outline across all trip anchors."[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mWhole trip[0m
+        [36m</button>[39m
+        [36m<button[39m
+          [33maria-pressed[39m=[32m"true"[39m
+          [33mclass[39m=[32m"map-scope-button map-scope-button-active"[39m
+          [33mtitle[39m=[32m"Show the selected route option and its main travel legs."[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mRoute[0m
+        [36m</button>[39m
+        [36m<button[39m
+          [33maria-pressed[39m=[32m"false"[39m
+          [33mclass[39m=[32m"map-scope-button"[39m
+          [33mtitle[39m=[32m"Focus on one travel leg and nearby planning markers."[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mSegment[0m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33maria-label[39m=[32m"Map scenario previews"[39m
+        [33mclass[39m=[32m"map-scenario-toggle"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-pressed[39m=[32m"true"[39m
+          [33mclass[39m=[32m"map-toggle-chip map-toggle-chip-active"[39m
+          [33mtitle[39m=[32m"Preview Rail-first route on the map."[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0m1[0m
+          [0m. [0m
+          [0mRail-first route[0m
+        [36m</button>[39m
+        [36m<button[39m
+          [33maria-pressed[39m=[32m"false"[39m
+          [33mclass[39m=[32m"map-toggle-chip"[39m
+          [33mtitle[39m=[32m"Preview Fjord-focus route on the map."[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0m2[0m
+          [0m. [0m
+          [0mFjord-focus route[0m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33maria-label[39m=[32m"Route context map"[39m
+        [33mclass[39m=[32m"map-surface"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33maria-label[39m=[32m"Selected route option route drawing"[39m
+          [33mclass[39m=[32m"map-route map-route-google-maps-js"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"map-provider-toolbar"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"map-provider-name"[39m
+            [36m>[39m
+              [0mSelected route option[0m
+            [36m</span>[39m
+            [36m<span>[39m
+              [0m2[0m
+              [0m shown segment(s)[0m
+            [36m</span>[39m
+            [36m<span>[39m
+              [0m4[0m
+              [0m shown marker(s)[0m
+            [36m</span>[39m
+            [36m<span>[39m
+              [0m1[0m
+              [0m linked planning note(s)[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33maria-label[39m=[32m"Interactive Google map for Rail-first route"[39m
+            [33mclass[39m=[32m"map-provider-canvas"[39m
+            [33mdata-google-maps-live[39m=[32m"true"[39m
+            [33mdata-provider-surface[39m=[32m"rendered"[39m
+            [33mrole[39m=[32m"group"[39m
+            [33mstyle[39m=[32m"display: block; visibility: visible; position: relative; width: 100%;"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33maria-label[39m=[32m"Route and option controls"[39m
+            [33mstyle[39m=[32m"max-height: 16rem; overflow-y: auto;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"map-fallback-route"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"map-stop"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"map-stop-marker"[39m
+                [36m>[39m
+                  [0m1[0m
+                [36m</span>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"map-stop-copy"[39m
+                [36m>[39m
+                  [36m<strong>[39m
+                    [0mStockholm[0m
+                  [36m</strong>[39m
+                  [36m<span>[39m
+                    [0mWhere the journey starts.[0m
+                  [36m</span>[39m
+                [36m</span>[39m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"map-stop map-stop-focused"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"map-stop-marker"[39m
+                [36m>[39m
+                  [0m2[0m
+                [36m</span>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"map-stop-copy"[39m
+                [36m>[39m
+                  [36m<strong>[39m
+                    [0mOslo[0m
+                  [36m</strong>[39m
+                  [36m<span>[39m
+                    [0mStop 2 of 3.[0m
+                  [36m</span>[39m
+                [36m</span>[39m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"map-stop"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"map-stop-marker"[39m
+                [36m>[39m
+                  [0m3[0m
+                [36m</span>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"map-stop-copy"[39m
+                [36m>[39m
+                  [36m<strong>[39m
+                    [0mBergen[0m
+                  [36m</strong>[39m
+                  [36m<span>[39m
+                    [0mFinal destination.[0m
+                  [36m</span>[39m
+                [36m</span>[39m
+              [36m</button>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33maria-label[39m=[32m"Fallback option markers"[39m
+              [33mclass[39m=[32m"map-option-marker-list"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33maria-label[39m=[32m"transport marker: Rail transfer anchors. 3 option(s) anchored to Stockholm, Oslo, Bergen"[39m
+                [33maria-pressed[39m=[32m"true"[39m
+                [33mclass[39m=[32m"map-option-marker map-option-marker-transport map-option-marker-selected"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mT[0m
+                [36m</span>[39m
+                [0mRail transfer anchors[0m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"map-sidebar"[39m
+        [36m>[39m
+          [36m<article[39m
+            [33mclass[39m=[32m"decision-card"[39m
+          [36m>[39m
+            [36m<h3>[39m
+              [0mMap view[0m
+            [36m</h3>[39m
+            [36m<p>[39m
+              [0mShows the selected route option across its regional travel legs and comparison context.[0m
+            [36m</p>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"muted-copy"[39m
+            [36m>[39m
+              [0mHigh confidence: the route has enough map detail for close review.[0m
+            [36m</p>[39m
+            [36m<ul[39m
+              [33maria-label[39m=[32m"Linked planning notes"[39m
+              [33mclass[39m=[32m"map-ledger-focus-list"[39m
+            [36m>[39m
+              [36m<li>[39m
+                [36m<span>[39m
+                  [0mOpen question[0m
+                [36m</span>[39m
+                [0mRemember Oslo rail transfer timing.[0m
+              [36m</li>[39m
+            [36m</ul>[39m
+          [36m</article>[39m
+          [36m<article[39m
+            [33maria-live[39m=[32m"polite"[39m
+            [33mclass[39m=[32m"decision-card map-marker-detail"[39m
+          [36m>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"scenario-kicker"[39m
+            [36m>[39m
+              [0mtransport[0m
+            [36m</p>[39m
+            [36m<h3>[39m
+              [0mRail transfer anchors[0m
+            [36m</h3>[39m
+            [36m<p>[39m
+              [0m3 option(s) anchored to Stockholm, Oslo, Bergen[0m
+            [36m</p>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"muted-copy"[39m
+            [36m>[39m
+              [0mRail transfers attached to the current route.[0m
+            [36m</p>[39m
+          [36m</article>[39m
+          [36m<dl[39m
+            [33mclass[39m=[32m"workspace-meta map-metrics"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<dt>[39m
+                [0mTravel minutes[0m
+              [36m</dt>[39m
+              [36m<dd>[39m
+                [0m420[0m
+              [36m</dd>[39m
+            [36m</div>[39m
+            [36m<div>[39m
+              [36m<dt>[39m
+                [0mTransfers[0m
+              [36m</dt>[39m
+              [36m<dd>[39m
+                [0m3[0m
+              [36m</dd>[39m
+            [36m</div>[39m
+            [36m<div>[39m
+              [36m<dt>[39m
+                [0mOptions[0m
+              [36m</dt>[39m
+              [36m<dd>[39m
+                [0m3[0m
+              [36m</dd>[39m
+            [36m</div>[39m
+            [36m<div>[39m
+              [36m<dt>[39m
+                [0mEstimated total[0m
+              [36m</dt>[39m
+              [36m<dd>[39m
+                [0m$3,600[0m
+              [36m</dd>[39m
+            [36m</div>[39m
+          [36m</dl>[39m
+          [36m<article[39m
+            [33mclass[39m=[32m"decision-card"[39m
+          [36m>[39m
+            [36m<h3>[39m
+              [0mSegment focus[0m
+            [36m</h3>[39m
+            [36m<p>[39m
+              [0mStockholm[0m
+              [0m to [0m
+              [0mOslo[0m
+              [0m · 210 min[0m
+            [36m</p>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"muted-copy"[39m
+            [36m>[39m
+              [0mSegment timing is estimated from ranked route data.[0m
+            [36m</p>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"muted-copy"[39m
+            [36m>[39m
+              [0mProvider distance is not available; duration is estimated from ranked scenario timing.[0m
+            [36m</p>[39m
+          [36m</article>[39m
+          [36m<article[39m
+            [33mclass[39m=[32m"decision-card"[39m
+          [36m>[39m
+            [36m<h3>[39m
+              [0mScenario comparison[0m
+            [36m</h3>[39m
+            [36m<p>[39m
+              [0mRail-first stays the easiest route to compare against.[0m
+            [36m</p>[39m
+            [36m<ul[39m
+              [33mclass[39m=[32m"map-highlight-list"[39m
+            [36m>[39m
+              [36m<li>[39m
+                [0mroute pace[0m
+              [36m</li>[39m
+            [36m</ul>[39m
+          [36m</article>[39m
+          [36m<article[39m
+            [33mclass[39m=[32m"decision-card"[39m
+          [36m>[39m
+            [36m<h3>[39m
+              [0mSelected scenario affordances[0m
+            [36m</h3>[39m
+            [36m<ul[39m
+              [33mclass[39m=[32m"map-highlight-list"[39m
+            [36m>[39m
+              [36m<li>[39m
+                [0mRecommended scenario[0m
+              [36m</li>[39m
+              [36m<li>[39m
+                [0mNo blocking issue found[0m
+              [36m</li>[39m
+              [36m<li>[39m
+                [0m3 mapped option marker(s)[0m
+              [36m</li>[39m
+              [36m<li>[39m
+                [0m3 route stop(s)[0m
+              [36m</li>[39m
+              [36m<li>[39m
+                [0m3 transfer checkpoint(s)[0m
+              [36m</li>[39m
+            [36m</ul>[39m
+          [36m</article>[39m
+          [36m<article[39m
+            [33mclass[39m=[32m"decision-card"[39m
+          [36m>[39m
+            [36m<h3>[39m
+              [0mRoute summary[0m
+            [36m</h3>[39m
+            [36m<p>[39m
+              [0mstockholm -&gt; oslo -&gt; bergen[0m
+            [36m</p>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"muted-copy"[39m
+            [36m>[39m
+              [0mLead route for the current workspace comparison set.[0m
+            [36m</p>[39m
+          [36m</article>[39m
+          [36m<article[39m
+            [33mclass[39m=[32m"decision-card"[39m
+          [36m>[39m
+            [36m<h3>[39m
+              [0mDestination context[0m
+            [36m</h3>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"muted-copy"[39m
+              [33mdata-testid[39m=[32m"policy-posture"[39m
+            [36m>[39m
+              [0mApproval posture: [0m
+              [0mNo approval packet yet[0m
+            [36m</p>[39m
+            [36m<p>[39m
+              [0m3 destination anchors are backed by 1 feasibility assessment(s).[0m
+            [36m</p>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"map-anchor-list"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"map-anchor-chip"[39m
+              [36m>[39m
+                [0mStockholm[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"map-anchor-chip"[39m
+              [36m>[39m
+                [0mOslo[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"map-anchor-chip"[39m
+              [36m>[39m
+                [0mBergen[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"map-anchor-chip"[39m
+              [36m>[39m
+                [0mSweden[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"map-anchor-chip"[39m
+              [36m>[39m
+                [0mNorway[0m
+              [36m</span>[39m
+            [36m</div>[39m
+          [36m</article>[39m
+          [36m<article[39m
+            [33mclass[39m=[32m"decision-card"[39m
+          [36m>[39m
+            [36m<h3>[39m
+              [0mScenario highlights[0m
+            [36m</h3>[39m
+            [36m<ul[39m
+              [33mclass[39m=[32m"map-highlight-list"[39m
+            [36m>[39m
+              [36m<li>[39m
+                [0mBalanced movement with clear rail legs.[0m
+              [36m</li>[39m
+            [36m</ul>[39m
+          [36m</article>[39m
+          [36m<article[39m
+            [33mclass[39m=[32m"decision-card"[39m
+          [36m>[39m
+            [36m<h3>[39m
+              [0mScenario review rail[0m
+            [36m</h3>[39m
+            [36m<div[39m
+              [33maria-label[39m=[32m"Map scenario review rail"[39m
+              [33mclass[39m=[32m"map-scenario-rail"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"map-scenario-rail-card map-scenario-rail-card-active"[39m
+              [36m>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"scenario-kicker"[39m
+                [36m>[39m
+                  [0mrecommended[0m
+                [36m</p>[39m
+                [36m<h4>[39m
+                  [0mRail-first route[0m
+                [36m</h4>[39m
+                [36m<p>[39m
+                  [0m420[0m
+                  [0m min · [0m
+                  [0m3 transfers[0m
+                [36m</p>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"map-scenario-rail-card"[39m
+              [36m>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"scenario-kicker"[39m
+                [36m>[39m
+                  [0malternative[0m
+                [36m</p>[39m
+                [36m<h4>[39m
+                  [0mFjord-focus route[0m
+                [36m</h4>[39m
+                [36m<p>[39m
+                  [0m510[0m
+                  [0m min · [0m
+                  [0m5 transfers[0m
+                [36m</p>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</article>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</section>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError ../../../../../../Library/CloudStorage/Dropbox/Learning/Code/trip-planner/frontend/node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../../../../Library/CloudStorage/Dropbox/Learning/Code/trip-planner/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../../../../Library/CloudStorage/Dropbox/Learning/Code/trip-planner/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../../../../Library/CloudStorage/Dropbox/Learning/Code/trip-planner/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/components/maps/TripMap.test.tsx:391:19
+    389|     expect(oslo).toBeDefined();
+    390|     act(() => { oslo.dispatchEvent(new Event("gmp-click")); });
+    391|     expect(screen.getByRole("heading", { name: "Oslo" })).toBeInTheDoc…
+       |                   ^
+    392|     expect(screen.getByLabelText("Linked planning notes for selected m…
+    393|     expect(oslo.zIndex).toBe(1000);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+Exact-byte restored corrected test:
+
+> trip-planner-frontend@0.1.0 test
+> vitest run --exclude src/smoke/** --exclude e2e/** TripMap -t selects canonical marker details and linked notes
+
+
+ RUN  v4.1.10 /Users/teacher/.codex/automations/pd-workloop-resume/worktrees/trip-planner-issue-1905/frontend
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 10 skipped (11)
+   Start at  08:24:21
+   Duration  771ms (transform 80ms, setup 58ms, import 96ms, tests 166ms, environment 367ms)
+
+
+Broad map/surface/workspace gates (before test strengthening; source unchanged):
+
+> trip-planner-frontend@0.1.0 test
+> vitest run --exclude src/smoke/** --exclude e2e/** TripMap mapSurface src/routes/WorkspacePage.test.tsx
+
+
+ RUN  v4.1.10 /Users/teacher/.codex/automations/pd-workloop-resume/worktrees/trip-planner-issue-1905/frontend
+
+
+ Test Files  3 passed (3)
+      Tests  112 passed (112)
+   Start at  08:22:30
+   Duration  37.73s (transform 699ms, setup 334ms, import 813ms, tests 36.94s, environment 1.70s)
+
+
+Final map gates:
+
+> trip-planner-frontend@0.1.0 test
+> vitest run --exclude src/smoke/** --exclude e2e/** TripMap mapSurface
+
+
+ RUN  v4.1.10 /Users/teacher/.codex/automations/pd-workloop-resume/worktrees/trip-planner-issue-1905/frontend
+
+
+ Test Files  2 passed (2)
+      Tests  26 passed (26)
+   Start at  08:24:51
+   Duration  1.30s (transform 156ms, setup 231ms, import 173ms, tests 431ms, environment 1.12s)
+

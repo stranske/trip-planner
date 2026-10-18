@@ -631,8 +631,8 @@ def test_refresh_does_not_authorize_prices_changed_after_policy_submission(
     )
     assert updated.status_code == 200
     refreshed = tpp_client.post(f"/api/workspace/{submitted_trip}/proposal/refresh")
-    assert refreshed.status_code == 200
-    assert refreshed.json()["proposal_state"]["summary"]["evaluation_result_status"] == "compliant"
+    assert refreshed.status_code == 404
+    assert tpp_client.get(f"/api/workspace/{submitted_trip}").json()["proposal_state"] is None
     prepared = tpp_client.post(f"/api/workspace/{submitted_trip}/proposal/handoff", json={})
     assert prepared.status_code == 409
     assert "Run the policy check again" in prepared.json()["detail"]
