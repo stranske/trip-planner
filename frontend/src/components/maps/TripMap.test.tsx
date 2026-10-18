@@ -1,9 +1,35 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FeasibilitySummary, RuntimeScenarioComparison, WorkspaceData } from "../../api/workspace";
 import { TripMap } from "./TripMap";
+
+const sdk = vi.hoisted(() => ({
+  markers: [] as Array<EventTarget & { map: unknown; title: string; position: unknown; zIndex: number | null }>,
+  geocode: vi.fn(), load: vi.fn(), polylines: [] as Array<{ setMap: ReturnType<typeof vi.fn> }>,
+}));
+vi.mock("@googlemaps/js-api-loader", () => ({ setOptions: vi.fn(), importLibrary: sdk.load }));
+beforeEach(() => {
+  sdk.markers.length = 0; sdk.polylines.length = 0;
+  sdk.geocode.mockReset().mockImplementation(async () => ({ results: [{ geometry: { location: { toJSON: () => ({ lat: 59.9, lng: 10.7 }) } } }] }));
+  sdk.load.mockReset().mockImplementation(async (library: string) => {
+    if (library === "maps") return {
+      Map: class { fitBounds = vi.fn(); },
+      Polyline: class { setMap = vi.fn(); constructor() { sdk.polylines.push(this); } },
+    };
+    if (library === "marker") return { AdvancedMarkerElement: class extends EventTarget {
+      map: unknown; title: string; position: unknown; zIndex: number | null;
+      constructor(options: { map: unknown; title: string; position: unknown; zIndex?: number }) {
+        super(); Object.assign(this, options); this.map = options.map; this.title = options.title;
+        this.position = options.position; this.zIndex = options.zIndex ?? null; sdk.markers.push(this);
+      }
+    } };
+    if (library === "geocoding") return { Geocoder: class { geocode = sdk.geocode; } };
+    if (library === "core") return { LatLngBounds: class { extend = vi.fn(); } };
+    throw new Error("unexpected SDK library " + library);
+  });
+});
 
 const comparison: RuntimeScenarioComparison = {
   title: "Scandinavia route comparison",
@@ -166,6 +192,7 @@ function renderTripMap(
   providerLoadState?: "pending" | "loading" | "ready" | "error"
 ) {
   function Harness() {
+    const [scenario, setScenario] = useState("route-option:rail-first");
     const [activeScope, setActiveScope] = useState<"global" | "regional" | "local">("regional");
     const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
     return (
@@ -173,8 +200,8 @@ function renderTripMap(
         comparison={comparison}
         scenarioComparisonSummary="Rail-first stays the easiest route to compare against."
         scenarioFocusAreas={["route_pace"]}
-        activeScenarioId="route-option:rail-first"
-        onSelectScenario={onSelectScenario}
+        activeScenarioId={scenario}
+        onSelectScenario={(id) => { setScenario(id); onSelectScenario(id); }}
         bundles={bundles}
         feasibilitySummary={feasibilitySummary}
         tripPrimaryRegions={["Sweden", "Norway"]}
@@ -341,4 +368,71 @@ describe("TripMap", () => {
     expect(screen.getByText(/Stockholm to Oslo · 210 min/)).toBeInTheDocument();
     expect(screen.getByText("Segment timing is estimated from ranked route data.")).toBeInTheDocument();
   });
+});
+
+
+describe("real Google Maps adapter", () => {
+  it("selects canonical marker details and linked notes from an SDK click", async () => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
+    const ledger = { ...planningLedger, entries: [{ ...planningLedger.entries[1], metadata: { marker_id: "oslo" } }] };
+    renderTripMap(vi.fn(), ledger); // No providerLoadState override: mounts the actual adapter.
+    const canvas = await screen.findByRole("group", { name: "Interactive Google map for Rail-first route" });
+    await waitFor(() => expect(canvas).toHaveAttribute("data-google-maps-live", "true"));
+    expect(screen.getByRole("button", { name: /transport marker: Rail transfer anchors/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Stockholm/ }).length).toBeGreaterThan(0);
+    expect(sdk.markers.map((marker) => marker.title)).not.toContain("Rail transfer anchors");
+    // Select another marker first: Oslo may be selected initially by its linked note.
+    fireEvent.click(screen.getByRole("button", { name: /transport marker: Rail transfer anchors/i }));
+    expect(screen.getByRole("heading", { name: "Rail transfer anchors" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Oslo" })).not.toBeInTheDocument();
+    const oslo = sdk.markers.find((marker) => marker.title === "Oslo")!;
+    expect(oslo).toBeDefined();
+    act(() => { oslo.dispatchEvent(new Event("gmp-click")); });
+    expect(screen.getByRole("heading", { name: "Oslo" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Linked planning notes for selected marker")).toHaveTextContent("Remember Oslo rail transfer timing.");
+    expect(oslo.zIndex).toBe(1000);
+    const removeListener = vi.spyOn(oslo, "removeEventListener");
+    cleanup();
+    expect(removeListener).toHaveBeenCalledWith("gmp-click", expect.any(Function));
+    expect(sdk.markers.every((marker) => marker.map === null)).toBe(true);
+    expect(sdk.polylines.every((line) => line.setMap.mock.calls.some(([map]) => map === null))).toBe(true);
+    // The old SDK callback must be removed when the adapter is disposed.
+    oslo.dispatchEvent(new Event("gmp-click"));
+  });
+
+  it("retains canonical controls when SDK loading fails", async () => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
+    sdk.load.mockRejectedValueOnce(new Error("synthetic SDK failure"));
+    renderTripMap();
+    await waitFor(() => expect(sdk.load).toHaveBeenCalledWith("maps"));
+    await waitFor(() => expect(screen.queryByRole("group", { name: "Interactive Google map for Rail-first route" })).not.toBeInTheDocument());
+    expect(screen.getAllByRole("button", { name: /Stockholm/ }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /transport marker: Rail transfer anchors/i })).toBeInTheDocument();
+  });
+
+  it("retains route and option context when geocoding fails and the scenario changes", async () => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
+    sdk.geocode.mockRejectedValue(new Error("synthetic missing location"));
+    renderTripMap();
+    await waitFor(() => expect(sdk.load).toHaveBeenCalledWith("maps"));
+    await waitFor(() => expect(screen.queryByRole("group", { name: "Interactive Google map for Rail-first route" })).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /Fjord-focus route/ }));
+    await waitFor(() => expect(screen.getAllByText("Fjord-focus route").length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.queryByRole("group", { name: "Interactive Google map for Fjord-focus route" })).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /transport marker: Rail transfer anchors/i })).toBeInTheDocument();
+    expect(sdk.markers).toHaveLength(0);
+  });
+});
+
+
+it("replaces SDK overlays on a ready scenario change without losing option controls", async () => {
+  vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
+  renderTripMap();
+  await waitFor(() => expect(screen.getByRole("group", { name: "Interactive Google map for Rail-first route" })).toHaveAttribute("data-google-maps-live", "true"));
+  const previousMarkers = [...sdk.markers];
+  fireEvent.click(screen.getByRole("button", { name: /Fjord-focus route/ }));
+  await waitFor(() => expect(screen.getByRole("group", { name: "Interactive Google map for Fjord-focus route" })).toHaveAttribute("data-google-maps-live", "true"));
+  expect(previousMarkers.every((marker) => marker.map === null)).toBe(true);
+  expect(sdk.markers.some((marker) => marker.map !== null && marker.title === "Flam")).toBe(true);
+  expect(screen.getByRole("button", { name: /transport marker: Rail transfer anchors/i })).toBeInTheDocument();
 });

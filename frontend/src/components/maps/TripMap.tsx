@@ -1,5 +1,5 @@
 import type { FeasibilitySummary, RuntimeScenarioComparison, WorkspaceData } from "../../api/workspace";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import {
   buildTripMapSurfaceModel,
@@ -44,7 +44,7 @@ export function TripMap({
   tripMode: string;
   policyPosture: string | null;
   planningLedger?: WorkspaceData["planning_ledger"];
-  /** Observed SDK lifecycle state; configuration alone must not mark the map live. */
+  /** Test-only observed lifecycle override; the real SDK path leaves this unset. */
   providerLoadState?: MapProviderLoadState;
   activeScope: MapViewScope;
   selectedSegmentId: string | null;
@@ -286,6 +286,9 @@ function ActiveTripMap({
               apiKey={googleMapsApiKey}
               title={activeScenario.title}
               routeSegments={mapSurface.visibleRouteSegments}
+              markers={mapSurface.visibleMarkers}
+              selectedMarkerId={selectedMarker?.id ?? null}
+              onSelectMarker={setSelectedMarkerId}
               visible={mapSurface.provider.kind === "google-maps-js"}
               onProviderLoadStateChange={setObservedProviderLoadState}
             >
@@ -481,6 +484,9 @@ function GoogleMapsProviderMap({
   apiKey,
   title,
   routeSegments,
+  markers,
+  selectedMarkerId,
+  onSelectMarker,
   visible,
   onProviderLoadStateChange,
   children,
@@ -488,6 +494,9 @@ function GoogleMapsProviderMap({
   apiKey: string;
   title: string;
   routeSegments: ReturnType<typeof buildTripMapSurfaceModel>["routeSegments"];
+  markers: MapMarker[];
+  selectedMarkerId: string | null;
+  onSelectMarker: (id: string) => void;
   visible: boolean;
   onProviderLoadStateChange: (state: MapProviderLoadState) => void;
   children: ReactNode;
@@ -495,6 +504,15 @@ function GoogleMapsProviderMap({
   const [canvas, setCanvas] = useState<HTMLDivElement | null>(null);
   const [providerSurfaceState, setProviderSurfaceState] =
     useState<MapProviderLoadState>("pending");
+  const providerMarkers = useRef<Array<{ id: string; marker: { zIndex: number | null } }>>([]);
+  const selection = useRef(selectedMarkerId);
+  selection.current = selectedMarkerId;
+  useEffect(() => {
+    for (const entry of providerMarkers.current) {
+      entry.marker.zIndex = entry.id === selectedMarkerId ? 1000 : null;
+    }
+  }, [selectedMarkerId]);
+  const markerKey = JSON.stringify(markers.map(({ id, label, providerLocationQuery }) => [id, label, providerLocationQuery]));
   const routeKey = routeSegments
     .map(
       (segment) =>
@@ -507,7 +525,9 @@ function GoogleMapsProviderMap({
       return;
     }
     let cancelled = false;
-    const overlays: Array<{ setMap: (map: unknown) => void }> = [];
+    const cleanups: Array<() => void> = [];
+    const markerEntries: typeof providerMarkers.current = [];
+    providerMarkers.current = markerEntries;
     onProviderLoadStateChange("loading");
     setProviderSurfaceState("loading");
 
@@ -535,24 +555,27 @@ function GoogleMapsProviderMap({
         const locations = new Map<string, { lat: number; lng: number }>();
 
         for (const routeLabel of Array.from(
-          new Set(routeSegments.flatMap((segment) => [segment.fromLabel, segment.toLabel]))
+          new Set([...routeSegments.flatMap((segment) => [segment.fromLabel, segment.toLabel]), ...markers.flatMap((marker) => marker.providerLocationQuery ? [marker.providerLocationQuery] : [])])
         )) {
           if (cancelled) {
-            overlays.forEach((overlay) => overlay.setMap(null));
+            cleanups.forEach((dispose) => dispose());
             return;
           }
           try {
             const response = await geocoder.geocode({ address: routeLabel });
             const location = response.results[0]?.geometry.location;
             if (location) {
-              locations.set(routeLabel, location.toJSON());
+              const point = location.toJSON();
+              if (Number.isFinite(point.lat) && Math.abs(point.lat) <= 90 && Number.isFinite(point.lng) && Math.abs(point.lng) <= 180) {
+                locations.set(routeLabel, point);
+              }
             }
           } catch {
             // Skip labels that fail geocoding; partial route context is still useful.
           }
         }
         if (cancelled) {
-          overlays.forEach((overlay) => overlay.setMap(null));
+          cleanups.forEach((dispose) => dispose());
           return;
         }
         if (locations.size === 0) {
@@ -562,18 +585,21 @@ function GoogleMapsProviderMap({
         }
 
         const bounds = new core.LatLngBounds();
-        for (const [label, location] of locations) {
-          if (cancelled) {
-            overlays.forEach((overlay) => overlay.setMap(null));
-            return;
-          }
+        for (const location of locations.values()) bounds.extend(location);
+        for (const marker of markers) {
+          const location = marker.providerLocationQuery ? locations.get(marker.providerLocationQuery) : null;
+          if (!location) continue; // Unlocated options remain in the accessible companion controls.
           const advancedMarker = new markerLib.AdvancedMarkerElement({
-            map,
-            position: location,
-            title: label,
+            map, position: location, title: marker.label, gmpClickable: true,
+            zIndex: marker.id === selection.current ? 1000 : undefined,
           });
-          overlays.push(advancedMarker);
-          bounds.extend(location);
+          const selectMarker = () => onSelectMarker(marker.id);
+          advancedMarker.addEventListener("gmp-click", selectMarker);
+          markerEntries.push({ id: marker.id, marker: advancedMarker });
+          cleanups.push(() => {
+            advancedMarker.removeEventListener("gmp-click", selectMarker);
+            advancedMarker.map = null;
+          });
         }
         for (const segment of routeSegments) {
           const from = locations.get(segment.fromLabel);
@@ -587,17 +613,18 @@ function GoogleMapsProviderMap({
               strokeOpacity: 0.9,
               strokeWeight: 4,
             });
-            overlays.push(polyline);
+            cleanups.push(() => polyline.setMap(null));
           }
         }
         if (cancelled) {
-          overlays.forEach((overlay) => overlay.setMap(null));
+          cleanups.forEach((dispose) => dispose());
           return;
         }
         map.fitBounds(bounds, 48);
         onProviderLoadStateChange("ready");
         setProviderSurfaceState("ready");
       } catch {
+        cleanups.forEach((dispose) => dispose());
         if (!cancelled) {
           onProviderLoadStateChange("error");
           setProviderSurfaceState("error");
@@ -608,9 +635,10 @@ function GoogleMapsProviderMap({
     void renderProviderMap();
     return () => {
       cancelled = true;
-      overlays.forEach((overlay) => overlay.setMap(null));
+      cleanups.forEach((dispose) => dispose());
+      if (providerMarkers.current === markerEntries) providerMarkers.current = [];
     };
-  }, [apiKey, canvas, onProviderLoadStateChange, routeKey]);
+  }, [apiKey, canvas, onProviderLoadStateChange, onSelectMarker, routeKey, markerKey]);
 
   const showLiveCanvas = visible && providerSurfaceState === "ready";
 
@@ -637,7 +665,9 @@ function GoogleMapsProviderMap({
         }
         data-google-maps-live={providerSurfaceState === "ready" ? "true" : "false"}
       />
-      {showLiveCanvas ? null : children}
+      <div aria-label="Route and option controls" style={{ maxHeight: "16rem", overflowY: "auto" }}>
+        {children}
+      </div>
     </>
   );
 }
