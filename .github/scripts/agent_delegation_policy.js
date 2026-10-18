@@ -1,3 +1,5 @@
+const { rateLimitExpired } = require('./rate_limit_receipt');
+
 /**
  * Agent Delegation Policy
  *
@@ -18,9 +20,48 @@ const DEFAULT_ROUTE_WEIGHTS_URL = (
 );
 
 const ROUTE_WEIGHTS_SCHEMA = 'orchestrator.route-weights/v1';
+const ROUTE_WEIGHTS_SCHEMAS = new Set([
+  'orchestrator.route-weights/v1',
+  'orchestrator.route-weights/v2',
+]);
 const ROUTE_WEIGHTS_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 const ROUTE_WEIGHTS_MAX_CLOCK_SKEW_MS = 60 * 1000;
 const ROUTE_WEIGHTS_FETCH_TIMEOUT_MS = 5000;
+
+// A per-PR startup failure drains on newer provider success or time expiry.
+const AGENT_INSTALL_FAILURE_BACKOFF_HOURS = 6;
+
+function isAgentInstallFailure(record) {
+  if (!record || !['error', 'completed'].includes(record.status) ||
+      record.completion?.reason === 'progressed' || record.result?.success === true) return false;
+  const result = record.result || {};
+  // Only the runner's explicit startup/preflight diagnostic is evidence. An
+  // agent can mention a missing inner tool (or exit 127) in its task summary.
+  return [result.summary, result.error, record.summary].some(text =>
+    /^[a-z0-9_-]+ CLI preflight failed:/i
+      .test(String(text || '').trim()));
+}
+
+function recentInstallFailures(completion, now = Date.now()) {
+  const records = [...(completion?.install_failure_receipts || []),
+    ...(completion?.successful_completion_receipts || []), completion].filter(Boolean);
+  const successfulAt = new Map();
+  for (const record of records) {
+    const at = Date.parse(record.completed_at);
+    if (record.status === 'completed' &&
+        (record.completion?.reason === 'progressed' || record.result?.success === true) &&
+        Number.isFinite(at) && at <= Number(now)) {
+      successfulAt.set(record.provider, Math.max(successfulAt.get(record.provider) || 0, at));
+    }
+  }
+  return new Set(records.filter(record => {
+    const at = Date.parse(record.completed_at);
+    const age = Number(now) - at;
+    return isAgentInstallFailure(record) && Number.isFinite(age) && age >= 0 &&
+      age < AGENT_INSTALL_FAILURE_BACKOFF_HOURS * 60 * 60 * 1000 &&
+      !(successfulAt.get(record.provider) > at);
+  }).map(record => record.provider));
+}
 
 /**
  * Keepalive round kind → Orchestrator route-weights task type.
@@ -59,6 +100,32 @@ function resolveRoundKind({ labels = [], state = {} } = {}) {
     return 'testgen';
   }
   return state.last_action || state.pending_action || 'implement';
+}
+
+/**
+ * Check whether a route-weights document is within the freshness window.
+ *
+ * @param {Object|null|undefined} document
+ * @param {Date|number|string} [now]
+ * @returns {boolean}
+ */
+function isRouteWeightsFresh(document, now) {
+  if (!document || typeof document !== 'object') {
+    return false;
+  }
+  const referenceTime = now instanceof Date ? now.getTime() : new Date(now || Date.now()).getTime();
+  if (!Number.isFinite(referenceTime)) {
+    return false;
+  }
+  const generatedAt = Date.parse(document.generated_at || '');
+  if (
+    !Number.isFinite(generatedAt) ||
+    referenceTime - generatedAt > ROUTE_WEIGHTS_MAX_AGE_MS ||
+    generatedAt - referenceTime > ROUTE_WEIGHTS_MAX_CLOCK_SKEW_MS
+  ) {
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -118,16 +185,11 @@ async function loadRouteWeights({ url = DEFAULT_ROUTE_WEIGHTS_URL, fetchImpl, no
       return null;
     }
 
-    if (!document || document.schema !== ROUTE_WEIGHTS_SCHEMA) {
+    if (!document || !ROUTE_WEIGHTS_SCHEMAS.has(document.schema)) {
       return null;
     }
 
-    const generatedAt = Date.parse(document.generated_at || '');
-    if (
-      !Number.isFinite(generatedAt) ||
-      referenceTime - generatedAt > ROUTE_WEIGHTS_MAX_AGE_MS ||
-      generatedAt - referenceTime > ROUTE_WEIGHTS_MAX_CLOCK_SKEW_MS
-    ) {
+    if (!isRouteWeightsFresh(document, referenceTime)) {
       return null;
     }
 
@@ -139,6 +201,16 @@ async function loadRouteWeights({ url = DEFAULT_ROUTE_WEIGHTS_URL, fetchImpl, no
       clearTimeout(timeoutId);
     }
   }
+}
+
+/**
+ * Fetch the Orchestrator route-weights export for intake and delegation callers.
+ *
+ * @param {Object} [options]
+ * @returns {Promise<Object|null>}
+ */
+async function fetchRouteWeights(options = {}) {
+  return loadRouteWeights(options);
 }
 
 /**
@@ -274,6 +346,7 @@ function selectAgentFromRouteWeights({
  */
 function decideNextAgent({
   state = {},
+  completion = null,
   labels = [],
   secrets = {},
   registry = {},
@@ -281,6 +354,7 @@ function decideNextAgent({
   routeWeights = null,
   roundKind = 'implement',
   core,
+  now = Date.now(),
 }) {
   const agents = registry.agents || {};
   const defaultAgent = registry.default_agent || 'codex';
@@ -288,9 +362,10 @@ function decideNextAgent({
   // Check if agent:auto is present
   const hasAutoLabel = labels.some((label) => normalizeLabel(label) === 'agent:auto');
 
-  // If no agent:auto, use explicit agent labels or default
-  if (!hasAutoLabel) {
-    const explicitAgent = getExplicitAgentFromLabels(labels, agents);
+  const installFailures = recentInstallFailures(completion, now);
+  const explicitAgent = getExplicitAgentFromLabels(labels, agents);
+  // Explicit routes also recover from a failed startup, without requiring agent:auto.
+  if (!hasAutoLabel && !installFailures.has(explicitAgent || defaultAgent)) {
     return {
       agent: explicitAgent || defaultAgent,
       reason: explicitAgent ? 'explicit-label' : 'default',
@@ -301,7 +376,7 @@ function decideNextAgent({
   }
 
   // agent:auto is present - run delegation logic
-  core?.info?.('agent:auto detected - running delegation policy');
+  core?.info?.('Running delegation policy (auto routing or startup recovery)');
 
   const explicitAgents = getExplicitAgentsFromLabels(labels, agents);
   if (explicitAgents.length > 1) {
@@ -315,7 +390,12 @@ function decideNextAgent({
     };
   }
 
-  const currentAgent = state.current_agent || '';
+  const currentAgent = (!hasAutoLabel && explicitAgent) || state.current_agent ||
+    (completion?.completion?.reason === 'rate_limited' ? completion.provider : '') ||
+    (installFailures.has(explicitAgent || defaultAgent) ? (explicitAgent || defaultAgent) : '');
+  const expired = rateLimitExpired(completion);
+  const rateLimited = !expired && completion?.completion?.reason === 'rate_limited' &&
+    completion.provider === currentAgent;
   const lastSwitchIteration = state.last_switch_iteration || 0;
   const currentIteration = state.iteration || 0;
   const switchCount = state.switch_count || 0;
@@ -332,24 +412,49 @@ function decideNextAgent({
     });
   }
 
-  // Filter to available agents
+  const taskType = ROUTE_WEIGHT_TASK_TYPES[roundKind] || ROUTE_WEIGHT_TASK_TYPES.implement;
+  const ranking = Array.isArray(routeWeights?.task_types?.[taskType]?.ranking)
+    ? routeWeights.task_types[taskType].ranking : [];
+
+  // Receipts survive a later provider failure; route exports can still report
+  // that provider's pool as healthy. Only expiry or loader-observed progress
+  // drains this persisted backoff, including before a current agent is chosen.
+  const activeRateLimited = new Set((completion?.rate_limit_receipts || [])
+    .filter((record) => record?.completion?.reason === 'rate_limited' &&
+      !rateLimitExpired(record))
+    .map((record) => record.provider));
+
+  // Initial selection has no completion to trigger the rate-limit switch path.
+  // Apply pool availability before concrete-label, weighted and default choices.
   const availableAgents = Object.keys(agents).filter((key) => (
     agentPrereqs[key].available && hasKeepaliveRunner(agents[key]) &&
-    (!Array.isArray(runnableAgents) || runnableAgents.includes(key))
+    !activeRateLimited.has(key) && !installFailures.has(key) &&
+    (!Array.isArray(runnableAgents) || runnableAgents.includes(key)) &&
+    ((currentAgent && !installFailures.has(currentAgent)) || getAgentPoolState(
+      routeWeights, key, ranking.find((row) => row?.agent === key),
+    ) === 'ok')
   ));
 
   if (availableAgents.length === 0) {
-    core?.warning?.('No agents available (missing secrets)');
+    core?.warning?.('No agents available (prerequisites, runners or pool capacity)');
     return {
       agent: '',
-      reason: 'no-agents-available',
+      reason: installFailures.has(currentAgent) ? 'install-failed-no-alternatives'
+        : (rateLimited ? 'rate-limited-no-alternatives' : 'no-agents-available'),
       shouldSwitch: false,
       alternatives: [],
       delegationSource: 'static',
     };
   }
 
-  const taskType = ROUTE_WEIGHT_TASK_TYPES[roundKind] || ROUTE_WEIGHT_TASK_TYPES.implement;
+  // Time alone reopens an exhausted provider gate; dispatch does not drain it.
+  if (expired && availableAgents.includes(completion.provider)) {
+    core?.info?.(`rate_limited receipt expired; ${completion.provider} eligible`);
+    return { agent: completion.provider, reason: 'rate-limit-receipt-expired',
+      shouldSwitch: currentAgent !== completion.provider, previousAgent: currentAgent,
+      alternatives: availableAgents.filter(agent => agent !== completion.provider),
+      delegationSource: 'static' };
+  }
 
   // If no current agent, preserve an explicit opener choice first, then use
   // evidence-bearing route weights, and finally fall back to the registry
@@ -404,12 +509,13 @@ function decideNextAgent({
     };
   }
 
-  if (!availableAgents.includes(currentAgent)) {
+  if (!rateLimited && !availableAgents.includes(currentAgent)) {
     const nextAgent = availableAgents.includes(defaultAgent) ? defaultAgent : availableAgents[0];
     core?.info?.(`Switching from unavailable ${currentAgent} to ${nextAgent}`);
     return {
       agent: nextAgent,
-      reason: `${currentAgent}-unavailable`,
+      reason: installFailures.has(currentAgent) ? `${currentAgent}-install-preflight-failed`
+        : `${currentAgent}-unavailable`,
       shouldSwitch: true,
       previousAgent: currentAgent,
       alternatives: availableAgents.filter((agent) => agent !== nextAgent),
@@ -427,7 +533,7 @@ function decideNextAgent({
   core?.debug?.(`Stall: ${stall}, Cooldown: ${inCooldown}, Rounds since switch: ${roundsSinceSwitch}`);
 
   // Rule: Continue if effective
-  if (effectiveness.effective) {
+  if (!rateLimited && effectiveness.effective) {
     return {
       agent: currentAgent,
       reason: `effective (${effectiveness.summary})`,
@@ -438,7 +544,7 @@ function decideNextAgent({
   }
 
   // Rule: Continue if in cooldown (anti-thrash)
-  if (inCooldown) {
+  if (!rateLimited && inCooldown) {
     return {
       agent: currentAgent,
       reason: `cooldown (${5 - roundsSinceSwitch} rounds remaining)`,
@@ -449,14 +555,20 @@ function decideNextAgent({
   }
 
   // Rule: Switch if stalled
-  if (stall.isStalled) {
-    const alternatives = availableAgents.filter((a) => a !== currentAgent);
+  if (rateLimited || stall.isStalled) {
+    const tried = new Set(labels.map(normalizeLabel)
+      .filter((label) => label.startsWith('agents:tried-'))
+      .map((label) => label.slice('agents:tried-'.length)));
+    const alternatives = availableAgents.filter((agent) => agent !== currentAgent &&
+      !tried.has(agent) && (!rateLimited || getAgentPoolState(
+        routeWeights, agent, ranking.find((row) => row.agent === agent),
+      ) === 'ok'));
     const reservedAgents = new Set(getRouteWeightReserveAgents(routeWeights?.reserve, taskType));
     const weighted = selectAgentFromRouteWeights({
-      routeWeights,
+      routeWeights: rateLimited && routeWeights ? { ...routeWeights, exploration: null } : routeWeights,
       taskType,
       currentAgent,
-      availableAgents,
+      availableAgents: alternatives,
       agents,
       reserve: routeWeights?.reserve,
       seed: explorationSeedFromState(state),
@@ -479,20 +591,22 @@ function decideNextAgent({
     if (nextAgent === currentAgent) {
       core?.warning?.('Stalled but no alternative agents available');
       return {
-        agent: currentAgent,
-        reason: `stalled-no-alternatives (${sourceSuffix})`,
+        agent: rateLimited ? '' : currentAgent,
+        reason: rateLimited ? 'rate-limited-no-alternatives' : `stalled-no-alternatives (${sourceSuffix})`,
         shouldSwitch: false,
         alternatives: [],
         delegationSource,
       };
     }
-    core?.info?.(`Switching from ${currentAgent} to ${nextAgent} due to stall (${sourceSuffix})`);
+    core?.info?.(`Switching from ${currentAgent} to ${nextAgent} due to ${rateLimited ? 'rate limit' : 'stall'} (${sourceSuffix})`);
     if (weighted.policy_version) {
       core?.info?.(`Route-weights policy version: ${weighted.policy_version}`);
     }
     return {
       agent: nextAgent,
-      reason: `${currentAgent}-stalled (${stall.reason}; ${sourceSuffix})`,
+      reason: rateLimited
+        ? `${currentAgent}-rate-limited (${sourceSuffix})`
+        : `${currentAgent}-stalled (${stall.reason}; ${sourceSuffix})`,
       shouldSwitch: true,
       previousAgent: currentAgent,
       alternatives: alternatives.filter((a) => a !== nextAgent),
@@ -815,11 +929,203 @@ function pickAgent({
   });
 }
 
+function hasIntakeRunner(agentConfig = {}) {
+  if (!agentConfig || typeof agentConfig !== 'object') {
+    return false;
+  }
+  if (agentConfig.enabled === false || agentConfig.preflight?.enabled === false) {
+    return false;
+  }
+  if (agentConfig.capabilities && agentConfig.capabilities.pr_keepalive === false) {
+    return false;
+  }
+  return Boolean(agentConfig.runner_workflow || agentConfig.runner);
+}
+
+function getAgentPoolState(routeWeights, agent, row) {
+  const key = String(agent || '').trim().toLowerCase();
+  const candidates = [
+    row?.pool_state,
+    row?.poolState,
+    row?.capacity?.state,
+    row?.capacity_state,
+    row?.state,
+    routeWeights?.capacity?.[key]?.state,
+    typeof routeWeights?.capacity?.[key] === 'string' ? routeWeights.capacity[key] : undefined,
+    routeWeights?.pools?.[key]?.state,
+    typeof routeWeights?.pools?.[key] === 'string' ? routeWeights.pools[key] : undefined,
+    routeWeights?.pool_capacity?.[key]?.state,
+    typeof routeWeights?.pool_capacity?.[key] === 'string' ? routeWeights.pool_capacity[key] : undefined,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim().toLowerCase();
+    }
+  }
+  // Until Orchestrator#645 publishes capacity in schema v2, treat every pool as ok.
+  return 'ok';
+}
+
+function makeIntakeDecision({
+  agent,
+  posterior = null,
+  poolState = 'static',
+  delegationSource = 'static',
+  reason = 'static-default',
+}) {
+  const result = {
+    agent,
+    posterior,
+    poolState,
+    pool_state: poolState,
+    delegationSource,
+    reason,
+  };
+  Object.defineProperties(result, {
+    toString: {
+      value() {
+        return this.agent;
+      },
+      enumerable: false,
+    },
+    valueOf: {
+      value() {
+        return this.agent;
+      },
+      enumerable: false,
+    },
+  });
+  return result;
+}
+
+/**
+ * Choose an intake agent from route weights and pool capacity.
+ *
+ * Returns the first agent in posterior order whose registry entry has a runner
+ * and whose pool state is `ok`, or falls back to the static default (`codex`)
+ * when route weights are absent, stale, or yield no eligible candidate.
+ *
+ * @param {string|Object} [taskType='implement']
+ * @param {Object|null} [routeWeights=null]
+ * @param {Object} [registryAgents={}]
+ * @param {Object} [options={}]
+ * @returns {{ agent: string, posterior: number|null, poolState: string, pool_state: string, delegationSource: 'route_weights'|'static', reason: string }}
+ */
+function chooseAgentForIntake(taskType = 'implement', routeWeights = null, registryAgents = {}, options = {}) {
+  if (taskType && typeof taskType === 'object' && !Array.isArray(taskType)) {
+    const opts = taskType;
+    return chooseAgentForIntake(
+      opts.taskType || 'implement',
+      opts.routeWeights ?? null,
+      opts.registryAgents || opts.agents || opts.registry || {},
+      opts
+    );
+  }
+
+  const normalizedTaskType =
+    ROUTE_WEIGHT_TASK_TYPES[taskType] || String(taskType || 'implement').trim().toLowerCase() || 'implement';
+  const agentsMap = (
+    registryAgents &&
+    typeof registryAgents === 'object' &&
+    registryAgents.agents &&
+    typeof registryAgents.agents === 'object'
+  )
+    ? registryAgents.agents
+    : (registryAgents || {});
+  const defaultAgent = String(
+    options?.defaultAgent ||
+    (registryAgents && typeof registryAgents.default_agent === 'string' && registryAgents.default_agent) ||
+    'codex'
+  ).trim().toLowerCase() || 'codex';
+
+  if (!routeWeights || typeof routeWeights !== 'object') {
+    return makeIntakeDecision({
+      agent: defaultAgent,
+      reason: 'route-weights-unavailable',
+    });
+  }
+
+  if (routeWeights.schema !== undefined && !ROUTE_WEIGHTS_SCHEMAS.has(routeWeights.schema)) {
+    return makeIntakeDecision({
+      agent: defaultAgent,
+      reason: 'route-weights-invalid-schema',
+    });
+  }
+
+  if (routeWeights.generated_at !== undefined && !isRouteWeightsFresh(routeWeights, options?.now)) {
+    return makeIntakeDecision({
+      agent: defaultAgent,
+      reason: 'route-weights-stale',
+    });
+  }
+
+  const taskEntry = routeWeights.task_types?.[normalizedTaskType] || routeWeights.task_types?.[taskType];
+  if (!taskEntry || taskEntry.evidence_ok !== true) {
+    return makeIntakeDecision({
+      agent: defaultAgent,
+      reason: taskEntry?.evidence_ok === false
+        ? 'route-weights-insufficient-evidence'
+        : 'route-weights-evidence-not-affirmed',
+    });
+  }
+
+  const reserveSet = new Set(getRouteWeightReserveAgents(routeWeights.reserve, normalizedTaskType));
+  const ranking = Array.isArray(taskEntry.ranking) ? taskEntry.ranking : [];
+  const orderedRanking = ranking
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => {
+      const postA = Number(a.row?.posterior);
+      const postB = Number(b.row?.posterior);
+      const validA = Number.isFinite(postA);
+      const validB = Number.isFinite(postB);
+      if (validA && validB && postB !== postA) {
+        return postB - postA;
+      }
+      if (validA !== validB) {
+        return validA ? -1 : 1;
+      }
+      return a.index - b.index;
+    })
+    .map((entry) => entry.row);
+
+  for (const row of orderedRanking) {
+    const candidate = String(row?.agent || '').trim().toLowerCase();
+    if (!candidate || reserveSet.has(candidate)) {
+      continue;
+    }
+    if (!hasIntakeRunner(agentsMap[candidate])) {
+      continue;
+    }
+    const poolState = getAgentPoolState(routeWeights, candidate, row);
+    if (poolState !== 'ok') {
+      continue;
+    }
+    const posterior = Number.isFinite(Number(row?.posterior)) ? Number(row.posterior) : null;
+    return makeIntakeDecision({
+      agent: candidate,
+      posterior,
+      poolState,
+      delegationSource: 'route_weights',
+      reason: 'route-weights',
+    });
+  }
+
+  return makeIntakeDecision({
+    agent: defaultAgent,
+    reason: 'route-weights-no-eligible-agent',
+  });
+}
+
 module.exports = {
+  AGENT_INSTALL_FAILURE_BACKOFF_HOURS,
+  isAgentInstallFailure,
+  recentInstallFailures,
   DEFAULT_ROUTE_WEIGHTS_URL,
   ROUTE_WEIGHT_TASK_TYPES,
   resolveRoundKind,
   loadRouteWeights,
+  fetchRouteWeights,
+  chooseAgentForIntake,
   explorationDraw,
   explorationSeedFromState,
   selectAgentFromRouteWeights,
