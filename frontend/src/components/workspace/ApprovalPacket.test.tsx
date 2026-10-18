@@ -297,3 +297,19 @@ describe("ApprovalPacket", () => {
     }
   });
 });
+
+
+describe("price evidence validity", () => {
+  it("requires a new policy check when the verdict was cleared", () => {
+    render(<ApprovalPacket workspace={workspace({ proposal: false })} onPrint={vi.fn()} />);
+    expect(screen.getByTestId("approval-packet-verdict")).toHaveTextContent("Needs a new policy check");
+    expect(documentText()).not.toContain("Passed the travel policy check");
+  });
+  it("never prints an old compliant evaluation when the summary is stale", () => {
+    const data = workspace({ summary: { evaluation_result_status: "stale", approval_ready: false } });
+    data.proposal_state!.evaluation = { evaluation_result: { status: "compliant" } } as NonNullable<typeof data.proposal_state>["evaluation"];
+    render(<ApprovalPacket workspace={data} onPrint={vi.fn()} />);
+    expect(screen.getByTestId("approval-packet-verdict")).toHaveTextContent("Needs a new policy check");
+    expect(documentText()).not.toContain("Passed the travel policy check");
+  });
+});

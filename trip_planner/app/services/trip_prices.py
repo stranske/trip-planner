@@ -17,10 +17,11 @@ import math
 from urllib.parse import urlparse
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from trip_planner.app.services.auth import AuthenticatedUser
+from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.persistence.models.trip_price import PersistedTripPrice
 from trip_planner.pricing import SourcedPrice, UnsourcedPriceError, manual_override
@@ -128,6 +129,38 @@ def _validated_evidence_url(url: str | None) -> str | None:
     return text
 
 
+# Only policy determinants participate: save timestamps and descriptive notes do not.
+POLICY_PRICE_FIELDS = (
+    "amount",
+    "currency",
+    "lowest_amount",
+    "evidence_attested",
+    "cabin_class",
+    "flight_hours",
+)
+
+
+def policy_price_evidence(rows: list[PersistedTripPrice]) -> list[dict[str, Any]]:
+    """A stable snapshot of the component set and the facts a price verdict covers."""
+    return [
+        {
+            "component": row.component,
+            **{field: getattr(row, field) for field in POLICY_PRICE_FIELDS},
+        }
+        for row in sorted(rows, key=lambda row: row.component)
+    ]
+
+
+def _invalidate_price_verdict(db_session: Session, *, user_id: str, trip_id: str) -> None:
+    # The price and its invalidation share the caller's commit (including rollback).
+    db_session.execute(
+        delete(PersistedProposalState).where(
+            PersistedProposalState.trip_id == trip_id,
+            PersistedProposalState.user_id == user_id,
+        )
+    )
+
+
 def save_trip_price(
     db_session: Session,
     *,
@@ -172,6 +205,7 @@ def save_trip_price(
     if amount is None:
         if existing is not None:
             db_session.delete(existing)
+            _invalidate_price_verdict(db_session, user_id=user.user_id, trip_id=trip_id)
             # The request-scoped session dependency does not commit, so a flush alone
             # would let the row reappear on the next read.
             db_session.commit()
@@ -207,6 +241,20 @@ def save_trip_price(
     else:
         hours = None
     link = _validated_evidence_url(evidence_url)
+
+    determinants = {
+        "amount": price.amount,
+        "currency": price.currency,
+        "lowest_amount": lowest,
+        "evidence_attested": bool(evidence_attested),
+        "cabin_class": cabin_class,
+        "flight_hours": hours,
+    }
+    material_change = existing is None or any(
+        getattr(existing, field) != value for field, value in determinants.items()
+    )
+    if material_change:
+        _invalidate_price_verdict(db_session, user_id=user.user_id, trip_id=trip_id)
 
     if existing is None:
         db_session.add(

@@ -46,3 +46,14 @@ Once `Travel-Plan-Permission` returns a `PolicyEvaluationResult`, planner-side f
 - Avoid opaque blobs for comparables, justifications, or failure reasons.
 - Do not re-encode organization-specific policy logic in this repo.
 - Keep local simulator behavior fixture-backed and explicitly non-authoritative.
+
+### Price evidence and policy validity
+
+A price verdict covers the component set, amount, currency, lowest fare, evidence
+attestation, cabin class and flight hours. A change to any of those facts, adding
+a component or withdrawing one (including the last price) clears the saved verdict
+in the same database transaction as the price write. No-op saves and note-only
+edits preserve it. Newly saved proposals retain that evidence snapshot; a late
+result whose snapshot differs from current prices is served as stale with
+`approval_ready=false`. The approval packet requires a new policy check for an
+absent or stale verdict. Only a fresh evaluation can restore readiness.
