@@ -445,10 +445,8 @@ def test_saved_flight_facts_prefill_the_form_without_inventing_airfare(
     assert rejected.value.status_code == 409
     session.expire_all()
     assert (
-        get_workspace_proposal_payload(session, user=user, trip_id=trip_id)["proposal_state"][
-            "portal_handoff"
-        ]
-        == saved_metadata
+        get_workspace_proposal_payload(session, user=user, trip_id=trip_id)["proposal_state"]
+        is None
     )
 
 
