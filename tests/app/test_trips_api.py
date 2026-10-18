@@ -105,6 +105,14 @@ def test_a_changed_trip_loses_the_verdict_reached_before_the_change(client: Test
     assert renamed.json()["verdict_cleared"] is False
     assert client.get(f"/api/workspace/{trip_id}").json()["proposal_state"] is not None
 
+    # Price evidence changes clear the same saved verdict transactionally.
+    repriced = client.put(
+        f"/api/workspace/{trip_id}/prices", json={"component": "lodging", "amount": 450.0}
+    )
+    assert repriced.status_code == 200
+    assert client.get(f"/api/workspace/{trip_id}").json()["proposal_state"] is None
+    assert client.post(f"/api/workspace/{trip_id}/proposal/submit", json={}).status_code == 200
+
     # New dates are a different request: the old verdict no longer describes the trip.
     redated = client.patch(
         f"/api/trips/{trip_id}",
