@@ -3235,7 +3235,8 @@ def test_transition_audit_inventory_has_current_tests_and_source_anchors() -> No
         "frontend/src/components/maps/TripMap.test.tsx",
         "frontend/src/components/maps/mapSurface.test.ts",
     }
-    for file in {row["file"] for row in entries}:
+    inventoried_files = {row["file"] for row in entries} | fully_inventoried
+    for file in inventoried_files:
         text = (root / file).read_text()
         names = (
             {
@@ -3263,6 +3264,9 @@ def test_transition_audit_inventory_has_current_tests_and_source_anchors() -> No
                 n.name for n in nodes if start <= n.lineno <= end and n.name.startswith("test_")
             }
             assert bounded <= listed, "unclassified native lineage transition test"
+            assert (
+                "test_transition_audit_native_submit_preserves_lineage_at_each_consumer" in listed
+            ), "transition audit lineage regression must stay inventoried"
     for row in entries:
         assert row["classification"] in {
             "exercised_offline",

@@ -13,8 +13,8 @@
       "test": "test_workspace_proposal_evaluation_derives_reoptimization_follow_up",
       "seam": "lineage",
       "classification": "intentional_fixture",
-      "boundary": "Persisted saved version -> native submit builder -> stored proposal -> reoptimization plan",
-      "limit": "PUT installs a fixture proposal with no lineage; proves the no-lineage refusal, not native generation."
+      "boundary": "PUT-installed workspace proposal -> evaluation PUT -> follow_up guidance",
+      "limit": "PUT installs a fixture proposal with no lineage; proves evaluation-derived no-lineage guidance, not native submit or reoptimization."
     },
     {
       "file": "tests/app/test_proposal.py",
@@ -61,8 +61,8 @@
       "test": "test_trip_level_reoptimization_returns_no_scenario_lineage",
       "seam": "lineage",
       "classification": "exercised_offline",
-      "boundary": "Persisted saved version -> native submit builder -> stored proposal -> reoptimization plan",
-      "limit": "TPP result is intercepted; no remote TPP acceptance claim."
+      "boundary": "Native submission (fixture TPP) -> stored proposal without source_version -> reoptimize refusal",
+      "limit": "Asserts missing source_version and no reoptimization_plan; TPP intercepted, no remote acceptance claim."
     },
     {
       "file": "tests/app/test_proposal.py",
