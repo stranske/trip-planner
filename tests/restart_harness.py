@@ -31,7 +31,7 @@ def sequential_restart_clients(db_path: Path, monkeypatch: pytest.MonkeyPatch, *
         monkeypatch.delenv(name, raising=False)
     set_planner_chat_model_factory_for_tests(None)
     reset_database_state()
-    events = []
+    events: list[str] = []
     original_user = None
 
     @contextmanager
