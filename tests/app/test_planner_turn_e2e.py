@@ -39,11 +39,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
-from tests.restart_harness import assert_restart_caches_cleared, sequential_restart_clients
 from fastapi.testclient import TestClient
 
-from trip_planner.persistence.db import reset_database_state
+from tests.restart_harness import (
+    clear_inter_app_restart_caches,
+    sequential_restart_clients,
+)
 
 # Documented response contract fields drawn from
 # trip_planner.app.schemas.planner.PlannerSessionResponse and PlannerMessageResponse.
@@ -184,10 +185,7 @@ def test_planner_turn_e2e_persists_across_app_instances(client_factory) -> None:
         )
 
         expected_session = first_client.get(f"/api/planner/{trip_id}/session").json()
-    assert events == ["first_started", "first_closed"]
-    reset_database_state()
-    assert_restart_caches_cleared()
-    events.append("caches_cleared")
+    clear_inter_app_restart_caches(events)
     with open_client(reload=True) as second_client:
         # ---- Second app instance (same DB): reload session + assert turn persists ----
         session = second_client.get(f"/api/planner/{trip_id}/session")

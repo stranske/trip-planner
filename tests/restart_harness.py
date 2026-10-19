@@ -18,6 +18,21 @@ def assert_restart_caches_cleared() -> None:
     assert not persistence_db._MIGRATED_URLS
 
 
+def clear_inter_app_restart_caches(events: list[str]) -> None:
+    """Dispose engines/sessions/migrations after writer A closes; record the event.
+
+    Both positive persistence gates call this once between apps. Removing either
+    call (or gutting the reset) must fail the gate that depends on a true rebind.
+    """
+    assert events == [
+        "first_started",
+        "first_closed",
+    ], "cache clear must run only after the writer app has closed"
+    reset_database_state()
+    assert_restart_caches_cleared()
+    events.append("caches_cleared")
+
+
 @contextmanager
 def sequential_restart_clients(db_path: Path, monkeypatch: pytest.MonkeyPatch, *, email: str):
     """Open each app sequentially against one file, with fresh authentication."""

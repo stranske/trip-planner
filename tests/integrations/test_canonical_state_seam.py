@@ -30,11 +30,13 @@ import json
 from pathlib import Path
 
 import pytest
-
-from tests.restart_harness import assert_restart_caches_cleared, sequential_restart_clients
 from sqlalchemy import delete, select
 
-from trip_planner.persistence.db import get_session_factory, reset_database_state
+from tests.restart_harness import (
+    clear_inter_app_restart_caches,
+    sequential_restart_clients,
+)
+from trip_planner.persistence.db import get_session_factory
 from trip_planner.persistence.models.activity import (
     PersistedActivityLogEvent,
     PersistedPlannerAction,
@@ -360,9 +362,7 @@ def _exercise_seam_restart(client_factory, *, delete_durable=None):
             result = db.execute(delete(model).where(model.trip_id == trip_id))
             assert result.rowcount == 1, "negative control must remove real durable state"
             db.commit()
-    reset_database_state()
-    assert_restart_caches_cleared()
-    events.append("caches_cleared")
+    clear_inter_app_restart_caches(events)
     with open_client(reload=True) as second_client:
         args = (
             second_client,
