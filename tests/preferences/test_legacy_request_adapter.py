@@ -130,7 +130,7 @@ def _coverage_map_reference_errors(text: str, root: Path) -> list[str]:
 
 def test_design_coverage_map_references_are_addressable() -> None:
     root = Path(__file__).resolve().parents[2]
-    text = (root / "docs/design-coverage-map.md").read_text()
+    text = (root / "docs/design-coverage-map.md").read_text(encoding="utf-8")
     assert _coverage_map_reference_errors(text, root) == []
 
 
@@ -144,7 +144,7 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence() -> None:
     import re
 
     root = Path(__file__).resolve().parents[2]
-    text = (root / "docs/design-coverage-map.md").read_text()
+    text = (root / "docs/design-coverage-map.md").read_text(encoding="utf-8")
     normalized = " ".join(text.split())
     legacy = next(
         line for line in text.splitlines() if line.startswith("| Legacy request adapter |")
@@ -158,11 +158,18 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence() -> None:
     assert "976 passed, 1 xfailed" in text
     for owner in ("F50", "F51", "F52"):
         assert owner in text
-    workflow = (root / ".github/workflows/cross-repo-smoke.yml").read_text()
+    workflow = (root / ".github/workflows/cross-repo-smoke.yml").read_text(encoding="utf-8")
     pin = re.search(r"TPP_PINNED_REF: ([0-9a-f]{40})", workflow)
     assert pin is not None and pin.group(1) in text
     assert "tests/integration/test_authenticated_two_app_handoff.py" in text
     assert "python scripts/check_full_product_verification.py --live-tpp=required" in text
+    full_product_row = next(
+        line
+        for line in text.splitlines()
+        if line.startswith("| Current full-product configured TPP transport |")
+    )
+    assert "🟡 Partial" in full_product_row
+    assert "UNVERIFIED" in full_product_row and "Required gate" in full_product_row
     partial_rows = [
         line for line in text.splitlines() if line.startswith("|") and "🟡 Partial" in line
     ]

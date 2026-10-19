@@ -341,7 +341,7 @@ These retained gaps describe verification boundaries. This map does not authoriz
 1. Check the **planner/runtime acceptance tests** first: `pytest -q tests/planner/test_planner_turn_acceptance.py tests/app/test_planner_routes.py tests/app/test_full_product_verification.py`.
 2. The **Docs-only** rows in each section identify items that are design commitments but not yet scheduled work.
 3. **Partial** rows and preambles name a bounded remaining gap; distinguish configured live-provider verification from missing implementation before selecting work.
-4. The **Summary: Remaining Follow-Up Claims** section lists the highest-priority gaps that should become new issues or verification tasks.
+4. The **Summary: Remaining Follow-Up Claims** section lists the highest-priority gaps for verification tasks under their existing owners. This scope does not authorize new finding issues or duplicate implementation owners.
 
 Map SDK selection: real-adapter mocked-library interaction/cleanup/failure/scenario coverage in `frontend/src/components/maps/TripMap.test.tsx` (issue #1905). Live provider deployment remains unverified.
 
