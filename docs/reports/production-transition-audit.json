@@ -1,0 +1,372 @@
+{
+  "schema": "trip-planner/transition-audit-v1",
+  "source_revision": "3d4cafc6a830849ed5435f8a5b04181545ae648a",
+  "scope": "F53 / issue1907; three named seams plus the adjacent tests listed here, not a whole-repository audit",
+  "owners": {
+    "lineage": "https://github.com/stranske/trip-planner/issues/1904",
+    "maps": "https://github.com/stranske/trip-planner/issues/1905",
+    "restart": "https://github.com/stranske/trip-planner/issues/1906"
+  },
+  "entries": [
+    {
+      "file": "tests/app/test_proposal.py",
+      "test": "test_workspace_proposal_evaluation_derives_reoptimization_follow_up",
+      "seam": "lineage",
+      "classification": "intentional_fixture",
+      "boundary": "Persisted saved version -> native submit builder -> stored proposal -> reoptimization plan",
+      "limit": "PUT installs a fixture proposal with no lineage; proves the no-lineage refusal, not native generation."
+    },
+    {
+      "file": "tests/app/test_proposal.py",
+      "test": "test_native_submit_then_reoptimize_without_injected_source_version",
+      "seam": "lineage",
+      "classification": "exercised_offline",
+      "boundary": "Persisted saved version -> native submit builder -> stored proposal -> reoptimization plan",
+      "limit": "TPP result is intercepted; no remote TPP acceptance claim."
+    },
+    {
+      "file": "tests/app/test_proposal.py",
+      "test": "test_submission_derives_lineage_instead_of_trusting_caller",
+      "seam": "lineage",
+      "classification": "exercised_offline",
+      "boundary": "Persisted saved version -> native submit builder -> stored proposal -> reoptimization plan",
+      "limit": "TPP result is intercepted; no remote TPP acceptance claim."
+    },
+    {
+      "file": "tests/app/test_proposal.py",
+      "test": "test_reoptimization_uses_the_submitted_version_after_scenario_changes",
+      "seam": "lineage",
+      "classification": "exercised_offline",
+      "boundary": "Persisted saved version -> native submit builder -> stored proposal -> reoptimization plan",
+      "limit": "TPP result is intercepted; no remote TPP acceptance claim."
+    },
+    {
+      "file": "tests/app/test_proposal.py",
+      "test": "test_native_lineage_prefers_current_saved_scenario_for_shared_itinerary",
+      "seam": "lineage",
+      "classification": "exercised_offline",
+      "boundary": "Persisted saved version -> native submit builder -> stored proposal -> reoptimization plan",
+      "limit": "Writes session selection directly: resolver tie-break control, not public selection-UI proof."
+    },
+    {
+      "file": "tests/app/test_proposal.py",
+      "test": "test_unsupported_saved_lineage_is_not_advertised_or_reoptimized",
+      "seam": "lineage",
+      "classification": "intentional_corruption",
+      "boundary": "Persisted saved version -> native submit builder -> stored proposal -> reoptimization plan",
+      "limit": "Direct durable-row mutations test unsupported-label refusal; not a legitimate user write path."
+    },
+    {
+      "file": "tests/app/test_proposal.py",
+      "test": "test_trip_level_reoptimization_returns_no_scenario_lineage",
+      "seam": "lineage",
+      "classification": "exercised_offline",
+      "boundary": "Persisted saved version -> native submit builder -> stored proposal -> reoptimization plan",
+      "limit": "TPP result is intercepted; no remote TPP acceptance claim."
+    },
+    {
+      "file": "tests/app/test_proposal.py",
+      "test": "test_proposal_state_persists_across_create_app_restart",
+      "seam": "lineage",
+      "classification": "exercised_offline",
+      "boundary": "Persisted saved version -> native submit builder -> stored proposal -> reoptimization plan",
+      "limit": "Sequential app close/reset/reopen, fresh login; not a separate OS process or hosted DB restart."
+    },
+    {
+      "file": "tests/app/test_proposal_payload_truth.py",
+      "test": "test_the_trip_plan_carries_what_tpp_rules_read",
+      "seam": "lineage-adjacent",
+      "classification": "exercised_offline",
+      "boundary": "Real API submission -> intercepted outbound TPP plan",
+      "limit": "Synthetic external TPP responses; does not prove remote policy service."
+    },
+    {
+      "file": "tests/app/test_proposal_payload_truth.py",
+      "test": "test_an_absent_attestation_is_sent_as_absent_not_as_true",
+      "seam": "lineage-adjacent",
+      "classification": "exercised_offline",
+      "boundary": "Real API submission -> intercepted outbound TPP plan",
+      "limit": "Synthetic external TPP responses; does not prove remote policy service."
+    },
+    {
+      "file": "tests/app/test_proposal_payload_truth.py",
+      "test": "test_an_unpriced_trip_is_refused_rather_than_sent_as_zero",
+      "seam": "lineage-adjacent",
+      "classification": "exercised_offline",
+      "boundary": "Real API submission -> intercepted outbound TPP plan",
+      "limit": "Synthetic external TPP responses; does not prove remote policy service."
+    },
+    {
+      "file": "tests/app/test_proposal_payload_truth.py",
+      "test": "test_a_missing_origin_is_sent_as_missing_not_as_a_placeholder",
+      "seam": "lineage-adjacent",
+      "classification": "exercised_offline",
+      "boundary": "Real API submission -> intercepted outbound TPP plan",
+      "limit": "Synthetic external TPP responses; does not prove remote policy service."
+    },
+    {
+      "file": "tests/app/test_proposal_payload_truth.py",
+      "test": "test_a_trip_the_planner_could_not_map_can_still_go_to_the_policy_check",
+      "seam": "lineage-adjacent",
+      "classification": "exercised_offline",
+      "boundary": "Real API submission -> intercepted outbound TPP plan",
+      "limit": "Synthetic external TPP responses; does not prove remote policy service."
+    },
+    {
+      "file": "tests/app/test_proposal_payload_truth.py",
+      "test": "test_the_fare_link_is_kept_and_sent_with_the_airfare",
+      "seam": "lineage-adjacent",
+      "classification": "exercised_offline",
+      "boundary": "Real API submission -> intercepted outbound TPP plan",
+      "limit": "Synthetic external TPP responses; does not prove remote policy service."
+    },
+    {
+      "file": "tests/app/test_proposal_payload_truth.py",
+      "test": "test_a_fare_link_must_be_a_web_address",
+      "seam": "lineage-adjacent",
+      "classification": "exercised_offline",
+      "boundary": "Real API submission -> intercepted outbound TPP plan",
+      "limit": "Synthetic external TPP responses; does not prove remote policy service."
+    },
+    {
+      "file": "tests/integrations/test_canonical_state_seam.py",
+      "test": "test_canonical_state_seam_persists_planner_turn_and_proposal_lifecycle",
+      "seam": "restart",
+      "classification": "exercised_offline",
+      "boundary": "App A exits -> engine/session/migration caches reset -> app B fresh login and durable reload",
+      "limit": "In-process app lifecycles and file-backed SQLite; no OS process, PostgreSQL, or hosted deployment claim."
+    },
+    {
+      "file": "tests/integrations/test_canonical_state_seam.py",
+      "test": "test_canonical_state_seam_rejects_missing_durable_rows",
+      "seam": "restart",
+      "classification": "exercised_offline",
+      "boundary": "App A exits -> engine/session/migration caches reset -> app B fresh login and durable reload",
+      "limit": "Intentional SQL row deletion proves durable-loss sensitivity; not a positive persistence claim."
+    },
+    {
+      "file": "tests/app/test_planner_turn_e2e.py",
+      "test": "test_planner_turn_e2e_persists_across_app_instances",
+      "seam": "restart",
+      "classification": "exercised_offline",
+      "boundary": "App A exits -> engine/session/migration caches reset -> app B fresh login and durable reload",
+      "limit": "In-process app lifecycles and file-backed SQLite; no OS process, PostgreSQL, or hosted deployment claim."
+    },
+    {
+      "file": "frontend/src/components/maps/TripMap.test.tsx",
+      "test": "switches map scopes without changing the selected route option",
+      "seam": "maps",
+      "classification": "intentional_component",
+      "boundary": "TripMap rendering, scenario/marker controls",
+      "limit": "Synthetic props/fixture data; not live provider proof."
+    },
+    {
+      "file": "frontend/src/components/maps/TripMap.test.tsx",
+      "test": "keeps provider diagnostics out of the normal traveler map",
+      "seam": "maps",
+      "classification": "intentional_component",
+      "boundary": "TripMap rendering, scenario/marker controls",
+      "limit": "Synthetic props/fixture data; not live provider proof."
+    },
+    {
+      "file": "frontend/src/components/maps/TripMap.test.tsx",
+      "test": "labels the keyed provider surface as a schematic preview when readiness is unproven",
+      "seam": "maps",
+      "classification": "intentional_component",
+      "boundary": "TripMap rendering, scenario/marker controls",
+      "limit": "Synthetic props/fixture data; not live provider proof."
+    },
+    {
+      "file": "frontend/src/components/maps/TripMap.test.tsx",
+      "test": "mounts the provider-backed surface when readiness is observed",
+      "seam": "maps",
+      "classification": "intentional_simulation",
+      "boundary": "TripMap rendering, scenario/marker controls",
+      "limit": "Explicit providerLoadState=ready renders simulated-ready group; it cannot prove observed SDK readiness."
+    },
+    {
+      "file": "frontend/src/components/maps/TripMap.test.tsx",
+      "test": "surfaces linked planning ledger entries as map focus cues",
+      "seam": "maps",
+      "classification": "intentional_component",
+      "boundary": "TripMap rendering, scenario/marker controls",
+      "limit": "Synthetic props/fixture data; not live provider proof."
+    },
+    {
+      "file": "frontend/src/components/maps/TripMap.test.tsx",
+      "test": "keeps a visible marker selected when refreshed scenario data has a new identity",
+      "seam": "maps",
+      "classification": "intentional_component",
+      "boundary": "TripMap rendering, scenario/marker controls",
+      "limit": "Synthetic props/fixture data; not live provider proof."
+    },
+    {
+      "file": "frontend/src/components/maps/TripMap.test.tsx",
+      "test": "renders segment timing and confidence in traveler language",
+      "seam": "maps",
+      "classification": "intentional_component",
+      "boundary": "TripMap rendering, scenario/marker controls",
+      "limit": "Synthetic props/fixture data; not live provider proof."
+    },
+    {
+      "file": "frontend/src/components/maps/TripMap.test.tsx",
+      "test": "selects canonical marker details and linked notes from an SDK click",
+      "seam": "maps",
+      "classification": "exercised_offline",
+      "boundary": "TripMap -> actual GoogleMapCanvas -> mocked SDK libraries/events -> canonical state, failure cleanup, scenario replacement",
+      "limit": "Only SDK library boundary mocked; no live Google Maps, geocoding, billing or deployment claim."
+    },
+    {
+      "file": "frontend/src/components/maps/TripMap.test.tsx",
+      "test": "retains canonical controls when SDK loading fails",
+      "seam": "maps",
+      "classification": "exercised_offline",
+      "boundary": "TripMap -> actual GoogleMapCanvas -> mocked SDK libraries/events -> canonical state, failure cleanup, scenario replacement",
+      "limit": "Only SDK library boundary mocked; no live Google Maps, geocoding, billing or deployment claim."
+    },
+    {
+      "file": "frontend/src/components/maps/TripMap.test.tsx",
+      "test": "retains route and option context when geocoding fails and the scenario changes",
+      "seam": "maps",
+      "classification": "exercised_offline",
+      "boundary": "TripMap -> actual GoogleMapCanvas -> mocked SDK libraries/events -> canonical state, failure cleanup, scenario replacement",
+      "limit": "Only SDK library boundary mocked; no live Google Maps, geocoding, billing or deployment claim."
+    },
+    {
+      "file": "frontend/src/components/maps/TripMap.test.tsx",
+      "test": "replaces SDK overlays on a ready scenario change without losing option controls",
+      "seam": "maps",
+      "classification": "exercised_offline",
+      "boundary": "TripMap -> actual GoogleMapCanvas -> mocked SDK libraries/events -> canonical state, failure cleanup, scenario replacement",
+      "limit": "Only SDK library boundary mocked; no live Google Maps, geocoding, billing or deployment claim."
+    },
+    {
+      "file": "frontend/src/components/maps/mapSurface.test.ts",
+      "test": "normalizes route stop labels for provider-independent map shaping",
+      "seam": "maps",
+      "classification": "intentional_model",
+      "boundary": "Map surface model and fallback/canonical controls",
+      "limit": "Synthetic readiness or helper-only shaping; no SDK initialization, readiness or live-service proof."
+    },
+    {
+      "file": "frontend/src/components/maps/mapSurface.test.ts",
+      "test": "selects the live Google Maps JavaScript adapter when a key and route are available",
+      "seam": "maps",
+      "classification": "intentional_model",
+      "boundary": "Map surface model and fallback/canonical controls",
+      "limit": "Synthetic readiness or helper-only shaping; no SDK initialization, readiness or live-service proof."
+    },
+    {
+      "file": "frontend/src/components/maps/mapSurface.test.ts",
+      "test": "switches between whole-trip and local map scopes without losing the route option",
+      "seam": "maps",
+      "classification": "intentional_model",
+      "boundary": "Map surface model and fallback/canonical controls",
+      "limit": "Synthetic readiness or helper-only shaping; no SDK initialization, readiness or live-service proof."
+    },
+    {
+      "file": "frontend/src/components/maps/mapSurface.test.ts",
+      "test": "uses provider-rich map view segment details when the runtime payload supplies them",
+      "seam": "maps",
+      "classification": "intentional_model",
+      "boundary": "Map surface model and fallback/canonical controls",
+      "limit": "Synthetic readiness or helper-only shaping; no SDK initialization, readiness or live-service proof."
+    },
+    {
+      "file": "frontend/src/components/maps/mapSurface.test.ts",
+      "test": "connects directly linked ledger entries to map markers and route segments",
+      "seam": "maps",
+      "classification": "intentional_model",
+      "boundary": "Map surface model and fallback/canonical controls",
+      "limit": "Synthetic readiness or helper-only shaping; no SDK initialization, readiness or live-service proof."
+    },
+    {
+      "file": "frontend/src/components/maps/mapSurface.test.ts",
+      "test": "omits policy posture from leisure trip route metrics even when the source includes it",
+      "seam": "maps",
+      "classification": "intentional_model",
+      "boundary": "Map surface model and fallback/canonical controls",
+      "limit": "Synthetic readiness or helper-only shaping; no SDK initialization, readiness or live-service proof."
+    },
+    {
+      "file": "frontend/src/components/maps/mapSurface.test.ts",
+      "test": "retains policy posture in non-leisure route metrics",
+      "seam": "maps",
+      "classification": "intentional_model",
+      "boundary": "Map surface model and fallback/canonical controls",
+      "limit": "Synthetic readiness or helper-only shaping; no SDK initialization, readiness or live-service proof."
+    },
+    {
+      "file": "frontend/src/components/maps/mapSurface.test.ts",
+      "test": "falls back when Google Maps is not configured",
+      "seam": "maps",
+      "classification": "intentional_model",
+      "boundary": "Map surface model and fallback/canonical controls",
+      "limit": "Synthetic readiness or helper-only shaping; no SDK initialization, readiness or live-service proof."
+    },
+    {
+      "file": "frontend/src/components/maps/mapSurface.test.ts",
+      "test": "keeps route context visible when the provider reports a load error",
+      "seam": "maps",
+      "classification": "intentional_model",
+      "boundary": "Map surface model and fallback/canonical controls",
+      "limit": "Synthetic readiness or helper-only shaping; no SDK initialization, readiness or live-service proof."
+    },
+    {
+      "file": "frontend/src/components/maps/mapSurface.test.ts",
+      "test": "keeps route context visible while the provider is still loading",
+      "seam": "maps",
+      "classification": "intentional_model",
+      "boundary": "Map surface model and fallback/canonical controls",
+      "limit": "Synthetic readiness or helper-only shaping; no SDK initialization, readiness or live-service proof."
+    },
+    {
+      "file": "frontend/src/components/maps/mapSurface.test.ts",
+      "test": "uses sparse route fallback when the active scenario does not include enough route stops",
+      "seam": "maps",
+      "classification": "intentional_model",
+      "boundary": "Map surface model and fallback/canonical controls",
+      "limit": "Synthetic readiness or helper-only shaping; no SDK initialization, readiness or live-service proof."
+    },
+    {
+      "file": "frontend/src/components/maps/mapSurface.test.ts",
+      "test": "emits lodging, activity, and transport markers from mixed bundle contexts",
+      "seam": "maps",
+      "classification": "intentional_model",
+      "boundary": "Map surface model and fallback/canonical controls",
+      "limit": "Synthetic readiness or helper-only shaping; no SDK initialization, readiness or live-service proof."
+    },
+    {
+      "file": "frontend/src/components/maps/mapSurface.test.ts",
+      "test": "configured is not observed ready",
+      "seam": "maps",
+      "classification": "intentional_model",
+      "boundary": "Map surface model and fallback/canonical controls",
+      "limit": "Synthetic readiness or helper-only shaping; no SDK initialization, readiness or live-service proof."
+    },
+    {
+      "file": "frontend/src/components/maps/mapSurface.test.ts",
+      "test": "high confidence requires observed provider",
+      "seam": "maps",
+      "classification": "intentional_model",
+      "boundary": "Map surface model and fallback/canonical controls",
+      "limit": "Synthetic readiness or helper-only shaping; no SDK initialization, readiness or live-service proof."
+    },
+    {
+      "file": "frontend/src/components/maps/mapSurface.test.ts",
+      "test": "only resolves source-backed stop locations; option schematic coordinates stay unlocated",
+      "seam": "maps",
+      "classification": "intentional_model",
+      "boundary": "Map surface model and fallback/canonical controls",
+      "limit": "Synthetic readiness or helper-only shaping; no SDK initialization, readiness or live-service proof."
+    },
+    {
+      "file": "tests/app/test_proposal.py",
+      "test": "test_transition_audit_native_submit_preserves_lineage_at_each_consumer",
+      "seam": "lineage",
+      "classification": "exercised_offline",
+      "boundary": "Saved-version API state -> native submission argument at persistence boundary -> independent stored row -> persisted reoptimization plan",
+      "limit": "Observes original persistence call without replacing its result; external TPP is intercepted."
+    }
+  ]
+}

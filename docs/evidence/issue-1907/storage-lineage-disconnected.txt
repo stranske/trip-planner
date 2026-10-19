@@ -1,0 +1,96 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____ test_transition_audit_native_submit_preserves_lineage_at_each_consumer ____
+
+tpp_client = <starlette.testclient.TestClient object at 0x10b1be120>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10b062650>
+
+    def test_transition_audit_native_submit_preserves_lineage_at_each_consumer(
+        tpp_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Storage's second resolver must not conceal a disconnected native producer."""
+        from copy import deepcopy
+    
+        import trip_planner.app.services.proposal as service
+    
+        monkeypatch.setenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", "true")
+        incoming = []
+        original = service.save_workspace_proposal_submission
+    
+        def observe(*args, **kwargs):
+            incoming.append(deepcopy(kwargs["proposal_payload"]))
+            return original(*args, **kwargs)
+    
+        monkeypatch.setattr(service, "save_workspace_proposal_submission", observe)
+        trip_id, workspace = _native_non_compliant_submission(tpp_client)
+        assert len(incoming) == 1, "native submission must reach the persistence consumer"
+        native_source = incoming[0].get("source_version")
+        assert native_source is not None, "native builder lineage lost before persistence"
+        saved = next(
+            s
+            for s in workspace["saved_scenarios"]
+            if s["saved_scenario_id"] == native_source["saved_scenario_id"]
+        )
+        expected = next(v for v in saved["versions"] if v["version_id"] == saved["current_version_id"])
+        assert native_source == expected
+        with get_session_factory()() as session:
+            stored = session.query(PersistedProposalState).filter_by(trip_id=trip_id).one()
+>           assert stored.proposal_payload["source_version"] == expected
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           KeyError: 'source_version'
+
+tests/app/test_proposal.py:3210: KeyError
+---------------------------- Captured stderr setup -----------------------------
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 20260407_01, Create account and auth-session tables.
+INFO  [alembic.runtime.migration] Running upgrade  -> 20260407_01, Create account and auth-session tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_01 -> 20260407_02, Create persisted trip table.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_01 -> 20260407_02, Create persisted trip table.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_02 -> 20260407_03, Create persisted saved-scenario and activity-history tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_02 -> 20260407_03, Create persisted saved-scenario and activity-history tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260407_03 -> 20260408_01, add persisted planning session state
+INFO  [alembic.runtime.migration] Running upgrade 20260407_03 -> 20260408_01, add persisted planning session state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_01 -> 20260408_02, add persisted budget plan and actual-spend state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_01 -> 20260408_02, add persisted budget plan and actual-spend state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_02 -> 20260408_03, add persisted policy import state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_02 -> 20260408_03, add persisted policy import state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_03 -> 20260409_01, add persisted proposal lifecycle state
+INFO  [alembic.runtime.migration] Running upgrade 20260408_03 -> 20260409_01, add persisted proposal lifecycle state
+INFO  [alembic.runtime.migration] Running upgrade 20260409_01 -> 20260410_01, add persisted planner actions
+INFO  [alembic.runtime.migration] Running upgrade 20260409_01 -> 20260410_01, add persisted planner actions
+INFO  [alembic.runtime.migration] Running upgrade 20260410_01 -> 20260412_01, add planner checkpoints and user-visible memory artifacts
+INFO  [alembic.runtime.migration] Running upgrade 20260410_01 -> 20260412_01, add planner checkpoints and user-visible memory artifacts
+INFO  [alembic.runtime.migration] Running upgrade 20260412_01 -> 20260507_01, add selected planning mode to session state
+INFO  [alembic.runtime.migration] Running upgrade 20260412_01 -> 20260507_01, add selected planning mode to session state
+INFO  [alembic.runtime.migration] Running upgrade 20260507_01 -> 20260510_01, add persisted planning ledger entries
+INFO  [alembic.runtime.migration] Running upgrade 20260507_01 -> 20260510_01, add persisted planning ledger entries
+INFO  [alembic.runtime.migration] Running upgrade 20260510_01 -> 20260510_02, add persisted planning notebook items and session focus columns
+INFO  [alembic.runtime.migration] Running upgrade 20260510_01 -> 20260510_02, add persisted planning notebook items and session focus columns
+INFO  [alembic.runtime.migration] Running upgrade 20260510_02 -> 20260512_01, repair planning notebook schema for already-deployed databases
+INFO  [alembic.runtime.migration] Running upgrade 20260510_02 -> 20260512_01, repair planning notebook schema for already-deployed databases
+INFO  [alembic.runtime.migration] Running upgrade 20260512_01 -> 20260921_01, add the trip origin the planner needs to measure a journey
+INFO  [alembic.runtime.migration] Running upgrade 20260512_01 -> 20260921_01, add the trip origin the planner needs to measure a journey
+INFO  [alembic.runtime.migration] Running upgrade 20260921_01 -> 20260921_02, add human-entered trip prices
+INFO  [alembic.runtime.migration] Running upgrade 20260921_01 -> 20260921_02, add human-entered trip prices
+INFO  [alembic.runtime.migration] Running upgrade 20260921_02 -> 20260922_01, record the flight details TPP's fare and cabin rules read on a price
+INFO  [alembic.runtime.migration] Running upgrade 20260921_02 -> 20260922_01, record the flight details TPP's fare and cabin rules read on a price
+INFO  [alembic.runtime.migration] Running upgrade 20260922_01 -> 20260928_01, persist truthful TPP portal handoff preparation state
+INFO  [alembic.runtime.migration] Running upgrade 20260922_01 -> 20260928_01, persist truthful TPP portal handoff preparation state
+INFO  [alembic.runtime.migration] Running upgrade 20260928_01 -> 20261014_01, record a link to the fare a traveller chose, as fare evidence
+INFO  [alembic.runtime.migration] Running upgrade 20260928_01 -> 20261014_01, record a link to the fare a traveller chose, as fare evidence
+=============================== warnings summary ===============================
+../../../../../Library/CloudStorage/Dropbox/Learning/Code/trip-planner/.venv/lib/python3.14/site-packages/fastapi/testclient.py:1
+  /Users/teacher/Library/CloudStorage/Dropbox/Learning/Code/trip-planner/.venv/lib/python3.14/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/app/test_proposal.py::test_transition_audit_native_submit_preserves_lineage_at_each_consumer
+  /Users/teacher/Library/CloudStorage/Dropbox/Learning/Code/trip-planner/.venv/lib/python3.14/site-packages/alembic/config.py:612: DeprecationWarning: No path_separator found in configuration; falling back to legacy splitting on spaces, commas, and colons for prepend_sys_path.  Consider adding path_separator=os to Alembic config.
+    util.warn_deprecated(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/app/test_proposal.py::test_transition_audit_native_submit_preserves_lineage_at_each_consumer
+1 failed, 2 warnings in 1.00s

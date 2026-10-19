@@ -1,0 +1,29 @@
+{
+  "time": "2026-10-19T21:09:28.874320+00:00",
+  "interpreter": "/Users/teacher/Library/CloudStorage/Dropbox/Learning/Code/trip-planner/.venv/bin/python",
+  "records": [
+    {
+      "mutation": "builder-lineage-disconnected",
+      "replacement": [
+        "        proposal_payload[\"source_version\"] = source_version",
+        "        proposal_payload.pop(\"source_version\", None)"
+      ],
+      "exit": 1,
+      "expected_failure": true
+    },
+    {
+      "mutation": "storage-lineage-disconnected",
+      "replacement": [
+        "        stored_proposal_payload[\"source_version\"] = source_version",
+        "        stored_proposal_payload.pop(\"source_version\", None)"
+      ],
+      "exit": 1,
+      "expected_failure": true
+    },
+    {
+      "restored_sha256": "feb2161127ff8964c51c48258463dc1ccee83c6d348b5b66ffba6ba473ae0e0b",
+      "restored_exit": 0,
+      "restored_command": "python -m pytest tests/app/test_proposal.py -q"
+    }
+  ]
+}
