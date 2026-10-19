@@ -1732,6 +1732,7 @@ function WorkspacePageContent({
   async function handleTripPriceSave(
     component: string,
     amount: number | null,
+    currency: string,
     note: string,
     fareDetail?: FareDetail
   ) {
@@ -1747,6 +1748,7 @@ function WorkspacePageContent({
       const next = await saveTripPrice(trip.trip_id, {
         component,
         amount,
+        currency,
         note,
         ...(fareDetail
           ? {

@@ -123,6 +123,73 @@ def test_components_sum_and_the_total_names_who_entered_it(client: TestClient) -
     assert payload["total"]["price_source"]["attributed_to"] == "Dana Chen"
 
 
+def test_omitted_currency_preserves_an_existing_eur_price_after_a_fresh_session(
+    client: TestClient,
+) -> None:
+    trip_id = _create_trip(client)
+    created = client.put(
+        f"/api/workspace/{trip_id}/prices",
+        json={"component": "lodging", "amount": 620.0, "currency": "EUR", "note": "Initial quote"},
+    )
+    assert created.status_code == 200, created.text
+    assert created.json()["components"][1]["currency"] == "EUR"
+
+    updated = client.put(
+        f"/api/workspace/{trip_id}/prices",
+        json={"component": "lodging", "amount": 620.0, "note": "Corrected hotel note"},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["components"][1]["currency"] == "EUR"
+    assert updated.json()["components"][1]["note"] == "Corrected hotel note"
+
+    amount_edit = client.put(
+        f"/api/workspace/{trip_id}/prices",
+        json={"component": "lodging", "amount": 640.0, "note": "Revised amount"},
+    )
+    assert amount_edit.status_code == 200, amount_edit.text
+    assert amount_edit.json()["components"][1]["currency"] == "EUR"
+
+    client.post("/api/auth/logout")
+    signed_in = client.post(
+        "/api/auth/login",
+        json={"email": "traveller@example.com", "password": "password123"},
+    )
+    assert signed_in.status_code == 200, signed_in.text
+    reread = client.get(f"/api/workspace/{trip_id}/prices")
+    assert reread.status_code == 200, reread.text
+    lodging = next(item for item in reread.json()["components"] if item["component"] == "lodging")
+    assert lodging["currency"] == "EUR"
+
+
+def test_new_prices_default_to_usd_and_explicit_currency_changes_still_apply(
+    client: TestClient,
+) -> None:
+    trip_id = _create_trip(client)
+    created = client.put(
+        f"/api/workspace/{trip_id}/prices", json={"component": "lodging", "amount": 620.0}
+    )
+    assert created.status_code == 200, created.text
+    assert created.json()["components"][1]["currency"] == "USD"
+
+    changed = client.put(
+        f"/api/workspace/{trip_id}/prices",
+        json={"component": "lodging", "amount": 620.0, "currency": "EUR"},
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["components"][1]["currency"] == "EUR"
+
+
+def test_mixed_currency_prices_still_refuse_to_sum(client: TestClient) -> None:
+    trip_id = _create_trip(client)
+    for component, amount, currency in (("transport", 486.0, "USD"), ("lodging", 620.0, "EUR")):
+        response = client.put(
+            f"/api/workspace/{trip_id}/prices",
+            json={"component": component, "amount": amount, "currency": currency},
+        )
+        assert response.status_code == 200, response.text
+    assert client.get(f"/api/workspace/{trip_id}/prices").json()["total"] is None
+
+
 def test_a_withdrawn_price_leaves_nothing_behind(client: TestClient) -> None:
     trip_id = _create_trip(client)
     client.put(f"/api/workspace/{trip_id}/prices", json={"component": "lodging", "amount": 612.0})

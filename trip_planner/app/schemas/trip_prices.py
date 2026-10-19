@@ -45,7 +45,9 @@ class TripPriceUpsertRequest(BaseModel):
     component: str
     #: Omit or send null to withdraw a figure that turned out to be wrong.
     amount: float | None = None
-    currency: str = "USD"
+    # An omitted currency means preserve the existing component's stated unit.
+    # New components still default to USD in the service layer.
+    currency: str | None = None
     note: str = Field(default="", max_length=400)
     #: Lowest fare available for the same journey, as the traveller found it.
     lowest_amount: float | None = None

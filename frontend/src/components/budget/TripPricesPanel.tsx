@@ -13,6 +13,7 @@ export type TripPricesPanelProps = {
   onSave: (
     component: string,
     amount: number | null,
+    currency: string,
     note: string,
     fareDetail?: FareDetail
   ) => void;
@@ -158,6 +159,9 @@ export function TripPricesPanel({
                   }))
                 }
               />
+              <span className="muted-copy" data-testid={`trip-price-currency-${component.component}`}>
+                {component.currency}
+              </span>
               <input
                 type="text"
                 aria-label={`Where the ${component.label} figure came from`}
@@ -181,6 +185,7 @@ export function TripPricesPanel({
                   onSave(
                     component.component,
                     raw === "" ? null : Number(raw),
+                    component.currency,
                     notes[component.component] ?? "",
                     component.component === FARE_COMPONENT
                       ? {
@@ -202,7 +207,7 @@ export function TripPricesPanel({
                   className="link-button"
                   disabled={busy}
                   aria-label={`Remove ${component.label}`}
-                  onClick={() => onSave(component.component, null, "")}
+                  onClick={() => onSave(component.component, null, component.currency, "")}
                 >
                   Remove
                 </button>

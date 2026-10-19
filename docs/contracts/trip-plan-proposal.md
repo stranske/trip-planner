@@ -57,3 +57,8 @@ edits preserve it. Newly saved proposals retain that evidence snapshot; a late
 result whose snapshot differs from current prices is served as stale with
 `approval_ready=false`. The approval packet requires a new policy check for an
 absent or stale verdict. Only a fresh evaluation can restore readiness.
+
+When a price update omits `currency`, it retains the existing component currency;
+new prices without an explicit currency use USD. The workspace sends the displayed
+component currency on every edit so a note or amount correction cannot relabel a
+traveller's monetary unit.
