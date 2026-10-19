@@ -35,16 +35,14 @@ Acceptance criteria from #957 mapped to this module:
 
 from __future__ import annotations
 
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 import pytest
+
+from tests.restart_harness import assert_restart_caches_cleared, sequential_restart_clients
 from fastapi.testclient import TestClient
 
-from trip_planner.app.main import create_app
-from trip_planner.app.services.planner import set_planner_chat_model_factory_for_tests
-from trip_planner.persistence import db as persistence_db
 from trip_planner.persistence.db import reset_database_state
 
 # Documented response contract fields drawn from
@@ -79,57 +77,10 @@ def db_path(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def client_factory(db_path: Path, monkeypatch: pytest.MonkeyPatch):
-    """Open each app sequentially against one file, with fresh authentication."""
-    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{db_path}")
-    for name in (
-        "TRIP_PLANNER_PLANNER_PROVIDER",
-        "TRIP_PLANNER_PLANNER_MODEL_PROVIDER",
-        "TRIP_PLANNER_PLANNER_MODEL",
-        "OPENAI_API_KEY",
-    ):
-        monkeypatch.delenv(name, raising=False)
-    set_planner_chat_model_factory_for_tests(None)
-    reset_database_state()
-    events = []
-    original_user = None
-
-    @contextmanager
-    def open_client(*, reload=False):
-        nonlocal original_user
-        expected = ["first_started", "first_closed", "caches_cleared"] if reload else []
-        assert events == expected, "clients must not overlap or reuse pre-write caches"
-        if reload:
-            assert not persistence_db._ENGINE_CACHE
-            assert not persistence_db._SESSION_FACTORY_CACHE
-            assert not persistence_db._MIGRATED_URLS
-        with TestClient(create_app()) as client:
-            events.append("second_started" if reload else "first_started")
-            if reload:
-                auth = client.post(
-                    "/api/auth/login",
-                    json={"email": "e2e-planner@example.com", "password": "password123"},
-                )
-                assert auth.status_code == 200, auth.text
-                assert auth.json()["user"] == original_user
-            else:
-                auth = client.post(
-                    "/api/auth/signup",
-                    json={
-                        "email": "e2e-planner@example.com",
-                        "password": "password123",
-                        "display_name": "Persistence test owner",
-                    },
-                )
-                assert auth.status_code == 201, auth.text
-                original_user = auth.json()["user"]
-            yield client
-        events.append("second_closed" if reload else "first_closed")
-
-    try:
-        yield open_client, events
-    finally:
-        set_planner_chat_model_factory_for_tests(None)
-        reset_database_state()
+    with sequential_restart_clients(
+        db_path, monkeypatch, email="e2e-planner@example.com"
+    ) as factory:
+        yield factory
 
 
 def _create_trip(client: TestClient) -> str:
@@ -235,8 +186,7 @@ def test_planner_turn_e2e_persists_across_app_instances(client_factory) -> None:
         expected_session = first_client.get(f"/api/planner/{trip_id}/session").json()
     assert events == ["first_started", "first_closed"]
     reset_database_state()
-    assert not persistence_db._ENGINE_CACHE
-    assert not persistence_db._SESSION_FACTORY_CACHE
+    assert_restart_caches_cleared()
     events.append("caches_cleared")
     with open_client(reload=True) as second_client:
         # ---- Second app instance (same DB): reload session + assert turn persists ----
