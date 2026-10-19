@@ -67,7 +67,7 @@ describe("TripPricesPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save Flights and ground travel" }));
 
     await waitFor(() => {
-      expect(onSave).toHaveBeenCalledWith("transport", 486, "United.com", {
+      expect(onSave).toHaveBeenCalledWith("transport", 486, "USD", "United.com", {
         lowestAmount: null,
         evidenceAttested: false,
         cabinClass: null,
@@ -98,7 +98,7 @@ describe("TripPricesPanel", () => {
 
     await waitFor(() => {
       // null withdraws; 0 would assert the leg is free, which nobody said.
-      expect(onSave).toHaveBeenCalledWith("transport", null, "");
+      expect(onSave).toHaveBeenCalledWith("transport", null, "USD", "");
     });
   });
 
@@ -110,7 +110,7 @@ describe("TripPricesPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Update Flights and ground travel" }));
 
     await waitFor(() => {
-      expect(onSave).toHaveBeenCalledWith("transport", null, "United.com", {
+      expect(onSave).toHaveBeenCalledWith("transport", null, "USD", "United.com", {
         lowestAmount: null,
         evidenceAttested: false,
         cabinClass: null,
@@ -138,7 +138,7 @@ describe("TripPricesPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save Flights and ground travel" }));
 
     await waitFor(() => {
-      expect(onSave).toHaveBeenCalledWith("transport", 486, "", {
+      expect(onSave).toHaveBeenCalledWith("transport", 486, "USD", "", {
         lowestAmount: 470,
         evidenceAttested: true,
         cabinClass: "economy",
@@ -200,6 +200,7 @@ describe("TripPricesPanel", () => {
       expect(onSave).toHaveBeenCalledWith(
         "transport",
         486,
+        "USD",
         "",
         expect.objectContaining({ evidenceUrl: "https://www.google.com/travel/flights/booking?tfs=abc" })
       );
@@ -209,5 +210,28 @@ describe("TripPricesPanel", () => {
   it("offers no search link when the trip cannot be searched", () => {
     render(<TripPricesPanel prices={EMPTY} busy={false} errorMessage={null} onSave={vi.fn()} />);
     expect(screen.queryByTestId("fare-search-link")).toBeNull();
+  });
+
+  it("shows and preserves a non-USD component currency when editing", async () => {
+    const onSave = vi.fn();
+    const eurPrices: TripPricesState = {
+      ...PRICED,
+      components: [{ ...PRICED.components[0], currency: "EUR" }, PRICED.components[1]],
+      total: { ...PRICED.total!, currency: "EUR" },
+    };
+    render(<TripPricesPanel prices={eurPrices} busy={false} errorMessage={null} onSave={onSave} />);
+
+    expect(screen.getByTestId("trip-price-currency-transport")).toHaveTextContent("EUR");
+    fireEvent.click(screen.getByRole("button", { name: "Update Flights and ground travel" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(
+        "transport",
+        486,
+        "EUR",
+        "United.com",
+        expect.any(Object)
+      );
+    });
   });
 });

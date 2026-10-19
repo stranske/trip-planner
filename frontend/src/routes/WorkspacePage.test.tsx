@@ -5046,6 +5046,32 @@ describe("WorkspacePage", () => {
     }
   });
 
+  it("forwards the displayed EUR component currency when the traveller edits its note", async () => {
+    const prices = {
+      components: [{ component: "transport", label: "Flights and ground travel", currency: "EUR", typical_amount: 620, note: "Original fare note", price_source: null }],
+      total: { typical_amount: 620, currency: "EUR", price_source: { kind: "manual", attributed_to: "Morgan Planner", captured_at: "2026-10-18T12:00:00Z" } },
+      priced_component_count: 1, unpriced_component_count: 0,
+    };
+    const fetchPrices = vi.spyOn(workspaceApi, "fetchTripPrices").mockResolvedValue(prices);
+    const savePrice = vi.spyOn(workspaceApi, "saveTripPrice").mockResolvedValue(prices);
+    mockedFetchWorkspace.mockResolvedValue({ ...workspacePayload, proposal_state: null, view_model: null });
+    try {
+      renderWorkspacePage();
+      await selectWorkspaceTab("Budget");
+      const note = await screen.findByLabelText("Where the Flights and ground travel figure came from");
+      await userEvent.setup().clear(note);
+      await userEvent.setup().type(note, "Corrected fare note");
+      await userEvent.setup().click(screen.getByRole("button", { name: "Update Flights and ground travel" }));
+      await waitFor(() => {
+        expect(savePrice).toHaveBeenCalledWith(workspacePayload.trip_record.trip.trip_id, expect.objectContaining({
+          component: "transport", amount: 620, currency: "EUR", note: "Corrected fare note",
+        }));
+      });
+    } finally {
+      fetchPrices.mockRestore(); savePrice.mockRestore();
+    }
+  });
+
 
   it("cancels a prepared handoff when a price save starts", async () => {
     const pending = deferred<WorkspaceProposalHandoffResponse>();

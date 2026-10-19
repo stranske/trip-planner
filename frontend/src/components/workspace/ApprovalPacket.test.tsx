@@ -120,6 +120,20 @@ describe("ApprovalPacket", () => {
     expect(documentText()).not.toMatch(/from tpp/i);
   });
 
+  it("prints a preserved EUR price with its stated unit", () => {
+    const eurPrices: TripPricesState = {
+      ...PRICED,
+      components: [{ ...PRICED.components[0], currency: "EUR" }],
+      total: { ...PRICED.total!, typical_amount: 486, currency: "EUR" },
+      priced_component_count: 1,
+      unpriced_component_count: 0,
+    };
+    render(<ApprovalPacket workspace={workspace()} prices={eurPrices} requesterName="Priya Raman" onPrint={vi.fn()} />);
+
+    expect(screen.getByTestId("approval-packet-costs")).toHaveTextContent("€486");
+    expect(screen.getByTestId("approval-packet-trip-cost")).toHaveTextContent("€486");
+  });
+
   it("prints the flight details the policy checks, as the traveller gave them", () => {
     render(<ApprovalPacket workspace={workspace()} prices={PRICED} onPrint={vi.fn()} />);
 

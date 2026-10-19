@@ -14,8 +14,8 @@ invent something in their place.
 from __future__ import annotations
 
 import math
-from urllib.parse import urlparse
 from typing import Any
+from urllib.parse import urlparse
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -168,7 +168,7 @@ def save_trip_price(
     trip_id: str,
     component: str,
     amount: float | None,
-    currency: str = "USD",
+    currency: str | None = None,
     note: str = "",
     lowest_amount: float | None = None,
     evidence_attested: bool = False,
@@ -214,8 +214,11 @@ def save_trip_price(
     # Validate by constructing the real thing. Every rule about what may be a price lives
     # in one place, and this path cannot drift away from it.
     try:
+        resolved_currency = (
+            currency if currency is not None else (existing.currency if existing else "USD")
+        )
         price = manual_override(
-            float(amount), currency=currency or "USD", entered_by=user.display_name or user.email
+            float(amount), currency=resolved_currency, entered_by=user.display_name or user.email
         )
     except (UnsourcedPriceError, TypeError, ValueError) as error:
         raise TripPriceInvalidError(str(error)) from error
