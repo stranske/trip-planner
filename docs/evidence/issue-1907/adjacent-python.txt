@@ -1,0 +1,14 @@
+...............                                                          [100%]
+=============================== warnings summary ===============================
+../../../../../Library/CloudStorage/Dropbox/Learning/Code/trip-planner/.venv/lib/python3.14/site-packages/fastapi/testclient.py:1
+  /Users/teacher/Library/CloudStorage/Dropbox/Learning/Code/trip-planner/.venv/lib/python3.14/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/app/test_proposal_payload_truth.py: 11 warnings
+tests/integrations/test_canonical_state_seam.py: 6 warnings
+tests/app/test_planner_turn_e2e.py: 2 warnings
+  /Users/teacher/Library/CloudStorage/Dropbox/Learning/Code/trip-planner/.venv/lib/python3.14/site-packages/alembic/config.py:612: DeprecationWarning: No path_separator found in configuration; falling back to legacy splitting on spaces, commas, and colons for prepend_sys_path.  Consider adding path_separator=os to Alembic config.
+    util.warn_deprecated(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+15 passed, 20 warnings in 4.21s

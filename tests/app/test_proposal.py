@@ -3175,3 +3175,125 @@ def test_proposal_state_persists_across_create_app_restart(
         assert plan["source_version"]["saved_scenario_id"] == source["saved_scenario_id"]
         assert after["evaluation"] == before["evaluation"]
     reset_database_state()
+
+
+def test_transition_audit_native_submit_preserves_lineage_at_each_consumer(
+    tpp_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Storage's second resolver must not conceal a disconnected native producer."""
+    from copy import deepcopy
+
+    import trip_planner.app.services.proposal as service
+
+    monkeypatch.setenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", "true")
+    incoming = []
+    original = service.save_workspace_proposal_submission
+
+    def observe(*args, **kwargs):
+        incoming.append(deepcopy(kwargs["proposal_payload"]))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(service, "save_workspace_proposal_submission", observe)
+    trip_id, workspace = _native_non_compliant_submission(tpp_client)
+    assert len(incoming) == 1, "native submission must reach the persistence consumer"
+    native_source = incoming[0].get("source_version")
+    assert native_source is not None, "native builder lineage lost before persistence"
+    saved = next(
+        s
+        for s in workspace["saved_scenarios"]
+        if s["saved_scenario_id"] == native_source["saved_scenario_id"]
+    )
+    expected = next(v for v in saved["versions"] if v["version_id"] == saved["current_version_id"])
+    assert native_source == expected
+    with get_session_factory()() as session:
+        stored = session.query(PersistedProposalState).filter_by(trip_id=trip_id).one()
+        assert stored.proposal_payload["source_version"] == expected
+    response = tpp_client.post(f"/api/workspace/{trip_id}/proposal/reoptimize", json={})
+    assert response.status_code == 200, response.text
+    plan = response.json()["summary"]["follow_up"]["reoptimization_plan"]
+    assert plan["source_version"] == expected
+    with get_session_factory()() as session:
+        stored = session.query(PersistedProposalState).filter_by(trip_id=trip_id).one()
+        assert stored.summary["follow_up"]["reoptimization_plan"] == plan
+
+
+def test_transition_audit_inventory_has_current_tests_and_source_anchors() -> None:
+    """Keep the bounded audit complete without claiming AST checks prove behavior."""
+    import ast
+    import re
+
+    root = Path(__file__).resolve().parents[2]
+    report = root / "docs/reports/production-transition-audit.md"
+    inventory = json.loads(report.with_suffix(".json").read_text())
+    entries = inventory["entries"]
+    assert {row["seam"] for row in entries} == {"lineage", "lineage-adjacent", "maps", "restart"}
+    assert len({(row["file"], row["test"]) for row in entries}) == len(entries)
+    fully_inventoried = {
+        "tests/app/test_proposal_payload_truth.py",
+        "tests/integrations/test_canonical_state_seam.py",
+        "tests/app/test_planner_turn_e2e.py",
+        "frontend/src/components/maps/TripMap.test.tsx",
+        "frontend/src/components/maps/mapSurface.test.ts",
+    }
+    inventoried_files = {row["file"] for row in entries} | fully_inventoried
+    for file in inventoried_files:
+        text = (root / file).read_text()
+        names = (
+            {
+                n.name
+                for n in ast.parse(text).body
+                if isinstance(n, ast.FunctionDef) and n.name.startswith("test_")
+            }
+            if file.endswith(".py")
+            else set(re.findall(r'\bit\("([^"]+)"', text))
+        )
+        listed = {row["test"] for row in entries if row["file"] == file}
+        assert listed <= names, f"stale audit test reference: {file}"
+        if file in fully_inventoried:
+            assert listed == names, f"unclassified transition test: {file}"
+        if file == "tests/app/test_proposal.py":
+            nodes = [n for n in ast.parse(text).body if isinstance(n, ast.FunctionDef)]
+            start = next(n.lineno for n in nodes if n.name == "_native_non_compliant_submission")
+            end = next(
+                n.end_lineno
+                for n in nodes
+                if n.name == "test_trip_level_reoptimization_returns_no_scenario_lineage"
+            )
+            assert end is not None
+            bounded = {
+                n.name for n in nodes if start <= n.lineno <= end and n.name.startswith("test_")
+            }
+            assert bounded <= listed, "unclassified native lineage transition test"
+            assert (
+                "test_transition_audit_native_submit_preserves_lineage_at_each_consumer" in listed
+            ), "transition audit lineage regression must stay inventoried"
+    for row in entries:
+        assert row["classification"] in {
+            "exercised_offline",
+            "intentional_fixture",
+            "intentional_corruption",
+            "intentional_model",
+            "intentional_component",
+            "intentional_simulation",
+        }
+        assert row["boundary"] and row["limit"]
+        assert f"`{row['file']}::{row['test']}`" in report.read_text()
+    source_anchors = {
+        "trip_planner/app/services/proposal.py": (
+            "_submission_source_version",
+            "build_workspace_submission_proposal",
+            "submit_workspace_proposal_for_trip",
+            "save_workspace_proposal_submission",
+        ),
+        "tests/restart_harness.py": (
+            "clear_inter_app_restart_caches",
+            "sequential_restart_clients",
+        ),
+    }
+    for file, symbols in source_anchors.items():
+        names = {
+            n.name
+            for n in ast.parse((root / file).read_text()).body
+            if isinstance(n, ast.FunctionDef)
+        }
+        assert set(symbols) <= names
