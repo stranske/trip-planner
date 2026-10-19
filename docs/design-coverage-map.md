@@ -4,9 +4,11 @@ This document maps every major design commitment in `trip-planner` to source cod
 It distinguishes docs-only claims from tested implementations so weekly reviews can assess real delivery status
 without re-reading every design doc.
 
-**Last updated:** 2026-05-11
-**Test suite baseline:** 976 passed, 1 xfailed (issue #1163 added 24 source-quality and explanation-builder tests)  
-**Source baseline:** 161 Python modules (~22 K LOC), 86 test modules (~18.5 K LOC), 38 TypeScript/React files
+**Bounded claim review:** 2026-10-19 at `4f78d2d1a`; [execution receipt](evidence/issue-1908-coverage-map.md).
+
+**Historical May baseline (not rerun):** 2026-05-11
+**Historical test suite baseline:** 976 passed, 1 xfailed (issue #1163 added 24 source-quality and explanation-builder tests)
+**Historical source baseline:** 161 Python modules (~22 K LOC), 86 test modules (~18.5 K LOC), 38 TypeScript/React files
 
 ---
 
@@ -14,7 +16,7 @@ without re-reading every design doc.
 
 | Status | Meaning |
 |--------|---------|
-| ✅ Implemented | Code exists and tests pass |
+| ✅ Implemented | Implementation and cited test paths exist; execution is limited to the dated receipts below, never implied by path existence |
 | 🟡 Partial | Code exists; either seeded/fixture-backed or missing test coverage |
 | ❌ Missing | Docs describe it; no implementation yet |
 | 🚧 Blocked | Depends on a missing or partial prerequisite |
@@ -28,21 +30,21 @@ Design ref: [`docs/domain-contracts.md`](domain-contracts.md)
 
 | Contract | Source | Tests | Status |
 |----------|--------|-------|--------|
-| `Trip` (main planning container) | `trip_planner/contracts/trip.py` | `tests/contracts/test_trip_contracts.py` | ✅ Implemented |
-| `Trip.mode` (leisure / business split) | `trip_planner/contracts/trip.py` | `tests/contracts/test_trip_contracts.py` | ✅ Implemented |
+| `Trip` (main planning container) | `trip_planner/contracts/trip.py` | `tests/contracts/test_trip.py` | ✅ Implemented |
+| `Trip.mode` (leisure / business split) | `trip_planner/contracts/trip.py` | `tests/contracts/test_trip.py` | ✅ Implemented |
 | `LeisurePreferenceProfile` | `trip_planner/preferences/schema.py` | `tests/preferences/` (multiple) | ✅ Implemented |
-| `BusinessTravelProfile` | `trip_planner/business/schema.py`, `business/profile.py` | `tests/business/test_business_profile.py` | ✅ Implemented |
+| `BusinessTravelProfile` | `trip_planner/business/schema.py`, `trip_planner/business/profile.py` | `tests/business/test_profile.py` | ✅ Implemented |
 | `Destination` (normalized place entity) | `trip_planner/contracts/destinations.py` | `tests/contracts/test_destination_contracts.py` | ✅ Implemented |
-| `OptionSet` + `Option` | `trip_planner/contracts/options.py` | `tests/contracts/test_option_contracts.py` | ✅ Implemented |
-| `ItineraryObjectives` | `trip_planner/contracts/objectives.py` | `tests/contracts/test_objectives_contracts.py` | ✅ Implemented |
+| `OptionSet` + `Option` | `trip_planner/contracts/options.py` | `tests/contracts/test_options.py` | ✅ Implemented |
+| `ItineraryObjectives` | `trip_planner/contracts/objectives.py` | `tests/contracts/test_objectives.py` | ✅ Implemented |
 | `LodgingOption` | `trip_planner/contracts/lodging.py` | `tests/contracts/` | ✅ Implemented |
-| `TransportOption` | `trip_planner/contracts/_option_contracts.py` | `tests/contracts/test_option_contracts.py` | ✅ Implemented |
+| `TransportOption` | `trip_planner/contracts/options.py` | `tests/contracts/test_options.py` | ✅ Implemented |
 | `ActivityOption` | `trip_planner/contracts/activities.py` | `tests/contracts/` | ✅ Implemented |
 | `InventoryBundle` | `trip_planner/contracts/bundles.py` | `tests/contracts/` | ✅ Implemented |
-| `TripPlanProposal` (TPP export) | `trip_planner/business/policy_contracts.py`, `integrations/tpp/contracts.py` | `tests/integrations/test_tpp_contracts.py` | ✅ Implemented |
-| Refs-not-inline rule (Trip references artifacts) | `trip_planner/contracts/trip.py` (`artifact_refs`) | `tests/contracts/test_trip_contracts.py` | ✅ Implemented |
+| `TripPlanProposal` (TPP export) | `trip_planner/business/policy_contracts.py`, `trip_planner/integrations/tpp/contracts.py` | `tests/integrations/test_tpp_contracts.py` | ✅ Implemented |
+| Refs-not-inline rule (Trip references artifacts) | `trip_planner/contracts/trip.py` (`artifact_refs`) | `tests/contracts/test_trip.py` | ✅ Implemented |
 
-All 13 root contracts from `domain-contracts.md` are implemented and tested.
+All 13 root contracts retain implementation/test references; only the bounded execution receipt below is a current test-run claim.
 
 ---
 
@@ -53,14 +55,14 @@ Issues: `#506` (epic), `#507`–`#512`
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
-| Leisure preference contracts + package layout (`#507`) | `trip_planner/preferences/schema.py`, `models.py` | `tests/preferences/test_preference_models.py` | ✅ Implemented |
-| Evidence model (`#508`) | `trip_planner/preferences/evidence.py`, `evidence_catalog.py` | `tests/preferences/test_evidence.py` | ✅ Implemented |
+| Leisure preference contracts + package layout (`#507`) | `trip_planner/preferences/schema.py`, `trip_planner/preferences/models.py` | `tests/preferences/test_models.py` | ✅ Implemented |
+| Evidence model (`#508`) | `trip_planner/preferences/evidence.py`, `trip_planner/preferences/evidence_catalog.py` | `tests/preferences/test_evidence.py` | ✅ Implemented |
 | Traveler fixture corpus (`#509`) | `trip_planner/preferences/fixture_corpus.py` | `tests/preferences/test_fixture_corpus.py` | ✅ Implemented |
 | Preference resolution engine (`#510`) | `trip_planner/preferences/resolution.py` | `tests/preferences/test_resolution.py` | ✅ Implemented |
-| Autonomy + revealed-preference updates (`#511`) | `trip_planner/preferences/autonomy.py`, `revealed_preference.py` | `tests/preferences/test_autonomy.py`, `test_revealed_preference.py` | ✅ Implemented |
+| Autonomy + revealed-preference updates (`#511`) | `trip_planner/preferences/autonomy.py`, `trip_planner/preferences/revealed_preference.py` | `tests/preferences/test_autonomy.py`, `tests/preferences/test_revealed_preference.py` | ✅ Implemented |
 | Interaction tracking | `trip_planner/preferences/interactions.py` | `tests/preferences/test_interactions.py` | ✅ Implemented |
 | Explanation generation | `trip_planner/preferences/explanations.py` | `tests/preferences/test_explanations.py` | ✅ Implemented |
-| Legacy request adapter | `trip_planner/preferences/legacy_request_adapter.py` | — | 🟡 Partial (no dedicated test) |
+| Legacy request adapter | `trip_planner/preferences/legacy_request_adapter.py` | `tests/preferences/test_legacy_request_adapter.py` | ✅ Implemented; dedicated adapter tests exist and were run in this bounded review |
 | Preference roadmap items (collaborative, in-trip, revealed-preference modes) | `docs/preference-roadmap.md` | — | 📄 Docs-only |
 
 ---
@@ -73,11 +75,11 @@ Issues: `#513` (epic), `#514`–`#518`
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
 | Shared trip/option-set/itinerary-objective contracts (`#514`) | `trip_planner/contracts/` | `tests/contracts/` | ✅ Implemented |
-| `BusinessTravelProfile` (`#515`) | `trip_planner/business/profile.py`, `schema.py` | `tests/business/test_business_profile.py` | ✅ Implemented |
-| Policy-facing proposal + evaluation contracts (`#516`) | `trip_planner/business/policy_contracts.py`, `approval_ready.py` | `tests/business/test_approval_ready.py`, `test_policy_contracts.py` | ✅ Implemented |
-| Source/provenance contracts (`#517`) | `trip_planner/sources/schema.py`, `provenance.py` | `tests/sources/` | ✅ Implemented |
-| Business planning objectives (`#518`) | `trip_planner/business/objectives.py`, `objective_derivation.py` | `tests/business/test_business_objectives.py`, `test_business_derivation.py` | ✅ Implemented |
-| Business scenario simulator | `trip_planner/business/simulator.py` | `tests/business/test_business_simulator.py` | ✅ Implemented |
+| `BusinessTravelProfile` (`#515`) | `trip_planner/business/profile.py`, `trip_planner/business/schema.py` | `tests/business/test_profile.py` | ✅ Implemented |
+| Policy-facing proposal + evaluation contracts (`#516`) | `trip_planner/business/policy_contracts.py`, `trip_planner/business/approval_ready.py` | `tests/business/test_approval_ready.py`, `tests/business/test_policy_contracts.py` | ✅ Implemented |
+| Source/provenance contracts (`#517`) | `trip_planner/sources/schema.py`, `trip_planner/sources/provenance.py` | `tests/sources/` | ✅ Implemented |
+| Business planning objectives (`#518`) | `trip_planner/business/objectives.py`, `trip_planner/business/objective_derivation.py` | `tests/business/test_business_objectives.py`, `tests/business/test_business_objective_derivation.py` | ✅ Implemented |
+| Business scenario simulator | `trip_planner/business/simulator.py` | `tests/business/test_simulator.py` | ✅ Implemented |
 | Business orchestration boundary | `docs/business-orchestration-boundary.md` | — | 📄 Docs-only |
 
 ---
@@ -92,7 +94,7 @@ Design refs: [`docs/itinerary-objective-derivation-boundary.md`](itinerary-objec
 | Route feasibility checking | `trip_planner/itinerary/feasibility.py` | `tests/itinerary/test_feasibility.py` | ✅ Implemented |
 | Move cost calculation | `trip_planner/itinerary/move_costs.py` | `tests/itinerary/` | ✅ Implemented |
 | Scenario generation | `trip_planner/itinerary/scenarios.py` | `tests/itinerary/test_scenarios.py` | ✅ Implemented |
-| Itinerary search | `trip_planner/itinerary/search.py` | `tests/itinerary/test_itinerary_search.py` | ✅ Implemented |
+| Itinerary search | `trip_planner/itinerary/search.py` | `tests/itinerary/test_search.py` | ✅ Implemented |
 
 ---
 
@@ -105,9 +107,9 @@ Issues: `#519` (epic), `#520`–`#524`
 |------------|--------|-------|--------|
 | Destination/place-context contracts (`#520`) | `trip_planner/contracts/destinations.py` | `tests/contracts/test_destination_contracts.py` | ✅ Implemented |
 | `LodgingOption` (`#521`) | `trip_planner/contracts/lodging.py` | `tests/contracts/` | ✅ Implemented |
-| `TransportOption` (`#522`) | `trip_planner/contracts/_option_contracts.py` | `tests/contracts/test_option_contracts.py` | ✅ Implemented |
+| `TransportOption` (`#522`) | `trip_planner/contracts/options.py` | `tests/contracts/test_options.py` | ✅ Implemented |
 | `ActivityOption` (`#523`) | `trip_planner/contracts/activities.py` | `tests/contracts/` | ✅ Implemented |
-| Inventory bundles + mixed option assembly (`#524`) | `trip_planner/contracts/bundles.py`, `options/` | `tests/options/` | ✅ Implemented |
+| Inventory bundles + mixed option assembly (`#524`) | `trip_planner/contracts/bundles.py`, `trip_planner/options/` | `tests/options/` | ✅ Implemented |
 
 ---
 
@@ -118,11 +120,11 @@ Issues: `#525` (epic), `#526`–`#530`
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
-| Source adapter + raw snapshot contracts (`#526`) | `trip_planner/sources/schema.py`, `adapters/base.py`, `snapshots.py` | `tests/sources/` | ✅ Implemented |
-| Entity resolution + deduplication (`#527`) | `trip_planner/sources/resolution.py`, `dedup.py` | `tests/sources/` | ✅ Implemented |
-| Lodging + transport ingestion (`#528`) | `trip_planner/ingestion/lodging_pipeline.py`, `transport_pipeline.py` | `tests/ingestion/test_lodging_pipeline.py`, `test_transport_pipeline.py` | ✅ Implemented |
-| Destination + activity ingestion (`#529`) | `trip_planner/ingestion/destination_pipeline.py`, `activity_pipeline.py` | `tests/ingestion/test_destination_pipeline.py`, `test_activity_pipeline.py` | ✅ Implemented |
-| Candidate generation + filtering (`#530`) | `trip_planner/candidates/generation.py`, `models.py` | `tests/candidates/test_generation.py` | ✅ Implemented |
+| Source adapter + raw snapshot contracts (`#526`) | `trip_planner/sources/schema.py`, `trip_planner/sources/adapters/base.py`, `trip_planner/sources/snapshots.py` | `tests/sources/` | ✅ Implemented |
+| Entity resolution + deduplication (`#527`) | `trip_planner/sources/resolution.py`, `trip_planner/sources/dedup.py` | `tests/sources/` | ✅ Implemented |
+| Lodging + transport ingestion (`#528`) | `trip_planner/ingestion/lodging_pipeline.py`, `trip_planner/ingestion/transport_pipeline.py` | `tests/ingestion/test_lodging_pipeline.py`, `tests/ingestion/test_transport_pipeline.py` | ✅ Implemented |
+| Destination + activity ingestion (`#529`) | `trip_planner/ingestion/destination_pipeline.py`, `trip_planner/ingestion/activity_pipeline.py` | `tests/ingestion/test_destination_pipeline.py`, `tests/ingestion/test_activity_pipeline.py` | ✅ Implemented |
+| Candidate generation + filtering (`#530`) | `trip_planner/candidates/generation.py`, `trip_planner/candidates/models.py` | `tests/candidates/test_generation.py` | ✅ Implemented |
 
 ---
 
@@ -147,10 +149,10 @@ Issues: `#675` (epic), `#683`–`#686`
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
-| Account registration, login, session restore (`#683`) | `trip_planner/app/routes/auth.py`, `services/auth.py`, `persistence/models/` | `tests/app/test_auth.py` | ✅ Implemented |
-| DB-backed trip creation, list, detail (`#684`) | `trip_planner/app/routes/trips.py`, `state/trips.py`, `state/repositories/` | `tests/app/test_trip_routes.py`, `tests/state/test_trips.py` | ✅ Implemented |
-| Saved scenario + planning-history persistence (`#685`) | `trip_planner/app/routes/scenario_history.py`, `state/scenarios.py` | `tests/app/`, `tests/state/` | ✅ Implemented |
-| Planning-session + activity-log persistence (`#686`) | `trip_planner/app/routes/planner.py`, `services/planner.py`, `persistence/models/planner_memory.py` | `tests/app/test_planner_routes.py`, `tests/app/test_planner_turn_e2e.py` | ✅ Implemented |
+| Account registration, login, session restore (`#683`) | `trip_planner/app/routes/auth.py`, `trip_planner/app/services/auth.py`, `trip_planner/persistence/models/` | `tests/app/test_auth.py` | ✅ Implemented |
+| DB-backed trip creation, list, detail (`#684`) | `trip_planner/app/routes/trips.py`, `trip_planner/state/trips.py`, `trip_planner/state/repositories/` | `tests/app/test_trip_routes.py`, `tests/state/test_trips.py` | ✅ Implemented |
+| Saved scenario + planning-history persistence (`#685`) | `trip_planner/app/routes/scenario_history.py`, `trip_planner/state/scenarios.py` | `tests/app/`, `tests/state/` | ✅ Implemented |
+| Planning-session + activity-log persistence (`#686`) | `trip_planner/app/routes/planner.py`, `trip_planner/app/services/planner.py`, `trip_planner/persistence/models/planner_memory.py` | `tests/app/test_planner_routes.py`, `tests/app/test_planner_turn_e2e.py` | ✅ Implemented |
 | Alembic migrations | `trip_planner/persistence/alembic/` | CI import check | ✅ Implemented |
 | Append-only scenario history | `trip_planner/state/scenarios.py` | `tests/state/` | ✅ Implemented |
 
@@ -163,11 +165,11 @@ Issues: `#674` (epic), `#680`–`#682`
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
-| FastAPI runtime + health endpoint (`#680`) | `trip_planner/app/main.py`, `routes/health.py` | `tests/app/test_health.py` | ✅ Implemented |
-| React shell + live health integration (`#680`) | `frontend/src/App.tsx`, `routes/HealthPage.tsx` | `frontend/src/routes/HealthPage.test.tsx` | ✅ Implemented |
+| FastAPI runtime + health endpoint (`#680`) | `trip_planner/app/main.py`, `trip_planner/app/routes/health.py` | `tests/app/test_health.py` | ✅ Implemented |
+| React shell + live health integration (`#680`) | `frontend/src/App.tsx`, `frontend/src/routes/HealthPage.tsx` | `frontend/src/routes/HealthPage.test.tsx` | ✅ Implemented |
 | Typed frontend API client (`#681`) | `frontend/src/api/` | `frontend/src/smoke/` | ✅ Implemented |
-| Route/data-loading foundation (`#681`) | `frontend/src/router.tsx`, `routes/` | `frontend/src/router.test.ts` | ✅ Implemented |
-| Full-stack local dev + CI workflow support (`#682`) | `Makefile`, `ci.yml` | `tests/test_repo_hygiene.py` | ✅ Implemented |
+| Route/data-loading foundation (`#681`) | `frontend/src/router.tsx`, `frontend/src/routes/` | `frontend/src/router.test.ts` | ✅ Implemented |
+| Full-stack local dev + CI workflow support (`#682`) | `Makefile`, `.github/workflows/ci.yml` | `tests/test_repo_hygiene.py` | ✅ Implemented |
 
 ---
 
@@ -178,9 +180,9 @@ Issues: `#676` (epic), `#687`–`#689`
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
-| Trip entry flow (`#687`) | `frontend/src/routes/NewTripPage.tsx`, `TripsPage.tsx` | `tests/app/test_trip_routes.py`, frontend route tests | ✅ Implemented |
-| Planner side panel in workspace (`#688`) | `frontend/src/components/planner/PlannerSidePanelSurface.tsx`, `WorkspacePage.tsx` | `tests/app/test_workspace.py` | ✅ Implemented |
-| Planner decisions persisted across reloads (`#689`) | `trip_planner/app/services/planner.py` (memory model), `routes/planner.py` | `tests/app/test_planner_turn_e2e.py` | ✅ Implemented |
+| Trip entry flow (`#687`) | `frontend/src/routes/NewTripPage.tsx`, `frontend/src/routes/TripsPage.tsx` | `tests/app/test_trip_routes.py`, frontend route tests | ✅ Implemented |
+| Planner side panel in workspace (`#688`) | `frontend/src/components/planner/PlannerSidePanelSurface.tsx`, `frontend/src/routes/WorkspacePage.tsx` | `tests/app/test_workspace.py` | ✅ Implemented |
+| Planner decisions persisted across reloads (`#689`) | `trip_planner/app/services/planner.py` (memory model), `trip_planner/app/routes/planner.py` | `tests/app/test_planner_turn_e2e.py` | ✅ Implemented |
 
 ---
 
@@ -193,12 +195,12 @@ Issues: `#677` (epic), `#690`–`#693`
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
-| Inventory bundle assembly surfaced in workspace (`#690`) | `trip_planner/app/services/inventory.py`, `app/services/workspace.py` (top-level `inventory_summary` key, with assembled `bundles` nested inside) | `tests/app/test_inventory.py` | ✅ Implemented |
-| Feasibility + move-cost evaluation in planner outputs (`#691`) | `trip_planner/app/services/feasibility.py`, `app/services/workspace.py` (top-level `feasibility_summary` key) | `tests/app/test_workspace.py` | ✅ Implemented |
-| Ranking + scenario-generation services with workspace results (`#692`) | `trip_planner/app/services/scenarios.py`, `app/services/workspace.py` (top-level `ranking` key) | `tests/app/test_workspace.py`, `tests/planner/test_planner_turn_acceptance.py` | ✅ Implemented |
+| Inventory bundle assembly surfaced in workspace (`#690`) | `trip_planner/app/services/inventory.py`, `trip_planner/app/services/workspace.py` (top-level `inventory_summary` key, with assembled `bundles` nested inside) | `tests/app/test_inventory.py` | ✅ Implemented |
+| Feasibility + move-cost evaluation in planner outputs (`#691`) | `trip_planner/app/services/feasibility.py`, `trip_planner/app/services/workspace.py` (top-level `feasibility_summary` key) | `tests/app/test_workspace.py` | ✅ Implemented |
+| Ranking + scenario-generation services with workspace results (`#692`) | `trip_planner/app/services/scenarios.py`, `trip_planner/app/services/workspace.py` (top-level `ranking` key) | `tests/app/test_workspace.py`, `tests/planner/test_planner_turn_acceptance.py` | ✅ Implemented |
 | Route-search + scenario-comparison in workspace (`#693`) | `trip_planner/app/services/workspace.py` (`_build_runtime_scenario_comparison`; surfaced as canonical `route_comparison` plus compatibility alias) | `tests/app/test_workspace.py`, `tests/planner/test_planner_turn_acceptance.py`, `frontend/src/routes/WorkspacePage.test.tsx` | ✅ Implemented |
 
-**Gap:** Arbitrary persisted trips do not yet receive the same normalized inventory and scenario depth as the two seeded examples (`trip-leisure-kyoto-draft`, `trip-business-client-summit`). Tracked in live-runtime-completion epic `#753` (children `#757`–`#759`).
+**Current persisted-runtime boundary:** `trip_planner/app/services/workspace.py` builds persisted-trip inventory input with `allow_fixture_fallback=False`, then passes that input to `trip_planner/app/services/inventory.py`; the adapter class default remains True for other callers. The non-seeded business/leisure and no-fixture-marker cases in `tests/app/test_workspace.py`, plus persisted-record precedence in `tests/app/test_inventory.py`, exercise the reachable persisted path. Section 17 replaces the old seeded-ID limitation. This does not guarantee provider depth or availability for every arbitrary trip.
 
 ---
 
@@ -209,7 +211,7 @@ Issues: `#543` (epic), `#544`–`#548`
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
-| Planner-turn + workflow contracts (`#544`) | `trip_planner/orchestration/models.py`, `actions.py` | `tests/orchestration/test_orchestration_models.py` | ✅ Implemented |
+| Planner-turn + workflow contracts (`#544`) | `trip_planner/orchestration/models.py`, `trip_planner/orchestration/actions.py` | `tests/orchestration/test_orchestration_models.py` | ✅ Implemented |
 | Leisure orchestration (`#545`) | `trip_planner/orchestration/leisure.py` | `tests/orchestration/test_leisure_flow.py` | ✅ Implemented |
 | Feedback loops (`#546`) | `trip_planner/orchestration/feedback.py` | `tests/orchestration/test_feedback.py` | ✅ Implemented |
 | In-trip replanning (`#547`) | `trip_planner/orchestration/in_trip.py` | `tests/orchestration/test_in_trip.py` | ✅ Implemented |
@@ -245,9 +247,9 @@ Issues: `#678` (epic), `#694`–`#697`
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
-| Budget editing + actual-spend capture (`#694`) | `trip_planner/app/routes/budget.py`, `services/budget.py`, `state/budget.py` | `tests/app/test_budget_routes.py` | ✅ Implemented |
-| Policy constraint sync + approval-readiness display (`#695`) | `trip_planner/app/routes/policy.py`, `services/policy.py` | `tests/app/test_policy.py` | ✅ Implemented |
-| Proposal submission + result ingestion (`#696`) | `trip_planner/app/routes/proposal.py`, `integrations/tpp/submission.py`, `results.py` | `tests/app/test_proposal.py`, `tests/integrations/test_submission.py`, `test_results.py` | ✅ Implemented |
+| Budget editing + actual-spend capture (`#694`) | `trip_planner/app/routes/budget.py`, `trip_planner/app/services/budget.py`, `trip_planner/state/budget.py` | `tests/app/test_budget_routes.py` | ✅ Implemented |
+| Policy constraint sync + approval-readiness display (`#695`) | `trip_planner/app/routes/policy.py`, `trip_planner/app/services/policy.py` | `tests/app/test_policy.py` | ✅ Implemented |
+| Proposal submission + result ingestion (`#696`) | `trip_planner/app/routes/proposal.py`, `trip_planner/integrations/tpp/submission.py`, `trip_planner/integrations/tpp/results.py` | `tests/app/test_proposal.py`, `tests/integrations/test_submission.py`, `tests/integrations/test_results.py` | ✅ Implemented |
 | Reoptimization + exception-handling after policy results (`#697`) | `trip_planner/integrations/tpp/reoptimization.py`, `trip_planner/app/routes/proposal.py` | `tests/integrations/test_reoptimization.py`, `tests/app/test_proposal.py` | ✅ Implemented |
 
 ---
@@ -256,18 +258,22 @@ Issues: `#678` (epic), `#694`–`#697`
 
 Design ref: [`docs/live-tpp-execution-reoptimization-epic.md`](live-tpp-execution-reoptimization-epic.md)
 
-> **Live TPP transport verified in a configured environment.** All contracts and seams exist. The planner-turn → TPP round-trip (permission request → approval evidence → confirmation) is exercisable via `HTTPTPPIntegrationClient.submit_proposal` / `fetch_evaluation_result` (used by `app/services/proposal.py`); the original `test_tpp_approval_flow_round_trip_from_planner_turn` xfail was deleted by the issue #1046 audit (2026-04-30) and recorded in `tests/planner/MIGRATIONS.md`. Issue #1161 (2026-05-11) hardened the verifier diagnostics so non-PASS `live-tpp` results expose a `remediation` hint and an `invalid_path_detail.kind` discriminator, and pinned `TPP_BASE_URL` mode to never resolve a sibling interpreter. On 2026-05-14, `python scripts/check_full_product_verification.py --live-tpp=required` reported `PASS live-tpp` in sibling-checkout mode against `Travel-Plan-Permission` commit `ee84f95`; see [`docs/verification-logs/live-tpp-pass-2026-05-14.log`](verification-logs/live-tpp-pass-2026-05-14.log). Default CI still auto-skips when live TPP config is absent.
+> **Current configured execution: UNVERIFIED.** Historical transport, pinned local two-app contracts and a current full-product gate are separate evidence states.
 
-| Commitment | Source | Tests | Status |
-|------------|--------|-------|--------|
-| TPP client + policy sync contract | `trip_planner/integrations/tpp/client.py`, `policy_sync.py` | `tests/integrations/test_policy_sync.py`, `test_canonical_state_seam.py` | ✅ Implemented |
-| Proposal lifecycle + submission | `trip_planner/integrations/tpp/submission.py`, `contracts.py` | `tests/integrations/test_submission.py`, `test_tpp_contracts.py` | ✅ Implemented |
-| Result ingestion | `trip_planner/integrations/tpp/results.py` | `tests/integrations/test_results.py` | ✅ Implemented |
-| Planner-turn-driven approval round-trip (in-process) | `trip_planner/app/services/proposal.py` (calls `HTTPTPPIntegrationClient.submit_proposal` + `fetch_evaluation_result`) | `tests/integrations/test_submission.py`, `test_results.py`, `test_tpp_cross_repo_smoke.py` | ✅ Implemented |
-| Reoptimization seam | `trip_planner/integrations/tpp/reoptimization.py`, `trip_planner/app/routes/proposal.py` | `tests/integrations/test_reoptimization.py`, `tests/app/test_proposal.py` | ✅ Implemented |
-| Live remote TPP transport | `scripts/check_full_product_verification.py`, `docs/verification-logs/live-tpp-pass-2026-05-14.log` | `tests/integrations/test_tpp_transport_httpserver.py`, `tests/integrations/test_tpp_cross_repo_smoke.py`; live verifier PASS captured 2026-05-14 | ✅ Implemented |
+| Layer | Source / tests | Evidence state |
+|---|---|---|
+| Historical May live-TPP run | `docs/verification-logs/live-tpp-pass-2026-05-14.log` | Preserved 2026-05-14 `PASS live-tpp` against sibling TPP `ee84f95`; current consumer/producer execution is not established by that old log. |
+| Local pinned authenticated two-app handoff | `tests/integration/test_authenticated_two_app_handoff.py`, `tests/integration/test_tpp_portal_contract.py`, `tests/integration/portal_contract_checkout.py` | Real local HTTP/auth/SQLite routes; `.github/workflows/cross-repo-smoke.yml` pins TPP `aa36ad2cc4e85da634347541480f2784363ccdbb`. Configured checks exist; this round did not execute the producer-pinned tests, so no current two-app PASS is claimed. |
+| Fixture-envelope lifecycle / reload | `tests/integrations/test_tpp_cross_repo_smoke.py`, `tests/integrations/test_canonical_state_seam.py` | These use Trip Planner app instances and supplied/intercepted policy payloads; they do not prove remote TPP transport. Canonical restart closes A, resets engine/session/migration caches, then opens B against file SQLite. |
+| TPP client and policy/result contracts | `trip_planner/integrations/tpp/client.py`, `trip_planner/integrations/tpp/policy_sync.py`, `trip_planner/integrations/tpp/results.py`; `tests/integrations/test_policy_sync.py`, `tests/integrations/test_results.py`, `tests/integrations/test_tpp_transport_httpserver.py` | Implementation and local contract tests are present; path validity alone is not an execution verdict. |
+| Native lineage and reoptimization | `trip_planner/app/services/proposal.py`, `trip_planner/integrations/tpp/reoptimization.py`; `tests/app/test_proposal.py` | F50 source #1904 / PR #1915; native producer and persistence/plan consumer evidence is classified in `docs/reports/production-transition-audit.md`. Intercepted external responses are explicit. |
+| Current full-product configured TPP transport | `scripts/check_full_product_verification.py`, `.github/workflows/cross-repo-smoke.yml`, `tests/scripts/test_cross_repo_smoke_workflow.py` | 🟡 Partial: current configured execution UNVERIFIED. Required gate: `python scripts/check_full_product_verification.py --live-tpp=required`; retain consumer/producer full SHAs, environment, actual run URL and artifact. Default skips and `--live-tpp off` are not PASS. |
 
-**Verification detail:** The remote TPP call path (`integrations/tpp/client.py`) is wired to a real HTTP transport (`HTTPTPPIntegrationClient` dispatches via `urllib.request.urlopen`) and has now been exercised end-to-end through the full-product verifier. The captured 2026-05-14 run started a sibling `Travel-Plan-Permission` service, then completed policy sync, proposal submission, status poll, and evaluation ingestion with `live-tpp PASS`. Default local and CI runs remain opt-in and report `SKIPPED` when `TPP_BASE_URL` / `TPP_REPO_PATH` plus auth are absent.
+The old remote-path implementation remains available through
+`trip_planner/integrations/tpp/client.py`. No new service, deployment, credential
+or live-provider run was performed for this docs issue. The current required
+configured gate remains a bounded release verification gap; no date or test name
+substitutes for its execution receipt.
 
 ---
 
@@ -300,9 +306,9 @@ Issues: `#753` (epic), `#757`–`#759`
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
-| Persisted-trip-driven inventory assembly (`#757`) | `trip_planner/app/services/inventory.py` | `tests/app/test_inventory.py` | 🟡 Partial (seeded IDs gate still present) |
-| Persisted default workspace bootstrap (`#758`) | `trip_planner/app/services/workspace.py` | `tests/app/test_workspace.py` | 🟡 Partial |
-| Runtime ranking + feasibility from persisted inventory (`#759`) | `trip_planner/app/services/scenarios.py` | — | 🟡 Partial (fixture branch present) |
+| Persisted-trip-driven inventory assembly (`#757`) | `trip_planner/app/services/inventory.py`, `trip_planner/app/services/workspace.py` (`allow_fixture_fallback=False`) | `tests/app/test_inventory.py` | ✅ Implemented persisted-record path; fixture-only callers remain explicit |
+| Persisted default workspace bootstrap (`#758`) | `trip_planner/app/services/workspace.py` | `tests/app/test_workspace.py` (non-seeded business/leisure and no-fixture-marker cases) | ✅ Implemented persisted-runtime bootstrap; provider availability is separate |
+| Runtime ranking + feasibility from persisted inventory (`#759`) | `trip_planner/app/services/scenarios.py`, `trip_planner/app/services/workspace.py` | `tests/app/test_workspace.py` (persisted-trip runtime-frame cases) | ✅ Reachable persisted inventory path; offline fixture-based assertions do not prove live source depth |
 
 ---
 
@@ -313,7 +319,7 @@ From [`docs/product-architecture-brief.md`](product-architecture-brief.md) and [
 | Rule | Evidence | Status |
 |------|---------|--------|
 | Contracts before engines before UI (delivery pattern) | Implementation plan §Working Rule | ✅ Followed throughout |
-| Separate leisure + business at contract level | `preferences/schema.py` vs `business/schema.py` | ✅ Implemented |
+| Separate leisure + business at contract level | `trip_planner/preferences/schema.py` vs `trip_planner/business/schema.py` | ✅ Implemented |
 | Audit trail (created_at, updated_at, version on mutable records) | `trip_planner/persistence/models/` | ✅ Implemented |
 | Append-only scenario history | `trip_planner/state/scenarios.py` | ✅ Implemented |
 | Trip references artifacts (no inlining) | `trip_planner/contracts/trip.py` (`TripArtifactRefs`) | ✅ Implemented |
@@ -324,7 +330,7 @@ From [`docs/product-architecture-brief.md`](product-architecture-brief.md) and [
 
 ## Summary: Remaining Follow-Up Claims
 
-These design commitments are still missing, partial, or not yet verified in a live provider environment. Each is a candidate for a follow-up issue:
+These retained gaps describe verification boundaries. This map does not authorize new issues or duplicate the existing implementation owners:
 
 1. **Semantic planner memory and reorientation** — ✅ Addressed by the `read_notebook_context` tool, which synthesizes trip-scoped notebook context across categories and fires on session-resume phrases. Remaining work is deeper embedding-based recall over free-text notes (explicitly out of scope for the deterministic layer). See §13 above.
 2. **Provider-rich timeline/map depth** — default workspace and planner-tool payloads now expose source-backed marker detail and per-segment distance-verification state. Remaining work is live provider verification in configured release environments. See §16 above.
@@ -334,7 +340,40 @@ These design commitments are still missing, partial, or not yet verified in a li
 
 1. Check the **planner/runtime acceptance tests** first: `pytest -q tests/planner/test_planner_turn_acceptance.py tests/app/test_planner_routes.py tests/app/test_full_product_verification.py`.
 2. The **Docs-only** rows in each section identify items that are design commitments but not yet scheduled work.
-3. **Partial** rows identify items where code exists but is seeded/fixture-backed — these are the next implementation lane.
-4. The **Summary: Remaining Follow-Up Claims** section lists the highest-priority gaps that should become new issues or verification tasks.
+3. **Partial** rows and preambles name a bounded remaining gap; distinguish configured live-provider verification from missing implementation before selecting work.
+4. The **Summary: Remaining Follow-Up Claims** section lists the highest-priority gaps for verification tasks under their existing owners. This scope does not authorize new finding issues or duplicate implementation owners.
 
 Map SDK selection: real-adapter mocked-library interaction/cleanup/failure/scenario coverage in `frontend/src/components/maps/TripMap.test.tsx` (issue #1905). Live provider deployment remains unverified.
+
+
+## Bounded current evidence and remaining Partial claims (issue #1908)
+
+The [current receipt](evidence/issue-1908-coverage-map.md) records the actual
+Python command and result at `4f78d2d1a`. Only that selected set was run here;
+the historical 976-test baseline above is preserved and was not repeated.
+
+- **F50 native lineage**: existing source #1904 / PR #1915 and audit #1907 / PR #1927.
+  `tests/app/test_proposal.py` observes the native builder before persistence can
+  repair missing lineage, then checks the stored proposal and plan. See
+  `docs/reports/production-transition-audit.md`; caller-envelope tests prove their
+  adapter contract, not the native producer. No new production fix is bundled.
+- **F51 maps / section 16 Partial**: source #1905 / PR #1923.
+  `frontend/src/components/maps/TripMap.test.tsx` includes actual GoogleMapCanvas
+  interaction/lifecycle tests with mocked SDK libraries; supplied readiness props
+  and `frontend/src/components/maps/mapSurface.test.ts` are narrower controls.
+  Live authenticated provider/deployment behavior remains UNVERIFIED. The
+  bounded gap is a configured provider observation, not another map implementation.
+- **F52 restart / section 13 Partial**: source #1906 / PR #1926.
+  `tests/integrations/test_canonical_state_seam.py` and the adjacent proposal test
+  close A, clear caches, open B and freshly authenticate. They prove the scoped
+  in-process/file-SQLite transition; OS-process/PostgreSQL/deployment restart and
+  live model-provider acceptance remain UNVERIFIED. Planner model/tool tests use
+  deterministic test providers, not a live model acceptance run.
+
+`tests/preferences/test_legacy_request_adapter.py` also validates normalized
+source/test/doc references in this map, rejects an explicitly nonexistent path,
+and accepts document-relative Markdown links. **Path validity is a documentation
+check, not behavioral verification.** Each remaining Partial claim above names
+its existing source/test reference and bounded execution gap. Scope excludes
+runtime changes, epic redesign, new findings issues, and repetition of the
+native-lineage/map/restart fixes.
