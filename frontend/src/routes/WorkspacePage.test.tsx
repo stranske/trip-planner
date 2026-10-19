@@ -5056,6 +5056,10 @@ describe("WorkspacePage", () => {
     const savePrice = vi.spyOn(workspaceApi, "saveTripPrice").mockResolvedValue(prices);
     mockedFetchWorkspace.mockResolvedValue({ ...workspacePayload, proposal_state: null, view_model: null });
     try {
+      mockedUseLoaderData.mockReturnValue({
+        workspace: Promise.resolve(workspacePayload),
+        trips: Promise.resolve(tripComparisonPayload),
+      });
       renderWorkspacePage();
       await selectWorkspaceTab("Budget");
       const note = await screen.findByLabelText("Where the Flights and ground travel figure came from");
