@@ -3,8 +3,8 @@
 This module is the wedge under stranske/trip-planner#957. It drives one real
 planner turn through the FastAPI router (no provider mocking), asserts the
 documented response contract field-by-field, and re-instantiates the app on the
-same SQLite database to prove the workspace/session state survives a process
-boundary — i.e. the turn was actually persisted, not just held in process memory.
+same SQLite database to prove the workspace/session state survives an app
+shutdown and cache-reset boundary — i.e. the turn was actually persisted, not just held in process memory.
 
 The test is deterministic: it relies on the in-tree deterministic planner
 fallback (no ``OPENAI_API_KEY`` configured), so request parsing, tool routing,
@@ -35,7 +35,7 @@ Acceptance criteria from #957 mapped to this module:
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +44,7 @@ from fastapi.testclient import TestClient
 
 from trip_planner.app.main import create_app
 from trip_planner.app.services.planner import set_planner_chat_model_factory_for_tests
+from trip_planner.persistence import db as persistence_db
 from trip_planner.persistence.db import reset_database_state
 
 # Documented response contract fields drawn from
@@ -77,88 +78,58 @@ def db_path(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def first_client(
-    db_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> Iterator[TestClient]:
-    """First app instance — creates the trip and runs the planner turn."""
+def client_factory(db_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Open each app sequentially against one file, with fresh authentication."""
     monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{db_path}")
-    monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", raising=False)
-    monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL", raising=False)
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    for name in (
+        "TRIP_PLANNER_PLANNER_PROVIDER",
+        "TRIP_PLANNER_PLANNER_MODEL_PROVIDER",
+        "TRIP_PLANNER_PLANNER_MODEL",
+        "OPENAI_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
     set_planner_chat_model_factory_for_tests(None)
     reset_database_state()
-    app = create_app()
+    events = []
+    original_user = None
 
-    with TestClient(app) as test_client:
-        signup = test_client.post(
-            "/api/auth/signup",
-            json={
-                "email": "e2e-planner@example.com",
-                "password": "password123",
-                "display_name": "E2E Planner",
-            },
-        )
-        assert signup.status_code == 201, signup.text
-        yield test_client
+    @contextmanager
+    def open_client(*, reload=False):
+        nonlocal original_user
+        expected = ["first_started", "first_closed", "caches_cleared"] if reload else []
+        assert events == expected, "clients must not overlap or reuse pre-write caches"
+        if reload:
+            assert not persistence_db._ENGINE_CACHE
+            assert not persistence_db._SESSION_FACTORY_CACHE
+            assert not persistence_db._MIGRATED_URLS
+        with TestClient(create_app()) as client:
+            events.append("second_started" if reload else "first_started")
+            if reload:
+                auth = client.post(
+                    "/api/auth/login",
+                    json={"email": "e2e-planner@example.com", "password": "password123"},
+                )
+                assert auth.status_code == 200, auth.text
+                assert auth.json()["user"] == original_user
+            else:
+                auth = client.post(
+                    "/api/auth/signup",
+                    json={
+                        "email": "e2e-planner@example.com",
+                        "password": "password123",
+                        "display_name": "Persistence test owner",
+                    },
+                )
+                assert auth.status_code == 201, auth.text
+                original_user = auth.json()["user"]
+            yield client
+        events.append("second_closed" if reload else "first_closed")
 
-    set_planner_chat_model_factory_for_tests(None)
-    # Intentionally do NOT call reset_database_state() here — the second app
-    # instance must read the same persisted state.
-
-
-@pytest.fixture
-def second_client(
-    db_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> Iterator[TestClient]:
-    """Second app instance — reads from the same DB to verify persistence.
-
-    Yielded only after the first client's ``with`` block has exited, simulating
-    a process restart against the same on-disk database.
-    """
-    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{db_path}")
-    monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", raising=False)
-    monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL", raising=False)
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    set_planner_chat_model_factory_for_tests(None)
-    # Force the persistence layer to re-bind to the (existing) sqlite file.
-    reset_database_state()
-    app = create_app()
-
-    with TestClient(app) as test_client:
-        # Sign in the same user; signup-or-login depending on harness contract.
-        login = test_client.post(
-            "/api/auth/login",
-            json={
-                "email": "e2e-planner@example.com",
-                "password": "password123",
-            },
-        )
-        # The login endpoint may be /api/auth/login or /api/auth/signin depending
-        # on harness conventions. If the route returns 404, the assertions below
-        # will fall through to the route-call site and produce a clear failure
-        # naming the missing capability.
-        if login.status_code == 404:
-            login = test_client.post(
-                "/api/auth/signin",
-                json={
-                    "email": "e2e-planner@example.com",
-                    "password": "password123",
-                },
-            )
-        assert login.status_code in (200, 201, 204), (
-            f"Could not re-authenticate the same user against the persisted DB. "
-            f"This either means the auth route name is not /api/auth/login or "
-            f"/api/auth/signin, or persisted user state is not surviving a "
-            f"create_app() boundary — both are workspace-state reload failures "
-            f"the #957 contract is meant to catch. status={login.status_code}, "
-            f"body={login.text}"
-        )
-        yield test_client
-
-    set_planner_chat_model_factory_for_tests(None)
-    reset_database_state()
+    try:
+        yield open_client, events
+    finally:
+        set_planner_chat_model_factory_for_tests(None)
+        reset_database_state()
 
 
 def _create_trip(client: TestClient) -> str:
@@ -222,98 +193,105 @@ def _assert_planner_reply_is_substantive(payload: dict[str, Any]) -> None:
     )
 
 
-def test_planner_turn_e2e_persists_across_app_instances(
-    first_client: TestClient,
-    second_client: TestClient,
-) -> None:
-    """Drive one planner turn through the API and prove it survives a re-bind.
+def test_planner_turn_e2e_persists_across_app_instances(client_factory) -> None:
+    """Close writer A, clear both caches, then authenticate and reload through B."""
+    open_client, events = client_factory
+    with open_client() as first_client:
+        # ---- First app instance: create + run a turn ----
+        trip_id = _create_trip(first_client)
 
-    Acceptance contract for issue #957. This test fails if any of:
+        turn_message = "Plan a long weekend in Chicago and summarize the current workspace state."
+        first_turn = first_client.post(
+            f"/api/planner/{trip_id}/turns",
+            json={"message": turn_message},
+        )
+        assert first_turn.status_code == 200, first_turn.text
+        first_payload = first_turn.json()
 
-    * The planner-turn route returns less than the documented response schema.
-    * The planner reply is empty or short enough to be a fixture placeholder.
-    * The created trip / session / planner messages cannot be reloaded by a
-      second ``create_app()`` instance bound to the same SQLite database.
-    """
-    # ---- First app instance: create + run a turn ----
-    trip_id = _create_trip(first_client)
+        _assert_documented_fields(first_payload, _DOCUMENTED_TURN_FIELDS)
+        assert first_payload["trip_id"] == trip_id
+        assert first_payload["session_state_id"] == f"session:{trip_id}"
+        assert first_payload["conversation_id"] == f"planner-conversation:{trip_id}"
+        _assert_planner_reply_is_substantive(first_payload)
 
-    turn_message = "Plan a long weekend in Chicago and summarize the current workspace state."
-    first_turn = first_client.post(
-        f"/api/planner/{trip_id}/turns",
-        json={"message": turn_message},
-    )
-    assert first_turn.status_code == 200, first_turn.text
-    first_payload = first_turn.json()
+        # The deterministic fallback names a checkpoint id that subsequent turns
+        # extend. If memory persistence is broken the checkpoint id is missing.
+        first_checkpoint = first_payload["planner_memory"].get("current_checkpoint_id")
+        assert first_checkpoint is not None and first_checkpoint.startswith("planner-chk:"), (
+            f"First turn did not produce a planner-memory checkpoint id. Got "
+            f"{first_checkpoint!r}. Memory persistence is the documented contract for "
+            f"#957's 'workspace persistence' assertion."
+        )
 
-    _assert_documented_fields(first_payload, _DOCUMENTED_TURN_FIELDS)
-    assert first_payload["trip_id"] == trip_id
-    assert first_payload["session_state_id"] == f"session:{trip_id}"
-    assert first_payload["conversation_id"] == f"planner-conversation:{trip_id}"
-    _assert_planner_reply_is_substantive(first_payload)
+        # The original user message must appear verbatim in the user-role message —
+        # request parsing assertion.
+        user_message = next(m for m in first_payload["messages"] if m["role"] == "user")
+        assert turn_message in user_message["content"], (
+            f"User message was not preserved by the route. Sent {turn_message!r}, "
+            f"received {user_message['content']!r}. Request parsing is part of the "
+            f"E2E contract."
+        )
 
-    # The deterministic fallback names a checkpoint id that subsequent turns
-    # extend. If memory persistence is broken the checkpoint id is missing.
-    first_checkpoint = first_payload["planner_memory"].get("current_checkpoint_id")
-    assert first_checkpoint is not None and first_checkpoint.startswith("planner-chk:"), (
-        f"First turn did not produce a planner-memory checkpoint id. Got "
-        f"{first_checkpoint!r}. Memory persistence is the documented contract for "
-        f"#957's 'workspace persistence' assertion."
-    )
+        expected_session = first_client.get(f"/api/planner/{trip_id}/session").json()
+    assert events == ["first_started", "first_closed"]
+    reset_database_state()
+    assert not persistence_db._ENGINE_CACHE
+    assert not persistence_db._SESSION_FACTORY_CACHE
+    events.append("caches_cleared")
+    with open_client(reload=True) as second_client:
+        # ---- Second app instance (same DB): reload session + assert turn persists ----
+        session = second_client.get(f"/api/planner/{trip_id}/session")
+        assert session.status_code == 200, session.text
+        session_payload = session.json()
 
-    # The original user message must appear verbatim in the user-role message —
-    # request parsing assertion.
-    user_message = next(m for m in first_payload["messages"] if m["role"] == "user")
-    assert turn_message in user_message["content"], (
-        f"User message was not preserved by the route. Sent {turn_message!r}, "
-        f"received {user_message['content']!r}. Request parsing is part of the "
-        f"E2E contract."
-    )
+        _assert_documented_fields(session_payload, _DOCUMENTED_TURN_FIELDS)
+        assert session_payload["trip_id"] == trip_id
+        assert session_payload["session_state_id"] == f"session:{trip_id}"
 
-    # ---- Second app instance (same DB): reload session + assert turn persists ----
-    session = second_client.get(f"/api/planner/{trip_id}/session")
-    assert session.status_code == 200, session.text
-    session_payload = session.json()
+        persisted_messages = session_payload["messages"]
+        assert persisted_messages, (
+            "Reload from a fresh app instance returned no messages. The planner turn "
+            "did not persist across the create_app() boundary — workspace persistence "
+            "contract violated."
+        )
 
-    _assert_documented_fields(session_payload, _DOCUMENTED_TURN_FIELDS)
-    assert session_payload["trip_id"] == trip_id
-    assert session_payload["session_state_id"] == f"session:{trip_id}"
+        persisted_user = next((m for m in persisted_messages if m["role"] == "user"), None)
+        assert (
+            persisted_user is not None
+        ), "Reload is missing the persisted user-role message from the prior turn."
+        assert turn_message in persisted_user["content"], (
+            f"Persisted user message diverged from what was sent. "
+            f"Sent {turn_message!r}, reload returned {persisted_user['content']!r}."
+        )
 
-    persisted_messages = session_payload["messages"]
-    assert persisted_messages, (
-        "Reload from a fresh app instance returned no messages. The planner turn "
-        "did not persist across the create_app() boundary — workspace persistence "
-        "contract violated."
-    )
+        persisted_planner = next((m for m in persisted_messages if m["role"] == "planner"), None)
+        assert (
+            persisted_planner is not None
+        ), "Reload is missing the persisted planner-role reply from the prior turn."
+        _assert_documented_fields(persisted_planner, _DOCUMENTED_MESSAGE_FIELDS)
 
-    persisted_user = next((m for m in persisted_messages if m["role"] == "user"), None)
-    assert (
-        persisted_user is not None
-    ), "Reload is missing the persisted user-role message from the prior turn."
-    assert turn_message in persisted_user["content"], (
-        f"Persisted user message diverged from what was sent. "
-        f"Sent {turn_message!r}, reload returned {persisted_user['content']!r}."
-    )
+        # The reloaded checkpoint must match the one returned by the original turn.
+        reloaded_checkpoint = session_payload["planner_memory"].get("current_checkpoint_id")
+        assert reloaded_checkpoint == first_checkpoint, (
+            f"Planner-memory checkpoint did not survive reload. First turn produced "
+            f"{first_checkpoint!r}, reloaded session has {reloaded_checkpoint!r}."
+        )
 
-    persisted_planner = next((m for m in persisted_messages if m["role"] == "planner"), None)
-    assert (
-        persisted_planner is not None
-    ), "Reload is missing the persisted planner-role reply from the prior turn."
-    _assert_documented_fields(persisted_planner, _DOCUMENTED_MESSAGE_FIELDS)
-
-    # The reloaded checkpoint must match the one returned by the original turn.
-    reloaded_checkpoint = session_payload["planner_memory"].get("current_checkpoint_id")
-    assert reloaded_checkpoint == first_checkpoint, (
-        f"Planner-memory checkpoint did not survive reload. First turn produced "
-        f"{first_checkpoint!r}, reloaded session has {reloaded_checkpoint!r}."
-    )
-
-    # available_tools is also documented — the workspace-state read tool must
-    # remain wired after reload (proves the runtime still has tool routing
-    # configured against the persisted trip).
-    tool_names = [tool.get("tool_name") for tool in session_payload["available_tools"]]
-    assert "read_workspace_state" in tool_names, (
-        f"Reload lost tool registration: available_tools={tool_names!r}. The "
-        f"runtime should expose at least the workspace-read tool against any "
-        f"existing trip-scoped session."
-    )
+        # available_tools is also documented — the workspace-state read tool must
+        # remain wired after reload (proves the runtime still has tool routing
+        # configured against the persisted trip).
+        tool_names = [tool.get("tool_name") for tool in session_payload["available_tools"]]
+        assert "read_workspace_state" in tool_names, (
+            f"Reload lost tool registration: available_tools={tool_names!r}. The "
+            f"runtime should expose at least the workspace-read tool against any "
+            f"existing trip-scoped session."
+        )
+        assert session_payload["messages"] == expected_session["messages"]
+        assert session_payload["planner_memory"] == expected_session["planner_memory"]
+    assert events == [
+        "first_started",
+        "first_closed",
+        "caches_cleared",
+        "second_started",
+        "second_closed",
+    ]
