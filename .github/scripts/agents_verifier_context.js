@@ -14,6 +14,8 @@ const {
 } = require('./issue_scope_parser.js');
 const { queryVerifierCiResults } = require('./verifier_ci_query.js');
 const { resolvePrSourceContext } = require('./source_context.js');
+const { buildVerificationEvent, completedEvent, completedLegacyEvent, guardExistingEvent, assessmentIdentity, parseRecoverySelector, digest } = require('./verification_event.js');
+const { executionBinding, reconcilePendingExecution, acquireRetainedExecution, guardRetainedRecoveryHistory } = require('./verifier_pending_execution.js');
 
 const DEFAULT_BRANCH = process.env.DEFAULT_BRANCH || 'main';
 const DEFAULT_DIFF_SUMMARY_PATH = 'verifier-diff-summary.md';
@@ -59,6 +61,98 @@ function historicalManualVerifierBinding(run, {owner,repo,pullNumber,associatedC
   const producers=(run.referenced_workflows||[]).filter(item=>item.path==='stranske/Workflows/.github/workflows/reusable-agents-verifier.yml@main');
   if (producers.length!==1 || producers[0].sha!==binding.producer_sha || producers[0].ref!=='refs/heads/main') return null;
   return binding;
+}
+
+// A historical role must be affirmatively declared, not merely mentioned in
+// evidence prose or quoted examples. Accept only bounded, direct role clauses;
+// unknown qualifications remain prose, not an authenticated role request.
+function affirmativeHistoricalEvidenceLines(text) {
+  let fence = null;
+  const authored = [];
+  for (const line of String(text || '').split('\n')) {
+    const marker = line.match(/^\s{0,3}(`{3,}|~{3,})/);
+    if (marker) {
+      if (!fence) fence = marker[1];
+      else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = null;
+      continue;
+    }
+    if (fence || line.length > EVIDENCE_CLAUSE_MAX_LEN || /^\s*>|^(?: {4}|\t)/.test(line)) continue;
+    // Never delete quoted words: that could turn `not`/`possibly` into an
+    // affirmative skeleton. Only the defined immutable SHA annotation unwraps.
+    authored.push(line.replace(/`+[^`\n]*`+|"[^"\n]*"|“[^”\n]*”|(^|[\s(:])'[^'\n]*'/g,
+      (quoted, prefix) => /^`+[0-9a-f]{7,40}`+$/i.test(quoted)
+        ? quoted.replace(/`/g, '') : `${prefix || ''}OPAQUE_QUOTED`));
+  }
+  const role = '(?:historical(?:\\s+(?:CI|coverage))?\\s+(?:baseline|evidence|provenance)|baseline|provenance)';
+  const label = new RegExp(`^(?:#{1,6}\\s+)?(?:#\\d+\\s+)?${role}(?:\\s+(?:evidence|validation))?$`, 'i');
+  const assertion = new RegExp(`^RUN\\s+(?:is|was|remains|serves as)\\s+(?:an?\\s+|the\\s+)?${role}[.!]?$`, 'i');
+  // A direct citation can carry its immutable measurement annotation. The
+  // measurement form also preserves the authored #853 provenance declaration.
+  const citation = /^(?:(?:(?:full\s+)?(?:combined\s+)?coverage\s+)?evidence\s+(?:is|remains)\s+(?:CI\s+)?run\s+)?RUN(?:\s+\(success on [0-9a-f]{7,40}\))?[.!]?$/i;
+  return positiveEvidenceLines(authored.join('\n')).filter(line => {
+    const plain = line.replace(/^[\s*+-]+/, '')
+      .replace(/\[[^\]\n]*\]\(https:\/\/github\.com\/[^/]+\/[^/]+\/actions\/runs\/\d+\)/gi, 'RUN')
+      .replace(/https:\/\/github\.com\/[^/]+\/[^/]+\/actions\/runs\/\d+/gi, 'RUN');
+    const separator = plain.indexOf(':');
+    if (separator < 0) return false;
+    const heading = plain.slice(0, separator).trim();
+    const clause = plain.slice(separator + 1).trim();
+    const evidenceLabel = /^(?:validation(?:\s+evidence)?|evidence)$/i.test(heading);
+    return (label.test(heading) && (citation.test(clause) || assertion.test(clause)))
+      || (evidenceLabel && assertion.test(clause));
+  });
+}
+
+// Historical source citations are discovery hints only. Authenticate their
+// distinct owning delivery through GitHub before collecting any old payload.
+async function historicalCiBaselineBinding(github, run, {owner, repo, pullNumber, texts}) {
+  const repository = `${owner}/${repo}`;
+  const runId = Number(run.id);
+  const historicalCitation = texts.some(text => affirmativeHistoricalEvidenceLines(text).some(line =>
+    [...line.matchAll(/https:\/\/github\.com\/([^/]+\/[^/]+)\/actions\/runs\/(\d+)(?!\d)/g)]
+        .some(match => match[1].toLowerCase() === repository.toLowerCase() && Number(match[2]) === runId)));
+  if (!Number.isSafeInteger(pullNumber) || pullNumber < 1 || !/^[0-9a-f]{40}$/i.test(run.head_sha)
+      || !historicalCitation || run.repository?.full_name?.toLowerCase() !== repository.toLowerCase()
+      || run.event !== 'pull_request' || run.status !== 'completed'
+      || !Number.isSafeInteger(run.run_attempt) || run.run_attempt < 1) return null;
+  const citedPulls = new Set(texts.flatMap(text => [...String(text || '').matchAll(
+    /https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)(?!\d)/g)]
+    .filter(match => match[1].toLowerCase() === repository.toLowerCase())
+    .map(match => Number(match[2]))));
+  if (!citedPulls.size || !github?.rest?.repos?.listPullRequestsAssociatedWithCommit
+      || !github?.rest?.pulls?.get) return null;
+  const associated = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+    owner, repo, commit_sha: run.head_sha, per_page: 100,
+  });
+  // An incomplete/ambiguous ownership lookup cannot establish a baseline.
+  if (!Array.isArray(associated?.data) || associated.data.length >= 100
+      || /rel="next"/.test(associated.headers?.link || '')) return null;
+  let owners = associated.data.filter(pull => Number.isSafeInteger(pull.number) && pull.number > 0
+    && pull.base?.repo?.full_name?.toLowerCase() === repository.toLowerCase());
+  if (owners.length !== associated.data.length
+      || (run.pull_requests !== undefined && !Array.isArray(run.pull_requests))) return null;
+  const runPulls = run.pull_requests || [];
+  if (runPulls.length > 1) return null;
+  if (runPulls.length) {
+    if (!Number.isSafeInteger(runPulls[0]?.number) || runPulls[0].number < 1) return null;
+    owners = owners.filter(pull => pull.number === runPulls[0].number);
+  }
+  // Authored citations cannot disambiguate multiple native owners. A run's
+  // explicit PR binding can, but must also agree with the commit association.
+  if (owners.length !== 1) return null;
+  const candidates = owners.filter(pull => citedPulls.has(pull.number) && pull.number !== pullNumber);
+  if (candidates.length !== 1) return null;
+  const response = await github.rest.pulls.get({owner, repo, pull_number: candidates[0].number});
+  const pull = response?.data;
+  const runHead = String(run.head_sha).toLowerCase();
+  if (pull?.number !== candidates[0].number || pull.merged !== true
+      || pull.base?.repo?.full_name?.toLowerCase() !== repository.toLowerCase()
+      || !/^[0-9a-f]{40}$/i.test(pull.head?.sha || '')
+      || !/^[0-9a-f]{40}$/i.test(pull.merge_commit_sha || '')
+      || ![pull.head.sha, pull.merge_commit_sha].some(sha => sha.toLowerCase() === runHead)) return null;
+  return {repository, pull_number: pull.number, head_sha: pull.head.sha,
+    merge_sha: pull.merge_commit_sha, run_id: runId, run_attempt: run.run_attempt, run_head_sha: runHead,
+    ownership_basis: runPulls.length ? 'run-pr-and-commit-association' : 'unique-commit-association'};
 }
 
 function validateHistoricalManualArtifact(binding,artifact,archiveSha256) {
@@ -842,6 +936,9 @@ async function fetchVerifierEvidence({
   const artifactChars = positiveLimit('VERIFIER_EVIDENCE_ARTIFACT_CHARS', DEFAULT_EVIDENCE_ARTIFACT_CHARS);
 
   const comments = { status: 'absent', complete: true, records: [], reason: '' };
+  // Protocol inventory is necessary control evidence, independent of optional
+  // proof rendering. Scan conversation pages even after text budgets fill.
+  const eventHistory = { schema: 'verifier-event-history/v1', complete: true, records: [], reason: '' };
   let usedCommentChars = 0;
   const commentFailures = [];
   const commentSources = [
@@ -864,9 +961,17 @@ async function fetchVerifierEvidence({
   for (const source of commentSources) {
     try {
       if (!source.method) throw new Error(`${source.name} API is unavailable`);
-      const perPage = Math.min(commentLimit, 100);
+      const conversation = source.name === 'conversation comments';
+      const perPage = conversation ? 100 : Math.min(commentLimit, 100);
       const maxPages = commentPageLimit;
       let truncated = false;
+      const reportedLimits = new Set();
+      const reportLimit = kind => {
+        if (!reportedLimits.has(kind)) {
+          reportedLimits.add(kind);
+          fail('comments', kind, source.name);
+        }
+      };
       const seenCommentIds = new Set();
       let lastCommentId;
       let commentOrder;
@@ -901,6 +1006,34 @@ async function fetchVerifierEvidence({
           }
           if (comment?.body != null && typeof comment.body !== 'string') throw new Error('invalid comment body');
           if (typeof comment?.body !== 'string' || !comment.body.trim()) continue;
+          if (conversation && ['github-actions', 'github-actions[bot]'].includes(comment?.user?.login || comment?.author?.login)
+              && String(comment?.html_url || comment?.url || '').toLowerCase().startsWith(
+                `https://github.com/${owner}/${repo}/pull/${pullNumber}#issuecomment-`.toLowerCase())) {
+            const markers = comment.body.match(/<!-- (?:verifier-event-state\/v1|verifier-corpus-decision\/v1) [^\n]*? -->/g) || [];
+            if (/<!-- (?:verifier-event-state\/v1|verifier-corpus-decision\/v1) /.test(comment.body) && !markers.length) {
+              eventHistory.complete = false;
+              eventHistory.reason = 'verifier protocol marker is malformed';
+            }
+            if (markers.length && (!positiveId || !String(comment.html_url || comment.url || '').endsWith(`#issuecomment-${id}`))) {
+              eventHistory.complete = false;
+              eventHistory.reason = 'verifier protocol comment identity is unavailable';
+            }
+            for (const marker of markers) {
+              try {
+                const parsed = marker.match(/^<!-- (verifier-event-state\/v1|verifier-corpus-decision\/v1) (.*) -->$/);
+                const payload = JSON.parse(parsed[2]);
+                if (!payload || typeof payload !== 'object' || Array.isArray(payload) || payload.schema !== parsed[1]) throw new Error('invalid protocol schema');
+              } catch {
+                eventHistory.complete = false;
+                eventHistory.reason = 'verifier protocol marker is malformed';
+              }
+            }
+            if (markers.length) eventHistory.records.push({
+              author: comment?.user?.login || comment?.author?.login,
+              url: comment?.html_url || comment?.url,
+              body: markers.join('\n'), source: source.name,
+            });
+          }
           // Exclude bot chatter before budgeting, but retain bot-authored proof,
           // review findings and run links. Reviews themselves are never filtered.
           const bot = comment?.user?.type === 'Bot' || /\[bot\]$/.test(comment?.user?.login || '');
@@ -908,7 +1041,8 @@ async function fetchVerifierEvidence({
               && !/evidence|proof|test|review|verif|concern|fail|actions\/runs\//i.test(comment.body)) continue;
           if (comments.records.length >= commentLimit) {
             truncated = true;
-            fail("comments", "record", source.name);
+            reportLimit('record');
+            if (conversation) continue;
             break;
           }
           const result = appendBoundedText(comments.records, {
@@ -918,16 +1052,23 @@ async function fetchVerifierEvidence({
             source: source.name,
           }, commentChars, usedCommentChars);
           usedCommentChars = result.usedChars;
-          truncated = result.truncated;
-          if (truncated) { fail("comments", "character", source.name); break; }
+          truncated = truncated || result.truncated;
+          if (result.truncated) { reportLimit('character'); if (!conversation) break; }
         }
-        if (truncated || !hasNext) break;
-        if (page === maxPages) { truncated = true; fail("comments", "page", source.name); }
+        if ((!conversation && truncated) || !hasNext) break;
+        if (page === maxPages) {
+          truncated = true;
+          fail("comments", "page", source.name);
+          if (conversation) {
+            eventHistory.complete = false;
+            eventHistory.reason = 'verifier conversation API pagination is incomplete';
+          }
+        }
       }
       // Page-number deletion shifts need not repeat an ID. Re-read every
       // collected page, including the terminal boundary, before trusting the
       // reference union. This is one bounded stability pass, never a retry loop.
-      if (!truncated && pageSnapshots.length > 1) {
+      if ((!truncated || (conversation && eventHistory.complete)) && pageSnapshots.length > 1) {
         for (const snapshot of pageSnapshots) {
           diagnostics.counters.comment_pages += 1;
           const current = await source.method({ ...source.params, per_page: perPage, page: snapshot.page });
@@ -942,6 +1083,10 @@ async function fetchVerifierEvidence({
         );
       }
     } catch (error) {
+      if (source.name === 'conversation comments') {
+        eventHistory.complete = false;
+        eventHistory.reason = `verifier protocol inventory retrieval failed: ${error.message}`;
+      }
       fail("comments", evidenceFailureKind(error), `${source.name}: ${error.message}`);
       commentFailures.push(`${source.name} retrieval failed: ${error.message}`);
       core?.warning?.(`Verifier ${source.name} evidence unavailable: ${error.message}`);
@@ -1031,6 +1176,7 @@ async function fetchVerifierEvidence({
   const runHeads = new Map();
   const runPaths = new Map();
   const pendingManualBindings = new Map();
+  const historicalBaselineBindings = new Map();
   const seenRunIds = new Set();
   let artifactIncomplete = allRunIds.length > referencedRunIds.length;
   if (artifactIncomplete) fail("artifacts", "reference_record", "explicit reference union exceeds run limit");
@@ -1074,8 +1220,14 @@ async function fetchVerifierEvidence({
       }
       if (!exactCommitShas.has(runHeadSha)) {
         const binding=historicalManualVerifierBinding(workflowRun,{owner,repo,pullNumber,associatedCommitShas});
+        const baseline = !binding && explicitEvidenceRunIds.has(runId)
+          ? await historicalCiBaselineBinding(github, workflowRun,
+            {owner, repo, pullNumber, texts: proseReferenceTexts}) : null;
         if (binding) {
           pendingManualBindings.set(runId,binding);
+        } else if (baseline) {
+          historicalBaselineBindings.set(runId, baseline);
+          // Retain an authenticated historical role, never current-head proof.
         } else if (!explicitEvidenceRunIds.has(runId)) {
           // Incidental status/history links are discovery hints, not claims of
           // evidence for this revision. Never download or credit unrelated runs.
@@ -1237,7 +1389,10 @@ async function fetchVerifierEvidence({
         // capture ledger, never semantic proof or a completeness upgrade.
         const capture = { repository: `${owner}/${repo}`, run_id: runId,
           head_sha: runHeads.get(runId), artifact_id: artifact.id,
-          name: artifact.name || '', status: 'unavailable', members: null };
+          name: artifact.name || '', status: 'unavailable', members: null,
+          ...(historicalBaselineBindings.has(runId) ? {
+            evidence_role: 'historical-baseline', historical_binding: historicalBaselineBindings.get(runId),
+          } : {}) };
         diagnostics.archive_inventory.push(capture);
         // The verifier's retained input bundle is transport, not another
         // acceptance output. Do not recursively re-ingest its own ZIP sidecars.
@@ -1331,6 +1486,9 @@ async function fetchVerifierEvidence({
             url: artifact.archive_download_url || '',
             text: extracted.text,
             truncated: Boolean(extracted.truncated),
+            ...(historicalBaselineBindings.has(runId) ? {
+              evidence_role: 'historical-baseline', historical_binding: historicalBaselineBindings.get(runId),
+            } : {}),
           });
         }
       }
@@ -1370,7 +1528,7 @@ async function fetchVerifierEvidence({
     : statuses.includes('present')
       ? 'present'
       : 'absent';
-  return { status, body, comments, artifacts, referencedRunIds: runIds, diagnostics };
+  return { status, body, comments, artifacts, referencedRunIds: runIds, diagnostics, event_history: eventHistory };
 }
 
 function fenceUntrustedEvidence(value) {
@@ -1405,6 +1563,7 @@ function formatVerifierEvidence(evidence) {
   if (evidence.artifacts.records.length) {
     lines.push('### Bounded referenced workflow artifacts', '');
     for (const artifact of evidence.artifacts.records) {
+      if (artifact.evidence_role === 'historical-baseline') lines.push('Historical baseline — not current-revision proof; acceptance relevance remains to be evaluated.', '');
       lines.push(`#### Run ${artifact.runId}: ${artifact.name}${artifact.url ? ` — ${artifact.url}` : ''}`, '', 'Untrusted workflow artifact:', fenceUntrustedEvidence(artifact.text), '');
     }
   }
@@ -1480,6 +1639,7 @@ function buildContextSourceCoverage({ planSources, diffText, diffMaxChars, evide
         status: record.truncated ? 'truncated' : 'included',
         included_chars: body.length,
         total_chars: record.truncated ? null : body.length,
+        ...(record.evidence_role ? {evidence_role: record.evidence_role, historical_binding: record.historical_binding} : {}),
       });
     }
     // Retained records never make a partial retrieval complete. Name the channel
@@ -1733,6 +1893,7 @@ async function fetchClosingIssues({ github, core, owner, repo, prNumber }) {
               body
               state
               url
+              repository { nameWithOwner }
               labels(first: 100) {
                 nodes {
                   name
@@ -1759,6 +1920,7 @@ async function fetchClosingIssues({ github, core, owner, repo, prNumber }) {
       body: issue.body || '',
       state: issue.state || 'UNKNOWN',
       url: issue.url || '',
+      repository: issue.repository?.nameWithOwner || `${owner}/${repo}`,
       labels: issue.labels?.nodes || [],
     }));
     const truncated = connection.pageInfo?.hasNextPage === true || connection.totalCount > nodes.length;
@@ -1789,6 +1951,7 @@ async function fetchAcceptanceIssues({ github, core, owner, repo, prNumber, sour
       issues: [...discovery.issues, {
         number: issue.number, title: issue.title, body: issue.body || '',
         state: issue.state || 'UNKNOWN', url: issue.html_url || '',
+        repository: `${owner}/${repo}`,
         labels: Array.isArray(issue.labels) ? issue.labels : [],
       }],
     };
@@ -2020,7 +2183,9 @@ async function buildVerifierContext({
       }
     }
   }
-  const ciTargetShas = [pull.merge_commit_sha, pull.head?.sha, context.sha].filter(Boolean);
+  // A reusable workflow's own context.sha can be a later wrapper revision.
+  // Current CI proof belongs only to this actual immutable delivery.
+  const ciTargetShas = [pull.merge_commit_sha, pull.head?.sha].filter(Boolean);
   const targetSha = ciTargetShas[0] || '';
   if (targetSha) {
     content.push(`- Target commit: \`${targetSha}\``);
@@ -2037,6 +2202,7 @@ async function buildVerifierContext({
     core,
     targetShas: ciTargetShas,
     workflows,
+    includeBinding: true,
   });
   // A CI workflow concluding `failure` on the merge commit is a hard,
   // pre-LLM disqualifier: a merge that breaks main must never verify PASS
@@ -2233,6 +2399,104 @@ async function buildVerifierContext({
     required: sourceContext.requiresIssue || closingIssues.length > 0
       || ['truncated', 'unavailable'].includes(closingIssueDiscovery.status),
   };
+  // Bind repeats to authoritative source/code bytes collected by this same
+  // path. A caller's digest is only an expectation, never evidence authority.
+  const recoverySelector = parseRecoverySelector(process.env.VERIFICATION_RECOVERY);
+  if (recoverySelector && !modelEvaluation) throw new Error('Retained recovery supports evaluate/compare only');
+  let verificationManifest = null;
+  const eventRequested = Boolean(recoverySelector || process.env.VERIFICATION_EVENT || process.env.VERIFICATION_MATERIAL
+    || process.env.VERIFICATION_PREDECESSOR);
+  if (modelEvaluation && !invalidOriginalBody && closingIssueDiscovery.status === 'included'
+      && !sourceContext.hasAmbiguousIssueSource && !missingIssueSource
+      && !apiDiffFallback && fullDiffBytes.length && isValidSha(pull.head?.sha)
+      && isValidSha(pull.merge_commit_sha)) {
+    if (!verifierEvidence.event_history?.complete) {
+      const reason = 'Verification event protocol inventory retrieval pending';
+      core?.setOutput?.('should_run', 'false');
+      core?.setOutput?.('skip_reason', reason);
+      core?.setOutput?.('retrieval_pending', 'verification_event_history');
+      return { shouldRun: false, reason: 'verification-event-history-retrieval-pending',
+        retrievalPending: { requirement: 'verification_event_history', reason: verifierEvidence.event_history?.reason || reason } };
+    }
+    verificationManifest = buildVerificationEvent({ repository: `${owner}/${repo}`, pull,
+      issues: closingIssues, fullDiffBytes, evidence: verifierEvidence, ciResults,
+      selectors: process.env.VERIFICATION_MATERIAL, expected: process.env.VERIFICATION_EVENT,
+      predecessorEventId: process.env.VERIFICATION_PREDECESSOR });
+    verificationManifest.assessment_identity = assessmentIdentity({mode,
+      provider:process.env.VERIFIER_PROVIDER || '',model:process.env.VERIFIER_MODEL || '',
+      model2:process.env.VERIFIER_MODEL2 || '',canonical:true});
+    verificationManifest.execution_binding = executionBinding(mode);
+    let recoveryOrigin;
+    if (recoverySelector) {
+      const recoveryKey = digest({schema:'retained-revalidation-key/v1',
+        event_id:verificationManifest.verification_event.event_id,
+        assessment:verificationManifest.assessment_identity,selector:recoverySelector});
+      const recoveryObservations=[];
+      const state = await guardRetainedRecoveryHistory({github,observations:recoveryObservations,event:verificationManifest.verification_event,
+        assessment:verificationManifest.assessment_identity,comments:verifierEvidence.event_history.records,
+        sourceRun:recoverySelector.run_id,sourceAttempt:recoverySelector.run_attempt,currentRun:Number(context.runId),
+        currentAttempt:Number(process.env.GITHUB_RUN_ATTEMPT || 1),recoveryKey,
+        currentExecution:{run_id:String(context.runId),run_attempt:String(process.env.GITHUB_RUN_ATTEMPT || 1),
+          repo:`${context.repo.owner}/${context.repo.repo}`,workflow_ref:process.env.GITHUB_WORKFLOW_REF || ''}});
+      verificationManifest.recovery_execution_reconciliation=recoveryObservations;
+      if (state === 'duplicate') {
+        core?.setOutput?.('should_run','false');
+        core?.setOutput?.('verification_event_duplicate','true');
+        return {shouldRun:false,reason:'duplicate-retained-revalidation'};
+      }
+      recoveryOrigin = await acquireRetainedExecution({github,event:verificationManifest.verification_event,
+        assessment:verificationManifest.assessment_identity,selector:recoverySelector,currentRun:Number(context.runId)});
+      recoveryOrigin.recovery_key = recoveryKey;
+      fs.writeFileSync('verification-recovery-origin.json',JSON.stringify(recoveryOrigin,null,2)+'\n');
+      verificationManifest.execution_binding = {...verificationManifest.execution_binding,retained_revalidation:true};
+      verificationManifest.retained_revalidation = {schema:'retained-revalidation/v1',
+        recovery_key:recoveryKey,source_run_id:String(recoverySelector.run_id),
+        source_run_attempt:String(recoverySelector.run_attempt),artifact_id:recoverySelector.artifact_id};
+    }
+    let retryKnownNoEvaluation;
+    try {
+      retryKnownNoEvaluation = recoverySelector ? true : guardExistingEvent(verificationManifest.verification_event,
+        verifierEvidence.event_history.records, verificationManifest.assessment_identity) === 'retry';
+    } catch (error) {
+      if (error.code !== 'VERIFIER_PENDING_EXECUTION') throw error;
+      const recovery = await reconcilePendingExecution({github,event:verificationManifest.verification_event,
+        assessment:verificationManifest.assessment_identity,state:error.pendingState,
+        currentExecution:{run_id:String(context.runId),run_attempt:String(process.env.GITHUB_RUN_ATTEMPT || ''),
+          repo:`${context.repo.owner}/${context.repo.repo}`,workflow_ref:process.env.GITHUB_WORKFLOW_REF || ''}});
+      if (recovery.retry_kind !== 'known_no_evaluation') {
+        verificationManifest.pending_execution_recovery = recovery;
+        fs.writeFileSync('verification-event-manifest.json', JSON.stringify(verificationManifest,null,2) + '\n');
+        core?.setOutput?.('should_run','false');
+        core?.setOutput?.('skip_reason','Existing verification execution requires targeted recovery');
+        core?.setOutput?.('retrieval_pending','verification_existing_execution');
+        return {shouldRun:false,reason:'verification-existing-execution-retrieval-pending',
+          verificationManifest,retrievalPending:{requirement:'verification_existing_execution',...recovery}};
+      }
+      verificationManifest.pending_no_evaluation = recovery.proof;
+      retryKnownNoEvaluation = true;
+    }
+    fs.writeFileSync('verification-event-manifest.json', JSON.stringify(verificationManifest, null, 2) + '\n');
+    core?.setOutput?.('verification_event', JSON.stringify(verificationManifest.verification_event));
+    core?.setOutput?.('verification_predecessor', verificationManifest.predecessor_event_id || '');
+    core?.setOutput?.('verification_assessment', JSON.stringify(verificationManifest.assessment_identity));
+    // A historical job-success fingerprint is not a verifier decision. Model
+    // invocations collect first, then suppress only actual terminal evidence.
+    if (!retryKnownNoEvaluation && verifierEvidence.event_history.complete
+        && (completedEvent(verificationManifest.verification_event, verifierEvidence.event_history.records,
+          verificationManifest.assessment_identity)
+          || (!eventRequested && ['', 'auto'].includes(verificationManifest.assessment_identity.provider)
+            && !verificationManifest.assessment_identity.model && !verificationManifest.assessment_identity.model2
+            && completedLegacyEvent(verificationManifest.verification_event, verifierEvidence)))) {
+      core?.setOutput?.('should_run', 'false');
+      core?.setOutput?.('verification_event_duplicate', 'true');
+      core?.setOutput?.('skip_reason', 'Exact verification event already has an authenticated terminal result.');
+      core?.setOutput?.('pr_number', String(pull.number));
+      core?.setOutput?.('target_sha', targetSha);
+      return { shouldRun: false, reason: 'duplicate-verification-event', verificationManifest };
+    }
+  } else if (eventRequested) {
+    throw new Error('Verification event requires complete authoritative request and changed-code inputs');
+  }
   // Put the inventory before large CI/plan/evidence blocks, so a late omitted
   // source is named even when its payload is beyond the former 8k prefix.
   content.splice(content.indexOf('## CI Information'), 0, formatContextSourceCoverage(sourceCoverage), '');
@@ -2281,6 +2545,7 @@ async function buildVerifierContext({
     chainDepth,
     verifierEvidence,
     sourceCoverage,
+    verificationManifest,
   };
 }
 
