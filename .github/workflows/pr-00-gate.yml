@@ -37,7 +37,52 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  resolve-pr:
+    name: resolve Gate PR context
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      pull_request: ${{ steps.resolve.outputs.pull_request }}
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        id: resolve
+        env:
+          PR_NUMBER: ''
+        with:
+          script: |
+            let pr = context.payload.pull_request || null;
+            const dispatchedPr = context.eventName === 'workflow_dispatch' && process.env.PR_NUMBER;
+            if (pr || dispatchedPr) {
+              const number = dispatchedPr ? Number(process.env.PR_NUMBER) : pr.number;
+              if (!Number.isSafeInteger(number) || number <= 0
+                  || (dispatchedPr && String(number) !== process.env.PR_NUMBER)) {
+                throw new Error('pr_number must be a positive integer');
+              }
+              const { data } = await github.rest.pulls.get({
+                ...context.repo, pull_number: number,
+              });
+              if (dispatchedPr) {
+                if (data.state !== 'open' || data.head.repo.full_name !== process.env.GITHUB_REPOSITORY
+                    || data.head.sha !== context.sha) {
+                  throw new Error('Dispatch must target the current open same-repository PR head');
+                }
+              } else if (data.state !== 'open' || data.number !== pr.number
+                  || data.head?.sha !== pr.head?.sha
+                  || data.head?.repo?.full_name !== pr.head?.repo?.full_name
+                  || data.head?.ref !== pr.head?.ref || data.base?.ref !== pr.base?.ref) {
+                throw new Error('PR identity changed before Gate metadata refresh');
+              }
+              // A rerun keeps the original event body. Refresh mutable metadata
+              // only after preserving the immutable PR/head/repository binding.
+              pr = dispatchedPr ? data : { ...pr, title: data.title, body: data.body, labels: data.labels,
+                state: data.state };
+            }
+            core.setOutput('pull_request', JSON.stringify(pr));
+
   detect:
+    needs: ["resolve-pr"]
     name: classify changed paths
     runs-on: ubuntu-latest
     outputs:
@@ -46,24 +91,29 @@ jobs:
       is_workflow_change: ${{ steps.classify.outputs.is-workflow-change || 'false' }}
       is_security_relevant: ${{ steps.classify.outputs.is-security-relevant || 'true' }}
       classification_rationale: ${{ steps.classify.outputs.classification-rationale || 'path classifier unavailable' }}
+    env:
+      GATE_PR_JSON: ${{ needs.resolve-pr.outputs.pull_request }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
       - name: Classify changed paths
         id: classify
-        uses: ./.github/actions/path-classifier
+        uses: stranske/Workflows/.github/actions/path-classifier@40e80e510f61e81f5612064b035a77e9b8d28756
         with:
           force-full: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify:full') || github.event_name == 'schedule' }}
 
   generated-delivery-seal:
+    needs: ["resolve-pr"]
     name: generated delivery seal
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - name: Require an exact-head delivery seal
-        uses: stranske/Workflows/.github/actions/generated-delivery-seal@632eb20586f8403219d101e8a982b62efeb94104
+        uses: stranske/Workflows/.github/actions/generated-delivery-seal@fe1efdada4ece0e9668db83ae3867e74c29c7744
+        with:
+          pull-request-json: ${{ needs.resolve-pr.outputs.pull_request }}
 
   python-ci:
     name: Python CI
