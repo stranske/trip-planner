@@ -75,7 +75,8 @@ jobs:
       }}
     uses: stranske/Workflows/.github/workflows/reusable-10-ci-python.yml@main
     with:
-      python-versions: '["3.12", "3.13"]'
+      primary-python-version: '3.14'
+      python-versions: '["3.13", "3.14"]'
       # Keep in lockstep with ci.yml: the Gate is the branch-protection-enforced
       # check, so its product/runtime coverage floor must match the owner-approved
       # #1262 follow-up target. See docs/CI_SYSTEM_GUIDE.md.

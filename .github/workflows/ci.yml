@@ -5,7 +5,7 @@
 # - Lint (Ruff)
 # - Format check (Black)
 # - Type checking (mypy)
-# - Tests (pytest) on Python 3.12 and 3.13
+# - Tests (pytest) on Python 3.13 and 3.14
 #
 # NOTE: Do NOT add a top-level 'permissions:' block here. It causes
 # startup_failure when calling reusable workflows. The reusable workflow
@@ -41,7 +41,8 @@ jobs:
     name: Python CI
     uses: stranske/Workflows/.github/workflows/reusable-10-ci-python.yml@main
     with:
-      python-versions: '["3.12", "3.13"]'
+      primary-python-version: '3.14'
+      python-versions: '["3.13", "3.14"]'
       format_check: false
       typecheck: true
       coverage: true
