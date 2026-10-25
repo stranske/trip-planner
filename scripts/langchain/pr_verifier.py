@@ -613,6 +613,8 @@ class PromptInputs:
     context_block: str
     diff_block: str
     coverage: PromptCoverage
+    # Exact required projection, measured before optional fitter enrichment.
+    required_evidence_chars: int = 0
 
 
 def _budget_from_env(name: str, default: int) -> int:
@@ -939,9 +941,13 @@ def _diff_file_is_binary_descriptor(text: str) -> bool:
     return has_binary_marker and not has_hunk
 
 
-def _excerpt_file(path: str, text: str, share: int) -> tuple[str, FileCoverage]:
+def _excerpt_file(
+    path: str, text: str, share: int, *, asset_view: str = ""
+) -> tuple[str, FileCoverage]:
+    binary = _diff_file_is_binary_descriptor(text)
+    text = text + asset_view
     total = len(text)
-    if _diff_file_is_binary_descriptor(text):
+    if binary and not asset_view:
         return "", FileCoverage(path, "omitted", 0, total)
     if share >= total:
         return text, FileCoverage(path, "complete", total, total)
@@ -964,7 +970,7 @@ def _excerpt_file(path: str, text: str, share: int) -> tuple[str, FileCoverage]:
 
 
 def _build_code_block(
-    diff: str, budget_chars: int
+    diff: str, budget_chars: int, *, asset_views: dict[str, str] | None = None
 ) -> tuple[str, CoverageStatus, tuple[FileCoverage, ...], int, int]:
     files = _split_diff_files(diff)
     if not files:
@@ -979,7 +985,21 @@ def _build_code_block(
     # omitted paths after fair-share allocation exceeded the diff budget.
     # Fit text first, then use spare budget for a count-only diagnostic.
     # Omitted paths remain in FileCoverage metadata and still prevent PASS.
-    sizes = [0 if _diff_file_is_binary_descriptor(text) else len(text) for _, text in files]
+    asset_views = asset_views or {}
+    sizes = [
+        (
+            len(text) + len(asset_views.get(path, ""))
+            if path in asset_views or not _diff_file_is_binary_descriptor(text)
+            else 0
+        )
+        for path, text in files
+    ]
+    # A complete single-file unit is the minimum meaningful code input. The
+    # rough grouping budget bounds optional packing, not model capacity. Its
+    # actual fully assembled request must still pass the shared native counter.
+    # Unknown binary descriptors keep their existing zero-byte omission.
+    if len(files) == 1 and sizes[0]:
+        budget_chars = max(budget_chars, sizes[0])
     omission_note = "[{count} changed file(s) omitted entirely — not shown to the reviewer]\n"
     shares = _fair_shares(sizes, max(0, budget_chars))
     parts: list[str] = []
@@ -987,7 +1007,7 @@ def _build_code_block(
     omitted = 0
     for (path, text), share in zip(files, shares, strict=True):
         assert path is not None  # Parse failures were rejected above.
-        excerpt, item = _excerpt_file(path, text, share)
+        excerpt, item = _excerpt_file(path, text, share, asset_view=asset_views.get(path, ""))
         coverage.append(item)
         if excerpt:
             parts.append(excerpt)
@@ -4527,6 +4547,10 @@ def _classify_evidence_channels(acceptance: str, *, _bind_attached: bool = True)
             + bound_review_destinations
         )
         clause_boundary = (
+            # A mandate in a later sentence cannot govern a descriptive evidence
+            # noun in the preceding one. Retain pronoun delivery inheritance via
+            # the existing antecedent binding below; quoted literals are inert.
+            r"[.!?]\s+(?=(?-i:[A-Z]))|"
             r"\s*;\s*|,?\s+(?:but|whereas)\s+|"
             r"(?:,?\s+(?:and|or)\s+)(?=(?:" + elided_review_delivery_predicate + r"))|"
             r"(?:,?\s+(?:and|while)\s+)(?="
@@ -4577,6 +4601,15 @@ def _classify_evidence_channels(acceptance: str, *, _bind_attached: bool = True)
             match.span() for match in re.finditer(bound_review_destinations, criterion, re.I)
         ]
         for boundary_match in re.finditer(clause_boundary, criterion, re.I):
+            # A period in an abbreviation/initialism is not a new sentence.
+            # Literal/member/URL interiors were protected above or contain no
+            # intervening whitespace. Keep the original governing operation.
+            if boundary_match[0].startswith(".") and re.search(
+                r"\b(?:(?:[a-z]\.){2,}|(?-i:[A-Z])\.|(?:etc|vs|dr|mr|mrs|prof|no|fig)\.)$",
+                criterion[: boundary_match.start() + 1],
+                re.I,
+            ):
+                continue
             if re.fullmatch(r",\s+", boundary_match[0]) and re.match(
                 r"(?:that|which)\b", criterion[boundary_match.end() :], re.I
             ):
@@ -5941,7 +5974,9 @@ def _resolve_evidence_policy(
     *,
     evaluate_minimum: bool,
     evidence_budget: int | None = None,
-) -> tuple[list[set[str]], frozenset[str], tuple[str, tuple[str, ...], tuple[str, ...]] | None]:
+) -> tuple[
+    list[set[str]], frozenset[str], tuple[str, tuple[str, ...], tuple[str, ...], int] | None
+]:
     """Resolve existing channel DNF, changing only evaluate's generic availability.
 
     A complete present source permits reasoning, not acceptance. Concrete channel
@@ -6015,7 +6050,7 @@ def _resolve_evidence_policy(
 
 def _fit_required_evidence_prompt(
     evidence: str, options: list[set[str]], budget: int
-) -> tuple[str, tuple[str, ...], tuple[str, ...]] | None:
+) -> tuple[str, tuple[str, ...], tuple[str, ...], int] | None:
     """Fit one complete requirement alternative before optional builder sections.
 
     Channel headings inside untrusted fences are inert. Retain complete selected
@@ -6026,6 +6061,7 @@ def _fit_required_evidence_prompt(
         "### Bounded PR body": "body",
         "### Bounded PR comments": "comments",
         "### Bounded referenced workflow artifacts": "artifacts",
+        "### Selected required artifact proof": "selected_material",
     }
     pieces: list[tuple[str, str]] = []
     name = "preamble"
@@ -6059,6 +6095,8 @@ def _fit_required_evidence_prompt(
         return None
     pieces.append((name, "".join(lines).strip()))
     present = {name for name, _ in pieces}
+    if "selected_material" in present:
+        present.add("artifacts")
     if not present.intersection({"body", "comments", "artifacts"}):
         return None
     candidates = []
@@ -6069,23 +6107,27 @@ def _fit_required_evidence_prompt(
             or not channels <= present
         ):
             continue
-        required = [body for name, body in pieces if name == "preamble" or name in channels]
+        required = [
+            body
+            for name, body in pieces
+            if name in {"preamble", "selected_material"} or name in channels
+        ]
         rendered = "\n\n".join(required)
         candidates.append((len(rendered), tuple(sorted(channels)), rendered))
     # This budget bounds optional enrichment, never complete required proof.
     # Choose the smallest valid complete alternative, then let native admission
     # count the actual request rather than clipping it or inventing absence.
-    for _, selected_channels, rendered in sorted(candidates):
+    for required_chars, selected_channels, rendered in sorted(candidates):
         channels = set(selected_channels)
         omitted: list[str] = []
         for name, body in pieces:
-            if name == "preamble" or name in channels:
+            if name in {"preamble", "selected_material"} or name in channels:
                 continue
             if len(rendered) + len(body) + 2 <= budget:
                 rendered += "\n\n" + body
             else:
                 omitted.append(name)
-        return rendered, tuple(sorted(channels)), tuple(omitted)
+        return rendered, tuple(sorted(channels)), tuple(omitted), required_chars
     return None
 
 
@@ -6213,6 +6255,7 @@ def build_prompt_inputs(
     included_required_evidence_channels: tuple[str, ...] = ()
     omitted_optional_evidence_sections: tuple[str, ...] = ()
     required_evidence_fitted = False
+    required_evidence_chars = 0
     if sections is None:
         context_block = _cap_prompt_text(
             context_text or "(context unavailable)", context_budget // TOKEN_CHARS
@@ -6246,6 +6289,7 @@ def build_prompt_inputs(
                     evidence_block,
                     included_required_evidence_channels,
                     omitted_optional_evidence_sections,
+                    required_evidence_chars,
                 ) = fitted_evidence
                 required_evidence_fitted = True
             context_block = "\n\n".join(part for part in (context_block, evidence_block) if part)
@@ -6286,7 +6330,22 @@ def build_prompt_inputs(
             reasons.append("Required acceptance evidence was truncated to fit the prompt budget.")
 
     if code_source:
-        diff_block, code, files, included, total = _build_code_block(code_source, diff_budget)
+        asset_views = {}
+        try:
+            from tools.verifier_gzip_assets import review_assets
+
+            asset_views = review_assets(
+                source_coverage,
+                (diff if diff and "diff --git " in diff else code_source + "\n").encode("utf-8"),
+                context=context_text,
+            )
+            if lossless:
+                diff_budget += sum(map(len, asset_views.values()))
+        except (OSError, ValueError, TypeError) as exc:
+            reasons.append(f"Gzip evidence capture invalid: {exc}")
+        diff_block, code, files, included, total = _build_code_block(
+            code_source, diff_budget, asset_views=asset_views
+        )
     else:
         diff_block, code, files, included, total = "(diff unavailable)", "unavailable", (), 0, 0
     if upstream_truncated:
@@ -6351,7 +6410,12 @@ def build_prompt_inputs(
         ),
     )
     context_block = coverage.render() + "\n\n" + (context_block or "(context unavailable)")
-    return PromptInputs(context_block=context_block, diff_block=diff_block, coverage=coverage)
+    return PromptInputs(
+        context_block=context_block,
+        diff_block=diff_block,
+        coverage=coverage,
+        required_evidence_chars=required_evidence_chars,
+    )
 
 
 def prompt_coverage(
@@ -6517,7 +6581,19 @@ def _evaluate_chunked(
         (_strip_diff_fence(body) for name, body in sections or [] if name == "full_diff"), ""
     )
     files = _split_diff_files(source)
-    binary_paths = {path for path, patch in files if _diff_file_is_binary_descriptor(patch)}
+    try:
+        from tools.verifier_gzip_assets import review_assets
+
+        asset_views = review_assets(
+            parse_context_source_coverage(context) or {}, source.encode("utf-8"), context=context
+        )
+    except (OSError, ValueError, TypeError):
+        asset_views = {}  # The shared prompt admission reports the precise integrity gap.
+    binary_paths = {
+        path
+        for path, patch in files
+        if _diff_file_is_binary_descriptor(patch) and path not in asset_views
+    }
     destinations = [path for path, _ in files]
     if len(destinations) != len(set(destinations)):
         return EvaluationResult(
@@ -6529,7 +6605,7 @@ def _evaluate_chunked(
                 dict.fromkeys(path or "(unknown changed file)" for path in destinations)
             ),
         )
-    if len(source) <= budget and not binary_paths:
+    if len(source) + sum(map(len, asset_views.values())) <= budget and not binary_paths:
         if source or sections is not None:
             coverage = prompt_coverage(context, diff, evaluate_minimum=evaluate_minimum)
             if not coverage.sufficient:
@@ -6592,9 +6668,22 @@ def _evaluate_chunked(
     chunks: list[tuple[list[str], str]] = []
     for path, patch in files:
         assert path is not None
-        if len(patch) > budget or _diff_file_is_binary_descriptor(patch):
+        review_size = len(patch) + len(asset_views.get(path, ""))
+        if path in binary_paths:
             continue
-        elif chunks and len(chunks[-1][1]) + len(patch) <= budget:
+        elif review_size > budget:
+            # Preserve one whole file in its own request. Every ordinary prompt
+            # validator and native admission sees those same bytes; no rough
+            # four-character estimate may silently exclude required code.
+            if len(chunks) < MAX_REVIEW_CHUNKS:
+                chunks.append(([path], patch))
+        elif (
+            chunks
+            and sum(len(asset_views.get(p, "")) for p in chunks[-1][0])
+            + len(chunks[-1][1])
+            + review_size
+            <= budget
+        ):
             paths, text = chunks[-1]
             chunks[-1] = ([*paths, path], text + patch)
         elif len(chunks) < MAX_REVIEW_CHUNKS:
@@ -6640,6 +6729,34 @@ def _evaluate_chunked(
             if evaluate_minimum
             else local_context + chunk_guidance
         )
+        if asset_views:
+            # Existing whole-file chunks receive only their assigned changed-file
+            # obligations. Original requirements and the frozen full capture stay
+            # unchanged; this is a prompt projection, not a new Git patch/event.
+            inventory = parse_context_source_coverage(chunk_context)
+            if inventory is not None:
+                inventory = {
+                    **inventory,
+                    "changed_code_sources": [
+                        row
+                        for row in inventory.get("changed_code_sources", [])
+                        if row.get("source") in paths
+                    ],
+                    "gzip_asset_sources": [
+                        row
+                        for row in inventory.get("gzip_asset_sources", [])
+                        if row.get("source") in paths
+                    ],
+                }
+                chunk_context = re.sub(
+                    r"(^## Context source coverage[ \t]*\n(?:(?!^## |^```)[^\n]*\n)*^```json[ \t]*\n).*?(\n```)",
+                    lambda match, inventory=inventory: match[1]
+                    + json.dumps(inventory, ensure_ascii=False)
+                    + match[2],
+                    chunk_context,
+                    count=1,
+                    flags=re.M | re.S,
+                )
         coverage = prompt_coverage(chunk_context, patch, evaluate_minimum=evaluate_minimum)
         prompt_coverages.append(coverage)
         record: dict[str, Any] = {
@@ -7707,7 +7824,28 @@ def _invoke_llm(
     # each complete request, including synthesis. Registered standard routes
     # without optional native facts do not claim a native-count receipt.
     client = _prepare_capacity_client(client)
-    if not _legacy_capacity_route(client):
+    legacy_route = _legacy_capacity_route(client)
+    # Only necessary projections above their own existing soft bounds override
+    # legacy optional capacity. Measure the shared fitter's required evidence
+    # before optional enrichment, and the assembled code/asset view, never raw
+    # optional history or the entire source context.
+    legacy_inputs = (
+        build_prompt_inputs(context, diff) if legacy_route and context is not None else None
+    )
+    required_input_above_soft_budget = bool(
+        legacy_inputs is not None
+        and (
+            legacy_inputs.coverage.code_included_chars
+            > _budget_from_env("VERIFIER_DIFF_BUDGET_TOKENS", VERIFIER_DIFF_BUDGET_TOKENS)
+            * TOKEN_CHARS
+            or legacy_inputs.required_evidence_chars
+            > _budget_from_env(
+                "VERIFIER_ACCEPTANCE_EVIDENCE_BUDGET_TOKENS", VERIFIER_CONTEXT_BUDGET_TOKENS
+            )
+            * TOKEN_CHARS
+        )
+    )
+    if not legacy_route or required_input_above_soft_budget:
         _preflight_input_capacity(
             client,
             prompt,
@@ -8184,6 +8322,17 @@ def _semantic_raw_inputs(context: str, diff: str | None) -> dict[str, bytes]:
             parse_context_source_coverage(context) or {}, Path(directory)
         )
         raw.update(artifacts)
+    if diff is not None:
+        from tools.verifier_gzip_assets import captured_inputs
+
+        raw.update(
+            captured_inputs(
+                parse_context_source_coverage(context) or {},
+                Path(directory or "verifier-evidence"),
+                diff.encode("utf-8"),
+                context=context,
+            )
+        )
     return raw
 
 

@@ -59,9 +59,9 @@ function validateEvent(value) {
   return event;
 }
 
-function requiredEvidence(selectors, evidence) {
-  const selected = parse(selectors, []);
-  if (!Array.isArray(selected) || selected.length > 20) throw new Error('Invalid required verification evidence selectors');
+function requiredEvidence(selectors, evidence, target = {}) {
+  const {validatedSelectors} = require('./verifier_gzip_assets');
+  const selected = validatedSelectors(selectors);
   const rows = selected.map(selector => {
     if (!selector || typeof selector !== 'object') throw new Error('Invalid required evidence selector');
     if (selector.kind === 'comment') {
@@ -78,6 +78,15 @@ function requiredEvidence(selectors, evidence) {
       return { kind: 'comment', url: selector.url,
         body_sha256: createHash('sha256').update(matches[0].body, 'utf8').digest('hex') };
     }
+    if (selector.kind === 'git_blob') {
+      const {evidencePath} = require('./verifier_gzip_assets');
+      if (Object.keys(selector).sort().join(',') !== 'kind,path' || !evidencePath(selector.path)) throw new Error('Invalid git_blob selector');
+      const matches = (evidence.gzip_assets || []).filter(row => row.source === selector.path);
+      if (matches.length !== 1 || matches[0].status !== 'captured') throw new Error('Required git_blob evidence unavailable');
+      const row=matches[0];
+      return {kind:'git_blob',path:row.source,git_blob_sha:row.git_blob_sha,raw_sha256:row.raw_sha256,
+        text_sha256:row.text_sha256,codec:row.codec};
+    }
     if (selector.kind === 'artifact_member') {
       if (![selector.run_id, selector.artifact_id].every(id => Number.isSafeInteger(id) && id > 0)
           || typeof selector.path !== 'string' || !selector.path) throw new Error('Invalid artifact member selector');
@@ -89,8 +98,19 @@ function requiredEvidence(selectors, evidence) {
           || !['included', 'captured'].includes(members[0].status) || !SHA.test(members[0].raw_sha256)) {
         throw new Error('Required verification artifact member is absent, ambiguous or incomplete');
       }
+      const binding = archives[0].historical_binding;
+      if (selector.evidence_role === 'comparison-baseline'
+          && (binding?.schema !== 'verifier-comparison-baseline/v1'
+            || binding.run_id !== selector.run_id || archives[0].head_sha !== binding.run_head_sha
+            || binding.repository !== String(target.repository || '').toLowerCase()
+            || String(archives[0].repository || '').toLowerCase() !== binding.repository
+            || binding.evaluated_sha !== target.evaluatedSha
+            || !selector.compared_paths.every(source => binding.compared_sources?.some(row => row.path === source && SHA.test(row.sha256))))) {
+        throw new Error('Required comparison baseline binding unavailable');
+      }
       return { kind: 'artifact_member', run_id: selector.run_id, artifact_id: selector.artifact_id,
-        path: selector.path, raw_sha256: members[0].raw_sha256 };
+        path: selector.path, raw_sha256: members[0].raw_sha256,
+        ...(selector.evidence_role ? {evidence_role:selector.evidence_role,comparison_binding:binding} : {}) };
     }
     throw new Error('Unsupported required verification evidence selector');
   });
@@ -122,7 +142,7 @@ function completedEvent(event, comments, assessmentIdentity) {
   });
 }
 
-function authenticatePredecessor(event, predecessor, evidence) {
+function authenticatePredecessor(event, predecessor, evidence, reconciledPending = new Set()) {
   const history = evidence.event_history;
   if (!SHA.test(predecessor) || !history?.complete) {
     throw new Error('Verification predecessor requires complete authenticated comment evidence');
@@ -134,6 +154,7 @@ function authenticatePredecessor(event, predecessor, evidence) {
     for (const match of String(comment.body).matchAll(/<!-- verifier-corpus-decision\/v1 (\{[^\n]+\}) -->/g)) {
       try {
         const d = JSON.parse(match[1]);
+        if (d.assessment_identity?.canonical === false) continue;
         if (d.schema !== 'verifier-corpus-decision/v1' || String(d.repo).toLowerCase() !== event.repo
             || String(d.pr) !== event.pr || d.head_sha !== event.head_sha || d.evaluated_sha !== event.evaluated_sha
             || !/^[1-9]\d*$/.test(String(d.run_id)) || !/^[1-9]\d*$/.test(String(d.run_attempt))
@@ -150,11 +171,148 @@ function authenticatePredecessor(event, predecessor, evidence) {
             head_sha:event.head_sha,evaluated_sha:event.evaluated_sha,
             run_id:String(d.run_id),run_attempt:String(d.run_attempt) });
         }
-        if (identity === predecessor) return;
+        if (identity === predecessor) {
+          const contested=(history.records || []).some(other => {
+            if (!['github-actions','github-actions[bot]'].includes(other.author)
+                || !String(other.url).toLowerCase().startsWith(prefix)) return false;
+            return [...String(other.body).matchAll(/<!-- verifier-event-state\/v1 (\{[^\n]+\}) -->/g)].some(match => {
+              try {
+                const state=JSON.parse(match[1]);
+                return state.assessment_identity?.canonical !== false
+                  && state.status==='incomplete' && state.verification_event?.event_id===identity
+                  && String(state.run_id)===String(d.run_id) && String(state.run_attempt)===String(d.run_attempt)
+                  && ['repo','pr','head_sha','evaluated_sha'].every(key=>String(state[key]).toLowerCase()===String(event[key]).toLowerCase());
+              } catch {return false;}
+            });
+          });
+          if (contested) continue;
+          return;
+        }
       } catch { /* Malformed history cannot supply causal authority. */ }
     }
   }
+  if (predecessor !== event.event_id && authenticateIncompletePredecessor(event,predecessor,history.records || [],reconciledPending)) return;
   throw new Error('Verification predecessor is not an authenticated exact-subject terminal event');
+}
+
+function authenticateIncompletePredecessor(event,predecessor,comments,reconciledPending) {
+  const prefix=`https://github.com/${event.repo}/pull/${event.pr}#issuecomment-`;
+  const rows=[];
+  for (const comment of comments) {
+    if (!['github-actions','github-actions[bot]'].includes(comment.author)
+        || !String(comment.url).toLowerCase().startsWith(prefix)) continue;
+    const matches=[...String(comment.body).matchAll(/<!-- (verifier-event-state\/v1|verifier-corpus-decision\/v1) (\{[^\n]+\}) -->/g)];
+    if ((comment.truncated || !matches.length) && String(comment.body).includes(predecessor)) throw new Error('Incomplete predecessor history');
+    for (const match of matches) {
+      let row;
+      try {row=JSON.parse(match[2]);} catch {
+        if(match[2].includes(predecessor)) throw new Error('Malformed predecessor history');
+        continue;
+      }
+      const sameSubject=['repo','pr','head_sha','evaluated_sha'].every(key => String(row[key]).toLowerCase()===String(event[key]).toLowerCase());
+      if (!sameSubject) continue;
+      if (comment.truncated) throw new Error('Truncated predecessor history');
+      let actual;
+      try {
+        if (row.schema==='verifier-corpus-decision/v1' && row.verification_event===undefined) {
+          if (!/^[1-9]\d{0,19}$/.test(String(row.run_id)) || !/^[1-9]\d{0,9}$/.test(String(row.run_attempt))
+              || typeof row.ci_failed!=='boolean' || !Array.isArray(row.provider_verdicts) || !row.provider_verdicts.length
+              || row.provider_verdicts.some(value=>!['PASS','CONCERNS','FAIL','NON_PASS'].includes(value))
+              || row.verdict!==(!row.ci_failed && row.provider_verdicts.every(value=>value==='PASS')?'PASS':'NON_PASS')) throw new Error('Invalid legacy history');
+          if (row.assessment_identity?.canonical === false) {
+            assessmentIdentity({...row.assessment_identity,canonical:true});
+            continue;
+          }
+          rows.push({row,actual:{event_id:digest({schema:'verification-legacy-event/v1',repo:event.repo,pr:event.pr,head_sha:event.head_sha,evaluated_sha:event.evaluated_sha,run_id:String(row.run_id),run_attempt:String(row.run_attempt)})},run:BigInt(row.run_id),attempt:BigInt(row.run_attempt)});
+          continue;
+        }
+        actual=validateEvent(row.verification_event);
+        if (['repo','pr','head_sha','evaluated_sha'].some(key=>actual[key]!==event[key])
+            || !/^[1-9]\d{0,19}$/.test(String(row.run_id)) || !/^[1-9]\d{0,9}$/.test(String(row.run_attempt))
+            || !(row.assessment_identity?.canonical === false
+              ? assessmentIdentity({...row.assessment_identity,canonical:true})
+              : sameAssessment(row.assessment_identity,row.assessment_identity))
+            || row.schema!==match[1]
+            || (row.schema==='verifier-event-state/v1' && !['pending','incomplete'].includes(row.status))
+            || (row.predecessor_event_id!==undefined && (!SHA.test(row.predecessor_event_id) || row.predecessor_event_id===actual.event_id))) throw new Error('Invalid predecessor row');
+      } catch {throw new Error('Malformed authenticated predecessor history');}
+      if (row.assessment_identity.canonical === false) {
+        if (row.schema==='verifier-corpus-decision/v1'
+            && (typeof row.ci_failed!=='boolean' || !Array.isArray(row.provider_verdicts) || !row.provider_verdicts.length
+              || row.provider_verdicts.some(value=>!['PASS','CONCERNS','FAIL','NON_PASS'].includes(value))
+              || row.verdict!==(!row.ci_failed && row.provider_verdicts.every(value=>value==='PASS')?'PASS':'NON_PASS'))) {
+          throw new Error('Malformed advisory predecessor history');
+        }
+        continue; // Valid advisory reads neither supply nor veto canonical authority.
+      }
+      rows.push({row,actual,comment,run:BigInt(row.run_id),attempt:BigInt(row.run_attempt)});
+    }
+  }
+  const candidates=rows.filter(entry=>entry.actual.event_id===predecessor);
+  if (!candidates.length) return false;
+  const newer=(left,right)=>left.run>right.run || (left.run===right.run && left.attempt>right.attempt);
+  const latest=candidates.reduce((left,right)=>newer(right,left)?right:left);
+  // A changed event cannot fork newer work. Repeating the exact already-created
+  // child keeps its original edge; it does not mint a new branch or retry grant.
+  const children=rows.filter(entry=>entry.actual.event_id===event.event_id);
+  if (rows.some(entry=>newer(entry,latest) && entry.actual.event_id!==event.event_id)) {
+    throw new Error('Predecessor has newer authenticated work');
+  }
+  if (children.some(entry=>!newer(entry,latest) || entry.row.predecessor_event_id!==predecessor)) {
+    throw new Error('Repeated verification event has conflicting parent metadata');
+  }
+  if (children.length) {
+    const childLatest=children.reduce((left,right)=>newer(right,left)?right:left);
+    const attempts=new Map();
+    for (const entry of children) {
+      const key=`${entry.run}:${entry.attempt}`;
+      attempts.set(key,[...(attempts.get(key) || []),entry]);
+    }
+    for (const current of attempts.values()) {
+      // Scope the existing guard to this authenticated attempt without changing
+      // retained records. An older unresolved provider attempt cannot disappear
+      // behind a later no-evaluation marker for the same event.
+      const attemptComments=current.map(({row,comment})=>({...comment,
+        body:`<!-- ${row.schema} ${JSON.stringify(row)} -->`}));
+      if (knownNoEvaluationAttempt(current,attemptComments)) continue;
+      if (!current.some(({row})=>row.status==='incomplete')
+          && completedEvent(event,attemptComments,current[0].row.assessment_identity)) continue;
+      if (current.every(({row})=>row.schema==='verifier-event-state/v1' && row.status==='pending')) {
+        if (current[0].run===childLatest.run && current[0].attempt===childLatest.attempt) continue;
+        const states=[...new Map(current.map(({row})=>[digest(row),row])).values()];
+        if (states.length===1) {
+          if (reconciledPending.has(digest(states[0]))) continue;
+          const error=new Error('Repeated verification event requires older pending execution recovery');
+          error.code='VERIFIER_PREDECESSOR_PENDING_EXECUTION';
+          error.pendingState=states[0];
+          error.verificationEvent=event;
+          throw error;
+        }
+      }
+      throw new Error('Repeated verification event requires existing execution recovery');
+    }
+  }
+  const current=candidates.filter(entry=>entry.run===latest.run && entry.attempt===latest.attempt);
+  return knownNoEvaluationAttempt(current,comments);
+}
+
+function knownNoEvaluationAttempt(current,comments) {
+  const latest=current[0];
+  const incomplete=current.filter(({row})=>row.status==='incomplete');
+  if (!incomplete.length || current.some(({row})=>row.verdict!==undefined)
+      || incomplete.some(({row})=>row.schema!=='verifier-event-state/v1'
+        || !sameAssessment(row.assessment_identity,latest.row.assessment_identity)
+        || !['validated_no_evaluation','evaluator_step_not_invoked'].includes(row.failure_cause))) return false;
+  if (guardExistingEvent(latest.actual,comments,latest.row.assessment_identity)!=='retry') return false;
+  const {executionBinding}=require('./verifier_pending_execution');
+  const binding=executionBinding(latest.row.assessment_identity.mode);
+  // Identical POST receipts are one authority value, without deleting history.
+  const pending=[...new Map(current.filter(({row})=>row.status==='pending')
+    .map(entry=>[digest(entry.row),entry])).values()];
+  if (pending.length!==1 || !sameAssessment(pending[0].row.assessment_identity,latest.row.assessment_identity)
+      || !pending[0].row.execution_binding || digest(pending[0].row.execution_binding)!==digest(binding)
+      || current.some(({row})=>row.predecessor_event_id!==latest.row.predecessor_event_id)) return false;
+  return true;
 }
 
 function completedLegacyEvent(event, evidence) {
@@ -243,7 +401,7 @@ function guardExistingEvent(event, comments, assessmentIdentity) {
 }
 
 function buildVerificationEvent({ repository, pull, issues, fullDiffBytes, evidence,
-  selectors, expected, predecessorEventId, ciResults }) {
+  selectors, expected, predecessorEventId, ciResults, reconciledPending }) {
   const repo = repository.toLowerCase();
   const source = (kind, number, body, repository = repo) => {
     if (!/^[^/\s]+\/[^/\s]+$/.test(repository) || !Number.isSafeInteger(number) || number < 1) {
@@ -261,7 +419,9 @@ function buildVerificationEvent({ repository, pull, issues, fullDiffBytes, evide
   const material = { schema: 'verification-material/v1', code: {
     head_sha: pull.head?.sha, evaluated_sha: pull.merge_commit_sha,
     diff_sha256: createHash('sha256').update(fullDiffBytes).digest('hex'),
-  }, ci_hard_gate: ciHardGate(pull, ciResults), required_evidence: requiredEvidence(selectors, evidence) };
+  }, ci_hard_gate: ciHardGate(pull, ciResults), required_evidence: requiredEvidence(selectors, evidence, {repository:repo,evaluatedSha:pull.merge_commit_sha}) };
+  // Explicit git_blob selectors bind required content above; transport-only
+  // views must not mint a new event when optional capture availability changes.
   const event = { schema: 'verification-event/v1', repo, pr: String(pull.number),
     head_sha: pull.head?.sha, evaluated_sha: pull.merge_commit_sha,
     request_sha256: digest(request), material_sha256: digest(material) };
@@ -271,7 +431,7 @@ function buildVerificationEvent({ repository, pull, issues, fullDiffBytes, evide
   if (expectation && validateEvent(expectation).event_id !== event.event_id) {
     throw new Error('Verification event expectation differs from authoritative collected inputs');
   }
-  if (predecessorEventId) authenticatePredecessor(event, predecessorEventId, evidence);
+  if (predecessorEventId) authenticatePredecessor(event, predecessorEventId, evidence, reconciledPending);
   return { verification_event: event, ...(predecessorEventId ? { predecessor_event_id: predecessorEventId } : {}),
     request, material };
 }
