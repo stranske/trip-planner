@@ -243,9 +243,9 @@ Required deployment configuration:
 - Netlify project env vars, public synthetic API: `TRIP_PLANNER_API_ORIGIN`
 - Netlify project env vars, optional live map adapter: `VITE_GOOGLE_MAPS_BROWSER_API_KEY`
 - Render service env vars: `TRIP_PLANNER_CORS_ORIGINS`, `TRIP_PLANNER_CORS_ORIGIN_REGEX`, and live TPP variables when remote policy execution is intentionally enabled
-- Render Python runtime: the repo pins `.python-version` to Python 3.12 and `pyproject.toml`
-  declares `requires-python = ">=3.12,<3.14"`. Keep that deploy runtime aligned with the
-  CI matrix (`3.12`, `3.13`); do not rely on Render's moving default Python version.
+- Render Python runtime: the repo pins `.python-version` to Python 3.14 and `pyproject.toml`
+  declares `requires-python = ">=3.13,<3.15"`. Keep that deploy runtime aligned with the
+  CI matrix (`3.13`, `3.14`); do not rely on Render's moving default Python version.
 - Render Postgres URLs are normalized to the `psycopg` SQLAlchemy driver at startup, and
   `psycopg[binary]` is a runtime dependency. Removing either breaks managed Postgres deploys.
 
