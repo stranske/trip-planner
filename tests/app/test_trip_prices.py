@@ -370,6 +370,29 @@ def test_material_price_edit_invalidates_saved_verdict(client, monkeypatch, chan
         _approved_price_verdict(client, monkeypatch, trip_id)
 
 
+def test_price_verdict_helper_disconnect_leaves_proposal_state(client, monkeypatch):
+    """Issue #1958 coupling: disconnecting `_invalidate_price_verdict` keeps proposal_state.
+
+    Durable form of the deliberate-break gate in
+    docs/evidence/issue-1958/deliberate-break-proof.txt. With the helper a no-op,
+    a material price edit must leave proposal_state present (the RED outcome the
+    connected invalidation tests assert is None). Read-time stale marking may still
+    clear approval_ready; the transactional delete is what this helper owns.
+    """
+    import trip_planner.app.services.trip_prices as trip_prices
+
+    monkeypatch.setattr(trip_prices, "_invalidate_price_verdict", lambda *args, **kwargs: None)
+    trip_id = _create_trip(client)
+    assert client.put(f"/api/workspace/{trip_id}/prices", json=_PRICE_EVIDENCE).status_code == 200
+    _approved_price_verdict(client, monkeypatch, trip_id)
+    changed = client.put(
+        f"/api/workspace/{trip_id}/prices",
+        json={**_PRICE_EVIDENCE, "amount": 6200.0},
+    )
+    assert changed.status_code == 200, changed.text
+    assert client.get(f"/api/workspace/{trip_id}").json()["proposal_state"] is not None
+
+
 def test_noop_price_save_does_not_invalidate_verdict(client, monkeypatch):
     trip_id = _create_trip(client)
     client.put(f"/api/workspace/{trip_id}/prices", json=_PRICE_EVIDENCE)
