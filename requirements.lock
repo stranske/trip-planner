@@ -95,7 +95,7 @@ markupsafe==3.0.3
     # via
     #   mako
     #   werkzeug
-mypy==2.4.0
+mypy==2.4.1
     # via trip-planner (pyproject.toml)
 mypy-extensions==1.1.0
     # via
@@ -142,7 +142,7 @@ pydantic-core==2.46.4
     # via pydantic
 pygments==2.20.0
     # via pytest
-pytest==9.1.1
+pytest==9.2.0
     # via
     #   trip-planner (pyproject.toml)
     #   app-baseline-kit
@@ -184,7 +184,7 @@ rpds-py==2026.6.3
     # via
     #   jsonschema
     #   referencing
-ruff==0.17.2
+ruff==0.17.3
     # via trip-planner (pyproject.toml)
 six==1.17.0
     # via python-dateutil
