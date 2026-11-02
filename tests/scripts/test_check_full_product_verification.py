@@ -581,3 +581,21 @@ def test_contract_report_tp3_not_fabricated_without_monkeypatch():
     rows = verifier.run_contract_report()
     comparison = next(row for row in rows if row["id"] == "TP3")
     assert comparison["verdict"] in {"WORKS", "PARTIAL"}, comparison
+
+    trips = next(row for row in rows if row["id"] == "TP2")
+    assert all(
+        request["body"]["trip"]["trip_frame"]["origin"] == "Seattle"
+        for request in trips["evidence"]["requests"]
+    ), trips
+
+    destinations = comparison["evidence"]["pairs"]["destination"]
+    assert [item["destination"] for item in destinations] == ["Chicago", "Reykjavik, Iceland"]
+    assert [item["party"] for item in destinations] == [1, 1]
+    travel_minutes = [
+        [figure["travel_minutes"] for figure in item["figures"]] for item in destinations
+    ]
+    # Changing another metric must not hide the local-only 45-minute fallback.
+    assert all(
+        minutes and all(value > 45 for value in minutes) for minutes in travel_minutes
+    ), comparison
+    assert travel_minutes[0] != travel_minutes[1], comparison
