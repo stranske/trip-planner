@@ -598,3 +598,35 @@ def test_contract_report_tp3_not_fabricated_without_monkeypatch():
         minutes and all(value > 45 for value in minutes) for minutes in travel_minutes
     ), comparison
     assert set(travel_minutes[0]) != set(travel_minutes[1]), comparison
+
+
+def test_contract_report_missing_origin_exposes_local_only_fabrication(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    original_request = TestClient.request
+
+    def omit_origin(self, method, url, **kwargs):
+        # Change only the probe input; keep the real routes and scenario engine.
+        if method.upper() == "POST" and str(url) == "/api/trips":
+            kwargs["json"]["trip_frame"].pop("origin", None)
+        return original_request(self, method, url, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(TestClient, "request", omit_origin)
+        rows = verifier.run_contract_report()
+
+    trips = next(row for row in rows if row["id"] == "TP2")
+    assert len(trips["evidence"]["requests"]) == 2, trips
+    assert all(
+        not request["body"]["trip"]["trip_frame"].get("origin")
+        for request in trips["evidence"]["requests"]
+    ), trips
+
+    comparison = next(row for row in rows if row["id"] == "TP3")
+    assert comparison["verdict"] == "FABRICATED", comparison
+    destinations = comparison["evidence"]["pairs"]["destination"]
+    assert [item["destination"] for item in destinations] == ["Chicago", "Reykjavik, Iceland"]
+    assert [item["party"] for item in destinations] == [1, 1]
+    for item in destinations:
+        assert item["figures"], comparison
+        assert {figure["travel_minutes"] for figure in item["figures"]} == {45}, comparison

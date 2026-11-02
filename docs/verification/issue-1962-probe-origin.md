@@ -14,11 +14,11 @@ Verified acceptance on 2026-11-02:
   TP3 returned `FABRICATED`; both destinations reported 45 minutes.
 - [x] Ran `python -m pytest -q tests/scripts/test_check_full_product_verification.py
   -m "not slow"`: **28 passed**, 6 existing Alembic deprecation warnings. The
-  latest run took 22.90 seconds; the supplied 5.01-second timing was not reproduced.
+  latest baseline run took 22.64 seconds; the supplied 5.01-second timing was not reproduced.
 - [x] Deliberate break: with the origin removed,
   `test_contract_report_tp3_not_fabricated_without_monkeypatch` failed with
   `FABRICATED`. Restored the script byte-for-byte in a `finally` block and reran
-  the named regression: **1 passed** in 6.70 seconds. The restored real report
+  the named regression: **1 passed** in 6.44 seconds. The restored real report
   returned `PARTIAL` with the destination travel times below.
 
 | Origin in probe input | TP3 verdict | Chicago minutes | Reykjavik minutes |
@@ -31,6 +31,14 @@ The party-size pair still reports 410 minutes for both one and eight travelers,
 so `PARTIAL` remains the accurate verdict. This change does not claim that all
 comparison determinants work.
 
+The missing-origin negative control is now automated in
+`test_contract_report_missing_origin_exposes_local_only_fabrication`. It removes
+only the origin from outgoing trip inputs, exercises real routes and scenario
+calculations, and requires persisted missing origins plus a `FABRICATED` TP3
+verdict with 45 minutes for each destination. The original unmocked regression
+remains intact. With the new test, the same targeted command reports **29 passed**
+in 25.51 seconds, with 7 existing Alembic deprecation warnings.
+
 The sandbox blocks asyncio socket wakeups: the initial ordinary pytest run
 stalled at TestClient startup. Successful report and pytest runs used the
 repository's documented temporary selector polling workaround via
@@ -42,8 +50,9 @@ The required repository-wide Black check passed: **518 files unchanged**, using
 
 The workspace's `.git` is mounted read-only, so `git add` fails creating
 `.git/index.lock`. The verified changes remain in the workspace; a recovery
-commit and Git bundle are saved under `/tmp/tp1962-review` and
-`/tmp/tp1962-probe-origin.bundle` respectively. Applying that commit to the PR
+commit and Git bundle for this iteration are saved under
+`/tmp/tp1962-negative-control` and `/tmp/tp1962-negative-control.bundle`
+respectively. Applying that commit to the PR
 branch requires a writable Git checkout.
 
 GitHub rejected the prior blocker comment and `needs-human` label requests, as
