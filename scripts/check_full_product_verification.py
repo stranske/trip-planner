@@ -236,6 +236,7 @@ def _create_trip(
             "summary": f"Full-product verification for {title}.",
             "mode": mode,
             "trip_frame": {
+                "origin": "Seattle",
                 "start_date": start_date.isoformat(),
                 "end_date": end_date.isoformat(),
                 "duration_days": duration_days,
