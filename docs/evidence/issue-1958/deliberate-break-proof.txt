@@ -1,0 +1,299 @@
+Issue #1958 deliberate-break evidence 2026-11-01T22:32Z. Fixture transport only.
+
+Mutation (temporary, restored before commit):
+  file: trip_planner/app/services/trip_prices.py
+  helper: _invalidate_price_verdict
+  break: early `return` so transactional proposal deletion is a no-op
+  restore: remove the early return (tree matches origin for this file)
+
+Command:
+  python -m pytest tests/app/test_trip_prices.py -k "stale or invalidate" -q --no-cov
+
+=== Connected / restored (helper intact) ===
+..........                                                               [100%]
+=============================== warnings summary ===============================
+tests/app/test_trip_prices.py: 10 warnings
+  /opt/hostedtoolcache/Python/3.14.9/x64/lib/python3.14/site-packages/alembic/config.py:612: DeprecationWarning: No path_separator found in configuration; falling back to legacy splitting on spaces, commas, and colons for prepend_sys_path.  Consider adding path_separator=os to Alembic config.
+    util.warn_deprecated(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+10 passed, 14 deselected, 10 warnings in 4.36s
+
+=== Disconnected (_invalidate_price_verdict early-return no-op) ===
+FFFFFFFF..                                                               [100%]
+=================================== FAILURES ===================================
+_________ test_material_price_edit_invalidates_saved_verdict[change0] __________
+
+client = <starlette.testclient.TestClient object at 0x72046405f770>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7204641b29e0>
+change = {'amount': 6200.0}
+
+    @pytest.mark.parametrize(
+        "change",
+        [
+            {"amount": 6200.0},
+            {"currency": "EUR"},
+            {"lowest_amount": 450.0},
+            {"evidence_attested": False},
+            {"cabin_class": "first"},
+            {"flight_hours": 9.0},
+            {"amount": None},
+            {"component": "lodging", "amount": 200.0},
+        ],
+    )
+    def test_material_price_edit_invalidates_saved_verdict(client, monkeypatch, change):
+        trip_id = _create_trip(client)
+        assert client.put(f"/api/workspace/{trip_id}/prices", json=_PRICE_EVIDENCE).status_code == 200
+        _approved_price_verdict(client, monkeypatch, trip_id)
+        changed = client.put(f"/api/workspace/{trip_id}/prices", json={**_PRICE_EVIDENCE, **change})
+        assert changed.status_code == 200, changed.text
+>       assert client.get(f"/api/workspace/{trip_id}").json()["proposal_state"] is None
+E       AssertionError: assert {'proposal': {'approval_notes': ['Manager review required before booking.'], 'comparables': [{'category': 'airfare', '...run the policy check before approval.', 'guidance': ['Prices changed. Re-run the policy check before approval.']}, ...} is None
+
+tests/app/test_trip_prices.py:367: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[alembic migration log omitted]
+_________ test_material_price_edit_invalidates_saved_verdict[change1] __________
+
+client = <starlette.testclient.TestClient object at 0x7204600b5450>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7204640ba8b0>
+change = {'currency': 'EUR'}
+
+    @pytest.mark.parametrize(
+        "change",
+        [
+            {"amount": 6200.0},
+            {"currency": "EUR"},
+            {"lowest_amount": 450.0},
+            {"evidence_attested": False},
+            {"cabin_class": "first"},
+            {"flight_hours": 9.0},
+            {"amount": None},
+            {"component": "lodging", "amount": 200.0},
+        ],
+    )
+    def test_material_price_edit_invalidates_saved_verdict(client, monkeypatch, change):
+        trip_id = _create_trip(client)
+        assert client.put(f"/api/workspace/{trip_id}/prices", json=_PRICE_EVIDENCE).status_code == 200
+        _approved_price_verdict(client, monkeypatch, trip_id)
+        changed = client.put(f"/api/workspace/{trip_id}/prices", json={**_PRICE_EVIDENCE, **change})
+        assert changed.status_code == 200, changed.text
+>       assert client.get(f"/api/workspace/{trip_id}").json()["proposal_state"] is None
+E       AssertionError: assert {'proposal': {'approval_notes': ['Manager review required before booking.'], 'comparables': [{'category': 'airfare', '...run the policy check before approval.', 'guidance': ['Prices changed. Re-run the policy check before approval.']}, ...} is None
+
+tests/app/test_trip_prices.py:367: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[alembic migration log omitted]
+_________ test_material_price_edit_invalidates_saved_verdict[change2] __________
+
+client = <starlette.testclient.TestClient object at 0x72045b5d5450>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7204640b6f90>
+change = {'lowest_amount': 450.0}
+
+    @pytest.mark.parametrize(
+        "change",
+        [
+            {"amount": 6200.0},
+            {"currency": "EUR"},
+            {"lowest_amount": 450.0},
+            {"evidence_attested": False},
+            {"cabin_class": "first"},
+            {"flight_hours": 9.0},
+            {"amount": None},
+            {"component": "lodging", "amount": 200.0},
+        ],
+    )
+    def test_material_price_edit_invalidates_saved_verdict(client, monkeypatch, change):
+        trip_id = _create_trip(client)
+        assert client.put(f"/api/workspace/{trip_id}/prices", json=_PRICE_EVIDENCE).status_code == 200
+        _approved_price_verdict(client, monkeypatch, trip_id)
+        changed = client.put(f"/api/workspace/{trip_id}/prices", json={**_PRICE_EVIDENCE, **change})
+        assert changed.status_code == 200, changed.text
+>       assert client.get(f"/api/workspace/{trip_id}").json()["proposal_state"] is None
+E       AssertionError: assert {'proposal': {'approval_notes': ['Manager review required before booking.'], 'comparables': [{'category': 'airfare', '...run the policy check before approval.', 'guidance': ['Prices changed. Re-run the policy check before approval.']}, ...} is None
+
+tests/app/test_trip_prices.py:367: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[alembic migration log omitted]
+_________ test_material_price_edit_invalidates_saved_verdict[change3] __________
+
+client = <starlette.testclient.TestClient object at 0x72045b6b1480>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x72045b5fa9c0>
+change = {'evidence_attested': False}
+
+    @pytest.mark.parametrize(
+        "change",
+        [
+            {"amount": 6200.0},
+            {"currency": "EUR"},
+            {"lowest_amount": 450.0},
+            {"evidence_attested": False},
+            {"cabin_class": "first"},
+            {"flight_hours": 9.0},
+            {"amount": None},
+            {"component": "lodging", "amount": 200.0},
+        ],
+    )
+    def test_material_price_edit_invalidates_saved_verdict(client, monkeypatch, change):
+        trip_id = _create_trip(client)
+        assert client.put(f"/api/workspace/{trip_id}/prices", json=_PRICE_EVIDENCE).status_code == 200
+        _approved_price_verdict(client, monkeypatch, trip_id)
+        changed = client.put(f"/api/workspace/{trip_id}/prices", json={**_PRICE_EVIDENCE, **change})
+        assert changed.status_code == 200, changed.text
+>       assert client.get(f"/api/workspace/{trip_id}").json()["proposal_state"] is None
+E       AssertionError: assert {'proposal': {'approval_notes': ['Manager review required before booking.'], 'comparables': [{'category': 'airfare', '...run the policy check before approval.', 'guidance': ['Prices changed. Re-run the policy check before approval.']}, ...} is None
+
+tests/app/test_trip_prices.py:367: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[alembic migration log omitted]
+_________ test_material_price_edit_invalidates_saved_verdict[change4] __________
+
+client = <starlette.testclient.TestClient object at 0x72045b6b2ea0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x72045be0d260>
+change = {'cabin_class': 'first'}
+
+    @pytest.mark.parametrize(
+        "change",
+        [
+            {"amount": 6200.0},
+            {"currency": "EUR"},
+            {"lowest_amount": 450.0},
+            {"evidence_attested": False},
+            {"cabin_class": "first"},
+            {"flight_hours": 9.0},
+            {"amount": None},
+            {"component": "lodging", "amount": 200.0},
+        ],
+    )
+    def test_material_price_edit_invalidates_saved_verdict(client, monkeypatch, change):
+        trip_id = _create_trip(client)
+        assert client.put(f"/api/workspace/{trip_id}/prices", json=_PRICE_EVIDENCE).status_code == 200
+        _approved_price_verdict(client, monkeypatch, trip_id)
+        changed = client.put(f"/api/workspace/{trip_id}/prices", json={**_PRICE_EVIDENCE, **change})
+        assert changed.status_code == 200, changed.text
+>       assert client.get(f"/api/workspace/{trip_id}").json()["proposal_state"] is None
+E       AssertionError: assert {'proposal': {'approval_notes': ['Manager review required before booking.'], 'comparables': [{'category': 'airfare', '...run the policy check before approval.', 'guidance': ['Prices changed. Re-run the policy check before approval.']}, ...} is None
+
+tests/app/test_trip_prices.py:367: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[alembic migration log omitted]
+_________ test_material_price_edit_invalidates_saved_verdict[change5] __________
+
+client = <starlette.testclient.TestClient object at 0x72045b7abd10>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x72045bf24a50>
+change = {'flight_hours': 9.0}
+
+    @pytest.mark.parametrize(
+        "change",
+        [
+            {"amount": 6200.0},
+            {"currency": "EUR"},
+            {"lowest_amount": 450.0},
+            {"evidence_attested": False},
+            {"cabin_class": "first"},
+            {"flight_hours": 9.0},
+            {"amount": None},
+            {"component": "lodging", "amount": 200.0},
+        ],
+    )
+    def test_material_price_edit_invalidates_saved_verdict(client, monkeypatch, change):
+        trip_id = _create_trip(client)
+        assert client.put(f"/api/workspace/{trip_id}/prices", json=_PRICE_EVIDENCE).status_code == 200
+        _approved_price_verdict(client, monkeypatch, trip_id)
+        changed = client.put(f"/api/workspace/{trip_id}/prices", json={**_PRICE_EVIDENCE, **change})
+        assert changed.status_code == 200, changed.text
+>       assert client.get(f"/api/workspace/{trip_id}").json()["proposal_state"] is None
+E       AssertionError: assert {'proposal': {'approval_notes': ['Manager review required before booking.'], 'comparables': [{'category': 'airfare', '...run the policy check before approval.', 'guidance': ['Prices changed. Re-run the policy check before approval.']}, ...} is None
+
+tests/app/test_trip_prices.py:367: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[alembic migration log omitted]
+_________ test_material_price_edit_invalidates_saved_verdict[change6] __________
+
+client = <starlette.testclient.TestClient object at 0x72046140f570>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x72045bf24950>
+change = {'amount': None}
+
+    @pytest.mark.parametrize(
+        "change",
+        [
+            {"amount": 6200.0},
+            {"currency": "EUR"},
+            {"lowest_amount": 450.0},
+            {"evidence_attested": False},
+            {"cabin_class": "first"},
+            {"flight_hours": 9.0},
+            {"amount": None},
+            {"component": "lodging", "amount": 200.0},
+        ],
+    )
+    def test_material_price_edit_invalidates_saved_verdict(client, monkeypatch, change):
+        trip_id = _create_trip(client)
+        assert client.put(f"/api/workspace/{trip_id}/prices", json=_PRICE_EVIDENCE).status_code == 200
+        _approved_price_verdict(client, monkeypatch, trip_id)
+        changed = client.put(f"/api/workspace/{trip_id}/prices", json={**_PRICE_EVIDENCE, **change})
+        assert changed.status_code == 200, changed.text
+>       assert client.get(f"/api/workspace/{trip_id}").json()["proposal_state"] is None
+E       AssertionError: assert {'proposal': {'approval_notes': ['Manager review required before booking.'], 'comparables': [{'category': 'airfare', '...run the policy check before approval.', 'guidance': ['Prices changed. Re-run the policy check before approval.']}, ...} is None
+
+tests/app/test_trip_prices.py:367: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[alembic migration log omitted]
+_________ test_material_price_edit_invalidates_saved_verdict[change7] __________
+
+client = <starlette.testclient.TestClient object at 0x7204611a2030>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7204616f9a90>
+change = {'component': 'lodging', 'amount': 200.0}
+
+    @pytest.mark.parametrize(
+        "change",
+        [
+            {"amount": 6200.0},
+            {"currency": "EUR"},
+            {"lowest_amount": 450.0},
+            {"evidence_attested": False},
+            {"cabin_class": "first"},
+            {"flight_hours": 9.0},
+            {"amount": None},
+            {"component": "lodging", "amount": 200.0},
+        ],
+    )
+    def test_material_price_edit_invalidates_saved_verdict(client, monkeypatch, change):
+        trip_id = _create_trip(client)
+        assert client.put(f"/api/workspace/{trip_id}/prices", json=_PRICE_EVIDENCE).status_code == 200
+        _approved_price_verdict(client, monkeypatch, trip_id)
+        changed = client.put(f"/api/workspace/{trip_id}/prices", json={**_PRICE_EVIDENCE, **change})
+        assert changed.status_code == 200, changed.text
+>       assert client.get(f"/api/workspace/{trip_id}").json()["proposal_state"] is None
+E       AssertionError: assert {'proposal': {'approval_notes': ['Manager review required before booking.'], 'comparables': [{'category': 'airfare', '...run the policy check before approval.', 'guidance': ['Prices changed. Re-run the policy check before approval.']}, ...} is None
+
+tests/app/test_trip_prices.py:367: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[alembic migration log omitted]
+=============================== warnings summary ===============================
+tests/app/test_trip_prices.py: 10 warnings
+  /opt/hostedtoolcache/Python/3.14.9/x64/lib/python3.14/site-packages/alembic/config.py:612: DeprecationWarning: No path_separator found in configuration; falling back to legacy splitting on spaces, commas, and colons for prepend_sys_path.  Consider adding path_separator=os to Alembic config.
+    util.warn_deprecated(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/app/test_trip_prices.py::test_material_price_edit_invalidates_saved_verdict[change0] - AssertionError: assert {'proposal': {'approval_notes': ['Manager review required before booking.'], 'comparables': [{'category': 'airfare', '...run the policy check before approval.', 'guidance': ['Prices changed. Re-run the policy check before approval.']}, ...} is None
+FAILED tests/app/test_trip_prices.py::test_material_price_edit_invalidates_saved_verdict[change1] - AssertionError: assert {'proposal': {'approval_notes': ['Manager review required before booking.'], 'comparables': [{'category': 'airfare', '...run the policy check before approval.', 'guidance': ['Prices changed. Re-run the policy check before approval.']}, ...} is None
+FAILED tests/app/test_trip_prices.py::test_material_price_edit_invalidates_saved_verdict[change2] - AssertionError: assert {'proposal': {'approval_notes': ['Manager review required before booking.'], 'comparables': [{'category': 'airfare', '...run the policy check before approval.', 'guidance': ['Prices changed. Re-run the policy check before approval.']}, ...} is None
+FAILED tests/app/test_trip_prices.py::test_material_price_edit_invalidates_saved_verdict[change3] - AssertionError: assert {'proposal': {'approval_notes': ['Manager review required before booking.'], 'comparables': [{'category': 'airfare', '...run the policy check before approval.', 'guidance': ['Prices changed. Re-run the policy check before approval.']}, ...} is None
+FAILED tests/app/test_trip_prices.py::test_material_price_edit_invalidates_saved_verdict[change4] - AssertionError: assert {'proposal': {'approval_notes': ['Manager review required before booking.'], 'comparables': [{'category': 'airfare', '...run the policy check before approval.', 'guidance': ['Prices changed. Re-run the policy check before approval.']}, ...} is None
+FAILED tests/app/test_trip_prices.py::test_material_price_edit_invalidates_saved_verdict[change5] - AssertionError: assert {'proposal': {'approval_notes': ['Manager review required before booking.'], 'comparables': [{'category': 'airfare', '...run the policy check before approval.', 'guidance': ['Prices changed. Re-run the policy check before approval.']}, ...} is None
+FAILED tests/app/test_trip_prices.py::test_material_price_edit_invalidates_saved_verdict[change6] - AssertionError: assert {'proposal': {'approval_notes': ['Manager review required before booking.'], 'comparables': [{'category': 'airfare', '...run the policy check before approval.', 'guidance': ['Prices changed. Re-run the policy check before approval.']}, ...} is None
+FAILED tests/app/test_trip_prices.py::test_material_price_edit_invalidates_saved_verdict[change7] - AssertionError: assert {'proposal': {'approval_notes': ['Manager review required before booking.'], 'comparables': [{'category': 'airfare', '...run the policy check before approval.', 'guidance': ['Prices changed. Re-run the policy check before approval.']}, ...} is None
+8 failed, 2 passed, 14 deselected, 10 warnings in 4.16s
+
+=== Restored again (helper intact; same as connected) ===
+..........                                                               [100%]
+=============================== warnings summary ===============================
+tests/app/test_trip_prices.py: 10 warnings
+  /opt/hostedtoolcache/Python/3.14.9/x64/lib/python3.14/site-packages/alembic/config.py:612: DeprecationWarning: No path_separator found in configuration; falling back to legacy splitting on spaces, commas, and colons for prepend_sys_path.  Consider adding path_separator=os to Alembic config.
+    util.warn_deprecated(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+10 passed, 14 deselected, 10 warnings in 4.36s
+
