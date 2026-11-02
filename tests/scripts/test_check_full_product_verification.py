@@ -575,3 +575,9 @@ def test_contract_report_captures_route_failure_and_continues(monkeypatch):
     assert rows[2]["verdict"] == "BROKEN"
     assert rows[2]["evidence"]["requests"][0]["status"] == 503
     assert rows[6]["evidence"]["requests"]
+
+
+def test_contract_report_tp3_not_fabricated_without_monkeypatch():
+    rows = verifier.run_contract_report()
+    comparison = next(row for row in rows if row["id"] == "TP3")
+    assert comparison["verdict"] in {"WORKS", "PARTIAL"}, comparison
