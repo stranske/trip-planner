@@ -598,4 +598,4 @@ def test_contract_report_tp3_not_fabricated_without_monkeypatch():
     assert all(
         minutes and all(value > 45 for value in minutes) for minutes in travel_minutes
     ), comparison
-    assert travel_minutes[0] != travel_minutes[1], comparison
+    assert set(travel_minutes[0]) != set(travel_minutes[1]), comparison
