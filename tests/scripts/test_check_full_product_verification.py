@@ -583,10 +583,9 @@ def test_contract_report_tp3_not_fabricated_without_monkeypatch():
     assert comparison["verdict"] in {"WORKS", "PARTIAL"}, comparison
 
     trips = next(row for row in rows if row["id"] == "TP2")
-    assert all(
-        request["body"]["trip"]["trip_frame"]["origin"] == "Seattle"
-        for request in trips["evidence"]["requests"]
-    ), trips
+    assert [
+        request["body"]["trip"]["trip_frame"]["origin"] for request in trips["evidence"]["requests"]
+    ] == ["Seattle", "Seattle"], trips
 
     destinations = comparison["evidence"]["pairs"]["destination"]
     assert [item["destination"] for item in destinations] == ["Chicago", "Reykjavik, Iceland"]
