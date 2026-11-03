@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import re
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -41,6 +43,28 @@ def test_product_contract_status_column_matches_offline_probe() -> None:
         if documented[tp] != probe[tp]
     }
     assert not mismatches, mismatches
+
+
+def test_product_contract_status_column_matches_cli_report(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    report_path = tmp_path / "product-probe.json"
+    assert verifier.main(["--live-tpp", "off", "--contract-report", str(report_path)]) == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    documented = _contract_status_by_id(
+        (verifier.REPO_ROOT / "docs" / "PRODUCT_CONTRACT.md").read_text(encoding="utf-8")
+    )
+    assert len(report) == len(documented) == 7
+    assert {row["id"]: row["verdict"] for row in report} == documented
+
+    # Derive the expected headline from the document, independently of the report.
+    counts = Counter(documented.values())
+    expected_headline = (
+        "product-probe: "
+        + ", ".join(f"{verdict} {counts[verdict]}" for verdict in verifier.CONTRACT_VERDICTS)
+        + f" of {len(documented)}"
+    )
+    assert expected_headline in capsys.readouterr().out.splitlines()
 
 
 @pytest.mark.parametrize(
