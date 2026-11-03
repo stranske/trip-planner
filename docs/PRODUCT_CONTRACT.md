@@ -11,10 +11,12 @@ Sign up → create business trip → compare options → message planner → che
 
 The **status** column tracks the latest offline `product-probe.json` from
 `python scripts/check_full_product_verification.py --live-tpp off --contract-report product-probe.json`
-(commit on `main` when the doc was last refreshed). The offline probe uses real
-application routes with local TPP fixture envelopes. **TP7 stays PARTIAL** until
-browser print/export is observed: `_probe_packet` only proves backend packet
-readiness (see [`_probe_packet`](../scripts/check_full_product_verification.py#L1430-L1453)), not a real print dialog.
+(commit on `main` when the doc was last refreshed). CI fails when that column
+drifts via [`tests/docs/test_product_contract_probe_drift.py`](../tests/docs/test_product_contract_probe_drift.py).
+The offline probe uses real application routes with local TPP fixture envelopes.
+**TP7 stays PARTIAL** until browser print/export is observed: `_probe_packet` only
+proves backend packet readiness (see [`_probe_packet`](../scripts/check_full_product_verification.py#L1430-L1453)),
+not a real print dialog.
 
 | id | a user can … and sees … | entry point | probe (how to exercise it; vary these determinants) | status (product-probe.json, latest main run) |
 |---|---|---|---|---|
