@@ -14,7 +14,7 @@ The **status** column tracks the latest offline `product-probe.json` from
 (commit on `main` when the doc was last refreshed). The offline probe uses real
 application routes with local TPP fixture envelopes. **TP7 stays PARTIAL** until
 browser print/export is observed: `_probe_packet` only proves backend packet
-readiness (`scripts/check_full_product_verification.py`), not a real print dialog.
+readiness (see [`_probe_packet`](../scripts/check_full_product_verification.py#L1430-L1453)), not a real print dialog.
 
 | id | a user can … and sees … | entry point | probe (how to exercise it; vary these determinants) | status (product-probe.json, latest main run) |
 |---|---|---|---|---|
@@ -29,5 +29,5 @@ readiness (`scripts/check_full_product_verification.py`), not a real print dialo
 ## Known gaps (aligned with latest `product-probe.json`)
 - TP3: compare still reports **PARTIAL** when scenario figures do not yet move on every probed determinant (destination/party). `_probe_comparison` does not vary duration, so a **WORKS** result would not establish duration sensitivity.
 - TP4: planner replies remain **PARTIAL** on deterministic fallback without a configured LLM provider (distinct replies, not byte-identical — see issue #1742).
-- TP5–TP6: contract probes report **WORKS** for fixture-backed backend `PUT /policy` and `PUT /proposal` paths. The frontend `POST /policy/sync` and `POST /proposal/submit` journeys and live TPP/hosted behaviour remain unverified by these probes.
+- TP5–TP6: [contract probes](../scripts/check_full_product_verification.py#L1358-L1453) report **WORKS** for fixture-backed backend `PUT /policy` and `PUT /proposal` paths, including populated `home_airport` values. The frontend policy call exists in [`syncWorkspacePolicy`](../frontend/src/api/workspace.ts#L1048-L1059). The frontend `POST /policy/sync` and `POST /proposal/submit` journeys and live TPP/hosted behaviour remain unverified by these probes.
 - TP7: backend packet readiness passes, but **PARTIAL** until a browser print/export observation is recorded (see `_probe_packet`).

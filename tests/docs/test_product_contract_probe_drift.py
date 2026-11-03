@@ -19,7 +19,7 @@ def _contract_status_by_id(contract_text: str) -> dict[str, str]:
     ):
         contract_id = match.group(1)
         assert contract_id not in rows, f"Duplicate contract ID: {contract_id}"
-        cells = [cell.strip() for cell in match.group(2).split("|")]
+        cells = [cell.strip() for cell in re.split(r"(?<!\\)\|", match.group(2))]
         assert len(cells) == 4, f"Expected five columns for {contract_id}"
         status = cells[3]
         assert status in verifier.CONTRACT_VERDICTS, f"Invalid status for {contract_id}: {status!r}"
@@ -55,10 +55,19 @@ def test_product_contract_status_column_matches_offline_probe() -> None:
     ],
     ids=["stale-tp3", "stale-tp5", "stale-tp6", "stale-tp7", "same-headline"],
 )
-def test_drift_guard_rejects_changed_probe_verdicts(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, changed_verdicts: dict[str, str]
+@pytest.mark.parametrize("changed_source", ["document", "probe"])
+def test_drift_guard_rejects_changed_verdicts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    changed_verdicts: dict[str, str],
+    changed_source: str,
 ) -> None:
     documented = {f"TP{i}": "WORKS" if i in {1, 2, 5, 6} else "PARTIAL" for i in range(1, 8)}
+    probe = documented.copy()
+    if changed_source == "document":
+        documented.update(changed_verdicts)
+    else:
+        probe.update(changed_verdicts)
     contract_path = tmp_path / "docs" / "PRODUCT_CONTRACT.md"
     contract_path.parent.mkdir()
     contract_path.write_text(
@@ -69,18 +78,15 @@ def test_drift_guard_rejects_changed_probe_verdicts(
         encoding="utf-8",
     )
     monkeypatch.setattr(verifier, "REPO_ROOT", tmp_path)
-    probe_rows = [
-        {"id": contract_id, "verdict": changed_verdicts.get(contract_id, status)}
-        for contract_id, status in documented.items()
-    ]
+    probe_rows = [{"id": contract_id, "verdict": status} for contract_id, status in probe.items()]
     monkeypatch.setattr(verifier, "run_contract_report", lambda: probe_rows)
 
     with pytest.raises(AssertionError) as failure:
         test_product_contract_status_column_matches_offline_probe()
 
     mismatches = {
-        contract_id: {"documented": documented[contract_id], "probe": verdict}
-        for contract_id, verdict in changed_verdicts.items()
+        contract_id: {"documented": documented[contract_id], "probe": probe[contract_id]}
+        for contract_id in changed_verdicts
     }
     assert str(mismatches) in str(failure.value)
 
@@ -126,6 +132,13 @@ def test_contract_status_parser_accepts_markdown_table_spacing() -> None:
     assert _contract_status_by_id(text) == {"TP1": "WORKS", "TP2": "PARTIAL"}
 
 
+@pytest.mark.parametrize("cell_index", range(3), ids=["journey", "route", "probe"])
+def test_contract_status_parser_accepts_escaped_pipes(cell_index: int) -> None:
+    cells = ["traveller", "route", "probe", "PARTIAL"]
+    cells[cell_index] += r" \| alternative"
+    assert _contract_status_by_id("| TP3 | " + " | ".join(cells) + " |") == {"TP3": "PARTIAL"}
+
+
 @pytest.mark.parametrize("status", ["works", "UNKNOWN", ""])
 def test_invalid_contract_status_is_reported(status: str) -> None:
     with pytest.raises(AssertionError, match="Invalid status for TP1"):
@@ -137,6 +150,7 @@ def test_invalid_contract_status_is_reported(status: str) -> None:
     [
         "| TP1 | traveller | route | WORKS |",
         "| TP1 | traveller | route | probe | extra | WORKS |",
+        r"| TP1 | traveller \| route | probe | WORKS |",
     ],
 )
 def test_contract_status_parser_rejects_wrong_column_count(row: str) -> None:
