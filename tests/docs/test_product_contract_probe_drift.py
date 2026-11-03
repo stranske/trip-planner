@@ -19,7 +19,9 @@ def _contract_status_by_id(contract_text: str) -> dict[str, str]:
     ):
         contract_id = match.group(1)
         assert contract_id not in rows, f"Duplicate contract ID: {contract_id}"
-        status = match.group(2).rsplit("|", 1)[-1].strip()
+        cells = [cell.strip() for cell in match.group(2).split("|")]
+        assert len(cells) == 4, f"Expected five columns for {contract_id}"
+        status = cells[3]
         assert status in verifier.CONTRACT_VERDICTS, f"Invalid status for {contract_id}: {status!r}"
         rows[contract_id] = status
     return rows
@@ -60,7 +62,8 @@ def test_drift_guard_rejects_changed_probe_verdicts(
     contract_path.parent.mkdir()
     contract_path.write_text(
         "\n".join(
-            f"| {contract_id} | journey | {status} |" for contract_id, status in documented.items()
+            f"| {contract_id} | journey | route | probe | {status} |"
+            for contract_id, status in documented.items()
         ),
         encoding="utf-8",
     )
@@ -84,24 +87,36 @@ def test_drift_guard_rejects_changed_probe_verdicts(
 @pytest.mark.parametrize(
     "duplicate",
     [
-        "| TP1 | current | WORKS |",
-        "|TP1| current |WORKS|",
-        "  | TP1 | current | WORKS |  ",
-        "| TP1 | current | works |",
+        "| TP1 | current | route | probe | WORKS |",
+        "|TP1| current |route|probe|WORKS|",
+        "  | TP1 | current | route | probe | WORKS |  ",
+        "| TP1 | current | route | probe | works |",
     ],
 )
 def test_duplicate_contract_id_cannot_hide_stale_status(duplicate: str) -> None:
-    text = f"| TP1 | stale | BROKEN |\n{duplicate}\n"
+    text = f"| TP1 | stale | route | probe | BROKEN |\n{duplicate}\n"
     with pytest.raises(AssertionError, match="Duplicate contract ID: TP1"):
         _contract_status_by_id(text)
 
 
 def test_contract_status_parser_accepts_markdown_table_spacing() -> None:
-    text = "  |TP1| traveller | route | probe |WORKS|  \n\t| TP2 | trip |PARTIAL|\n"
+    text = "  |TP1| traveller | route | probe |WORKS|  \n\t| TP2 | trip |route|probe|PARTIAL|\n"
     assert _contract_status_by_id(text) == {"TP1": "WORKS", "TP2": "PARTIAL"}
 
 
 @pytest.mark.parametrize("status", ["works", "UNKNOWN", ""])
 def test_invalid_contract_status_is_reported(status: str) -> None:
     with pytest.raises(AssertionError, match="Invalid status for TP1"):
-        _contract_status_by_id(f"| TP1 | traveller | {status} |\n")
+        _contract_status_by_id(f"| TP1 | traveller | route | probe | {status} |\n")
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "| TP1 | traveller | route | WORKS |",
+        "| TP1 | traveller | route | probe | extra | WORKS |",
+    ],
+)
+def test_contract_status_parser_rejects_wrong_column_count(row: str) -> None:
+    with pytest.raises(AssertionError, match="Expected five columns for TP1"):
+        _contract_status_by_id(row)
