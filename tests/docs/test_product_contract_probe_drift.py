@@ -33,6 +33,7 @@ def test_product_contract_status_column_matches_offline_probe() -> None:
     documented = _contract_status_by_id(contract_text)
     probe_rows = verifier.run_contract_report()
     probe = {row["id"]: row["verdict"] for row in probe_rows}
+    assert len(probe_rows) == len(probe), "Duplicate contract IDs in offline probe"
     assert documented.keys() == probe.keys() == {f"TP{i}" for i in range(1, 8)}
     mismatches = {
         tp: {"documented": documented[tp], "probe": probe[tp]}
@@ -82,6 +83,27 @@ def test_drift_guard_rejects_changed_probe_verdicts(
         for contract_id, verdict in changed_verdicts.items()
     }
     assert str(mismatches) in str(failure.value)
+
+
+@pytest.mark.parametrize("duplicate_verdict", ["WORKS", "BROKEN"])
+def test_drift_guard_rejects_duplicate_probe_ids(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, duplicate_verdict: str
+) -> None:
+    contract_path = tmp_path / "docs" / "PRODUCT_CONTRACT.md"
+    contract_path.parent.mkdir()
+    contract_path.write_text(
+        "\n".join(f"| TP{i} | journey | route | probe | WORKS |" for i in range(1, 8)),
+        encoding="utf-8",
+    )
+    # A later matching verdict must not hide an earlier conflicting observation.
+    probe_rows = [{"id": "TP1", "verdict": duplicate_verdict}] + [
+        {"id": f"TP{i}", "verdict": "WORKS"} for i in range(1, 8)
+    ]
+    monkeypatch.setattr(verifier, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(verifier, "run_contract_report", lambda: probe_rows)
+
+    with pytest.raises(AssertionError, match="Duplicate contract IDs in offline probe"):
+        test_product_contract_status_column_matches_offline_probe()
 
 
 @pytest.mark.parametrize(
