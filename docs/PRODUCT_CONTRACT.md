@@ -9,27 +9,27 @@ Sign up → create business trip → compare options → message planner → che
 
 ## Core functions
 
-The values below remain the **2026-09-20 baseline**, not current main readings.
-The latest main run's `product-probe` artifact is authoritative; no hosted reading
-is claimed by this baseline. Run locally with
-`python scripts/check_full_product_verification.py --live-tpp off --contract-report product-probe.json`.
+The **status** column tracks the latest offline `product-probe.json` from
+`python scripts/check_full_product_verification.py --live-tpp off --contract-report product-probe.json`
+(commit on `main` when the doc was last refreshed). CI fails when that column
+drifts via [`tests/docs/test_product_contract_probe_drift.py`](../tests/docs/test_product_contract_probe_drift.py).
 The offline probe uses real application routes with local TPP fixture envelopes.
-TP7 reports PARTIAL when only packet inputs are observed: browser print/export
-requires a separate browser observation and is not proved by backend readiness.
+**TP7 stays PARTIAL** until browser print/export is observed: `_probe_packet` only
+proves backend packet readiness (see [`_probe_packet`](../scripts/check_full_product_verification.py#L1430-L1453)),
+not a real print dialog.
 
 | id | a user can … and sees … | entry point | probe (how to exercise it; vary these determinants) | status (product-probe.json, latest main run) |
 |---|---|---|---|---|
 | TP1 | a traveller can sign up or sign in and sees a session that survives navigation | `POST /api/auth/signup`, `POST /api/auth/login`, `GET /api/auth/session` | vary fresh signup and existing-account login; navigate/create request then read session | WORKS |
 | TP2 | a traveller can create a business trip and sees persisted destination, dates, party and purpose | `/trips/new` → `POST /api/trips` | POST trips with different destination, dates, party and purpose; read each trip | WORKS |
-| TP3 | a traveller can compare scenarios and sees ranked cost, travel time, transfers and feasibility for the trip | Compare tab → `GET /api/workspace/{id}/scenarios/compare` | compare Reykjavik vs Nairobi, party 1 vs 8, duration 1 vs 14 days; diff figures. Contract probes include an origin (Seattle) so destination changes exercise inter-city travel determinants. | FABRICATED |
+| TP3 | a traveller can compare scenarios and sees ranked cost, travel time, transfers and feasibility for the trip | Compare tab → `GET /api/workspace/{id}/scenarios/compare` | compare Chicago vs Reykjavik, Iceland and party 1 vs 8; diff figures. Duration is not varied by this probe. Contract probes include an origin (Seattle) so destination changes exercise inter-city travel determinants. | PARTIAL |
 | TP4 | a traveller can message the planner and sees a reply responsive to the request | Plan tab → `POST /api/planner/{id}/turns` | vary cancellation and gibberish; assert cancellation acknowledgement versus fallback reply | PARTIAL |
-| TP5 | a traveller can check policy and sees a policy snapshot and posture for the trip | Policy tab → `PUT /api/workspace/{id}/policy` | vary policy payload fare/cabin limits; inspect resulting state and blockers | BROKEN |
-| TP6 | a traveller can submit for approval and sees a TPP proposal execution | Policy tab Submit → `PUT /api/workspace/{id}/proposal` | vary proposal home_airport and policy context; inspect execution/error | BROKEN |
-| TP7 | a traveller can print or export an approval packet and sees a printable approver document | Policy tab Print / Export (`ApprovalPacket`) | submit then open ApprovalPacket and print/export | BROKEN |
+| TP5 | a traveller can check policy and sees a policy snapshot and posture for the trip | Backend fixture probe → `PUT /api/workspace/{id}/policy` | vary policy payload cabin and lodging limits; inspect resulting policy state | WORKS |
+| TP6 | a traveller can submit for approval and sees a TPP proposal execution | Backend fixture probe → `PUT /api/workspace/{id}/proposal` | vary proposal home_airport and policy context; inspect execution/error | WORKS |
+| TP7 | a traveller can print or export an approval packet and sees a printable approver document | Policy tab Print / Export (`ApprovalPacket`) | submit then open ApprovalPacket and print/export | PARTIAL |
 
-## Known gaps at draft time
-- TP3: destination and party size do not change scenario figures; cost is duration-only and feasibility is constant.
-- TP4: replies differ by message but remain deterministic fallback with no provider (issue #1742 addressed byte-identical replies only).
-- TP5: no frontend call reaches the policy route, leaving `policy_state` null and no actionable blockers.
-- TP6: submission is blocked by null policy context; a populated payload still fails because it omits required `home_airport`.
-- TP7: packet and print/export UI are unreachable because TP6 cannot create `proposal_state`.
+## Known gaps (aligned with latest `product-probe.json`)
+- TP3: compare still reports **PARTIAL** when scenario figures do not yet move on every probed determinant (destination/party). `_probe_comparison` does not vary duration, so a **WORKS** result would not establish duration sensitivity.
+- TP4: planner replies remain **PARTIAL** on deterministic fallback without a configured LLM provider (distinct replies, not byte-identical — see issue #1742).
+- TP5–TP6: [contract probes](../scripts/check_full_product_verification.py#L1358-L1453) report **WORKS** for fixture-backed backend `PUT /policy` and `PUT /proposal` paths, including populated `home_airport` values. The frontend policy call exists in [`syncWorkspacePolicy`](../frontend/src/api/workspace.ts#L1048-L1059). The frontend `POST /policy/sync` and `POST /proposal/submit` journeys and live TPP/hosted behaviour remain unverified by these probes.
+- TP7: backend packet readiness passes, but **PARTIAL** until a browser print/export observation is recorded (see `_probe_packet`).
