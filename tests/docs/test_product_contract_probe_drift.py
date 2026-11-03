@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
 
@@ -37,6 +38,47 @@ def test_product_contract_status_column_matches_offline_probe() -> None:
         if documented[tp] != probe[tp]
     }
     assert not mismatches, mismatches
+
+
+@pytest.mark.parametrize(
+    "changed_verdicts",
+    [
+        {"TP3": "FABRICATED"},
+        {"TP5": "BROKEN"},
+        {"TP6": "BROKEN"},
+        {"TP7": "BROKEN"},
+        # A headline-only comparison would miss this swap between contract IDs.
+        {"TP3": "WORKS", "TP5": "PARTIAL"},
+    ],
+    ids=["stale-tp3", "stale-tp5", "stale-tp6", "stale-tp7", "same-headline"],
+)
+def test_drift_guard_rejects_changed_probe_verdicts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, changed_verdicts: dict[str, str]
+) -> None:
+    documented = {f"TP{i}": "WORKS" if i in {1, 2, 5, 6} else "PARTIAL" for i in range(1, 8)}
+    contract_path = tmp_path / "docs" / "PRODUCT_CONTRACT.md"
+    contract_path.parent.mkdir()
+    contract_path.write_text(
+        "\n".join(
+            f"| {contract_id} | journey | {status} |" for contract_id, status in documented.items()
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(verifier, "REPO_ROOT", tmp_path)
+    probe_rows = [
+        {"id": contract_id, "verdict": changed_verdicts.get(contract_id, status)}
+        for contract_id, status in documented.items()
+    ]
+    monkeypatch.setattr(verifier, "run_contract_report", lambda: probe_rows)
+
+    with pytest.raises(AssertionError) as failure:
+        test_product_contract_status_column_matches_offline_probe()
+
+    mismatches = {
+        contract_id: {"documented": documented[contract_id], "probe": verdict}
+        for contract_id, verdict in changed_verdicts.items()
+    }
+    assert str(mismatches) in str(failure.value)
 
 
 @pytest.mark.parametrize(
