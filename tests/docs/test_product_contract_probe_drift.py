@@ -12,13 +12,15 @@ from scripts import check_full_product_verification as verifier
 def _contract_status_by_id(contract_text: str) -> dict[str, str]:
     rows: dict[str, str] = {}
     for match in re.finditer(
-        r"^\| (TP\d+) \|.*\| ([A-Z]+) \|$",
+        r"^[ \t]*\|[ \t]*(TP\d+)[ \t]*\|(.*)\|[ \t]*$",
         contract_text,
         re.MULTILINE,
     ):
         contract_id = match.group(1)
         assert contract_id not in rows, f"Duplicate contract ID: {contract_id}"
-        rows[contract_id] = match.group(2)
+        status = match.group(2).rsplit("|", 1)[-1].strip()
+        assert status in verifier.CONTRACT_VERDICTS, f"Invalid status for {contract_id}: {status!r}"
+        rows[contract_id] = status
     return rows
 
 
@@ -37,7 +39,27 @@ def test_product_contract_status_column_matches_offline_probe() -> None:
     assert not mismatches, mismatches
 
 
-def test_duplicate_contract_id_cannot_hide_stale_status() -> None:
-    text = "| TP1 | stale | BROKEN |\n| TP1 | current | WORKS |\n"
+@pytest.mark.parametrize(
+    "duplicate",
+    [
+        "| TP1 | current | WORKS |",
+        "|TP1| current |WORKS|",
+        "  | TP1 | current | WORKS |  ",
+        "| TP1 | current | works |",
+    ],
+)
+def test_duplicate_contract_id_cannot_hide_stale_status(duplicate: str) -> None:
+    text = f"| TP1 | stale | BROKEN |\n{duplicate}\n"
     with pytest.raises(AssertionError, match="Duplicate contract ID: TP1"):
         _contract_status_by_id(text)
+
+
+def test_contract_status_parser_accepts_markdown_table_spacing() -> None:
+    text = "  |TP1| traveller | route | probe |WORKS|  \n\t| TP2 | trip |PARTIAL|\n"
+    assert _contract_status_by_id(text) == {"TP1": "WORKS", "TP2": "PARTIAL"}
+
+
+@pytest.mark.parametrize("status", ["works", "UNKNOWN", ""])
+def test_invalid_contract_status_is_reported(status: str) -> None:
+    with pytest.raises(AssertionError, match="Invalid status for TP1"):
+        _contract_status_by_id(f"| TP1 | traveller | {status} |\n")
