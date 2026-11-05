@@ -28,6 +28,8 @@ not a real print dialog.
 | TP6 | a traveller can submit for approval and sees a TPP proposal execution | Backend fixture probe → `PUT /api/workspace/{id}/proposal` | vary proposal home_airport and policy context; inspect execution/error | WORKS |
 | TP7 | a traveller can print or export an approval packet and sees a printable approver document | Policy tab Print / Export (`ApprovalPacket`) | submit then open ApprovalPacket and print/export | PARTIAL |
 
+Baseline (hand-measured 2026-09-20, superseded by `product-probe.json`): TP1 WORKS, TP2 WORKS, TP3 FABRICATED, TP4 PARTIAL, TP5 BROKEN, TP6 BROKEN, TP7 BROKEN.
+
 ## Known gaps (aligned with latest `product-probe.json`)
 - TP3: compare still reports **PARTIAL** when scenario figures do not yet move on every probed determinant (destination/party). `_probe_comparison` does not vary duration, so a **WORKS** result would not establish duration sensitivity.
 - TP4: planner replies remain **PARTIAL** on deterministic fallback without a configured LLM provider (distinct replies, not byte-identical — see issue #1742).
