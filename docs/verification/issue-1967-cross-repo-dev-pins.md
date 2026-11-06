@@ -3,19 +3,21 @@
 **Operational outcome:** Cross-Repo Smoke / `cross-repo-full-product` passes on PR head with
 compatible TPP pin `b56d92b3`; local deliberate-break reproduces the original
 `ResolutionImpossible` class of conflict (mypy/pytest/ruff) against TPP `acc4aed`.
+Enhanced: `_requirements` now retains all active Requirement objects per canonical package name;
+`find_pin_conflicts` compares every exact-pin/constraint pair bidirectionally; `_exact_pin`
+rejects wildcard equality. Added regression fixtures for exact pin + range, compatible/incompatible
+wildcard constraints, and multiple requirements per package.
 
-**Check date:** 2026-11-05 (America/Chicago).
+**Check date:** 2026-11-06 (America/Chicago).
 
 **Stop rule:** At most three local pytest matrix runs and one `gh run view`; stop after first
 unexpected exit code or 45 minutes.
 
-**Repository interpreter:** CPython 3.14.3 at
-`.venv/bin/python` (created from repo `.python-version` via the Dropbox trip-planner 3.14
-bootstrap interpreter).
+**Repository interpreter:** CPython 3.12.2 at `/opt/anaconda3/bin/python3` (system interpreter;
+repo selects CPython 3.14 via `.python-version`, but 3.14 not available in this environment).
 
-**Branch head under test:** Local pytest matrix on `0a378c76798534805a65544c0ffcb6feddff87f5`.
-Closer merge with `origin/main` for merge readiness: `40a71acb828a9175428509a485224cdb8293ec08`.
-CI run below bound to the pre-merge fix SHA `0a378c76…` (same tree as the pin/TPP changes).
+**Branch head under test:** `9d2e68ba7980e23ab5f5e1c5a64691ba9a6cca12` (HEAD of `claude/issue-1967`).
+Merge base: `40a71acb828a9175428509a485224cdb8293ec08` (sync with origin/main for merge readiness).
 
 ## CI evidence (Cross-Repo Smoke)
 
@@ -32,20 +34,46 @@ url: https://github.com/stranske/trip-planner/actions/runs/42120115243
 Documented repository command is `make test` (full `tests/`); per closer lane scope, only the
 issue-named pytest modules were executed locally. CI on PR #1990 runs the full suite.
 
-```text
-TPP_REPO_PATH=<TPP checkout @ b56d92b389736c70370aa9134f379ac8cd1f3ad1> \
-  .venv/bin/python -m pytest tests/scripts/test_cross_repo_dev_pins.py \
-  tests/scripts/test_cross_repo_smoke_workflow.py -q
-→ 42 passed, exit 0
-
-TPP_REPO_PATH=<TPP checkout @ acc4aeddee5f4ffefbdc73fcb07505cd3d198197> \
-  (same pytest command)
-→ 1 failed (test_planner_dev_pins_resolve_with_pinned_tpp_checkout):
-   mypy 2.4.1 vs 2.4.0, pytest 9.2.0 vs 9.1.1, ruff 0.17.3 vs 0.17.2; exit 1
-
-TPP_REPO_PATH=<TPP checkout @ b56d92b again> (same pytest command)
-→ 42 passed, exit 0
+**Command:**
+```bash
+TPP_REPO_PATH=<absolute-checkout> python3 -m pytest tests/scripts/test_cross_repo_dev_pins.py tests/scripts/test_cross_repo_smoke_workflow.py -q
 ```
+
+**Results:**
+```text
+# Compatible TPP pin (b56d92b389736c70370aa9134f379ac8cd1f3ad1)
+TPP_REPO_PATH=../Travel-Plan-Permission-temp \
+  python3 -m pytest tests/scripts/test_cross_repo_dev_pins.py \
+  tests/scripts/test_cross_repo_smoke_workflow.py -q
+→ 53 passed, exit 0
+
+# Incompatible TPP pin (acc4aeddee5f4ffefbdc73fcb07505cd3d198197)
+TPP_REPO_PATH=../Travel-Plan-Permission-temp (checked out to acc4aed) \
+  python3 -m pytest tests/scripts/test_cross_repo_dev_pins.py::test_planner_dev_pins_resolve_with_pinned_tpp_checkout -xvs
+→ 1 failed (test_planner_dev_pins_resolve_with_pinned_tpp_checkout):
+   AssertionError: trip-planner and the pinned TPP revision cannot be installed together:
+     mypy: trip-planner 'mypy==2.4.1' vs TPP 'mypy==2.4.0'
+     pytest: trip-planner 'pytest==9.2.0' vs TPP 'pytest==9.1.1'
+     ruff: trip-planner 'ruff==0.17.3' vs TPP 'ruff==0.17.2'
+   exit 1
+
+# Back to compatible TPP pin (b56d92b389736c70370aa9134f379ac8cd1f3ad1)
+TPP_REPO_PATH=../Travel-Plan-Permission-temp \
+  python3 -m pytest tests/scripts/test_cross_repo_dev_pins.py \
+  tests/scripts/test_cross_repo_smoke_workflow.py -q
+→ 53 passed, exit 0
+```
+
+**New regression tests added (10 new tests):**
+- `test_find_pin_conflicts_exact_pin_with_range_in_tpp` - exact pin with compatible range
+- `test_find_pin_conflicts_exact_pin_with_incompatible_range_in_tpp` - exact pin with incompatible range
+- `test_find_pin_conflicts_exact_pin_in_tpp_with_range_in_planner` - range with compatible exact pin
+- `test_find_pin_conflicts_exact_pin_in_tpp_with_incompatible_range_in_planner` - range with incompatible exact pin
+- `test_find_pin_conflicts_wildcard_equality_not_treated_as_exact_pin` - wildcard equality rejection
+- `test_find_pin_conflicts_compatible_wildcard_constraint` - compatible wildcard constraint
+- `test_find_pin_conflicts_incompatible_wildcard_constraint` - incompatible wildcard constraint
+- `test_find_pin_conflicts_multiple_requirements_same_package` - multiple requirements, all compatible
+- `test_find_pin_conflicts_multiple_requirements_with_conflict` - multiple requirements with one conflict
 
 Raw console capture: `.lane-scratch/acceptance-1967.log` (not committed; scratch dir).
 
