@@ -28,7 +28,12 @@ def _requirements(pyproject: Path) -> dict[str, Requirement]:
     project = tomllib.loads(pyproject.read_text())["project"]
     entries = list(project.get("dependencies", []))
     entries += project.get("optional-dependencies", {}).get("dev", [])
-    return {canonicalize_name(req.name): req for req in map(Requirement, entries)}
+    requirements: dict[str, Requirement] = {}
+    for req in map(Requirement, entries):
+        if req.marker is not None and not req.marker.evaluate({"extra": "dev"}):
+            continue
+        requirements[canonicalize_name(req.name)] = req
+    return requirements
 
 
 def _exact_pin(req: Requirement) -> str | None:
@@ -64,6 +69,36 @@ def test_find_pin_conflicts_flags_diverged_exact_pin(tmp_path: Path) -> None:
 
     assert find_pin_conflicts(planner, tpp) == [
         "ruff: trip-planner 'ruff==0.17.3' vs TPP 'ruff==0.17.2'"
+    ]
+
+
+def test_find_pin_conflicts_ignores_inactive_markers(tmp_path: Path) -> None:
+    planner = tmp_path / "planner.toml"
+    tpp = tmp_path / "tpp.toml"
+    planner.write_text(
+        '[project]\ndependencies = []\n[project.optional-dependencies]\ndev = ["ruff==0.17.3"]\n'
+    )
+    tpp.write_text(
+        "[project]\ndependencies = []\n[project.optional-dependencies]\n"
+        "dev = [\"ruff==0.17.2; python_version < '3.0'\"]\n"
+    )
+
+    assert find_pin_conflicts(planner, tpp) == []
+
+
+def test_find_pin_conflicts_flags_active_marker_pin(tmp_path: Path) -> None:
+    planner = tmp_path / "planner.toml"
+    tpp = tmp_path / "tpp.toml"
+    planner.write_text(
+        '[project]\ndependencies = []\n[project.optional-dependencies]\ndev = ["ruff==0.17.3"]\n'
+    )
+    tpp.write_text(
+        "[project]\ndependencies = []\n[project.optional-dependencies]\n"
+        "dev = [\"ruff==0.17.2; python_version >= '3.0'\"]\n"
+    )
+
+    assert find_pin_conflicts(planner, tpp) == [
+        "ruff: trip-planner 'ruff==0.17.3' vs TPP 'ruff==0.17.2; python_version >= \"3.0\"'"
     ]
 
 
