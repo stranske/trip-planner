@@ -354,6 +354,28 @@ def load_selection_decisions() -> list[SelectionDecision]:
     return decisions
 
 
+def retired_selection_keys() -> set[tuple[str, str | None]]:
+    """(profile, provider) pairs whose selection was retired and not re-selected.
+
+    A selection_history entry with ``superseded_by: "retired"`` retires that provider for
+    the profile (GitHub Models, 2026-10-31). Consumer slot files are create-only, so a
+    stale slot can still name it; runtime must refuse it even with an explicit model pin.
+    """
+    payload = _load_object(_registry_path(), label="model registry")
+    if payload is None:
+        return set()
+    history = payload.get("selection_history", [])
+    if not isinstance(history, list):
+        return set()
+    retired = {
+        (str(raw.get("profile", "")).strip(), normalize_provider(str(raw.get("provider", ""))))
+        for raw in history
+        if isinstance(raw, dict) and raw.get("superseded_by") == "retired"
+    }
+    active = {(decision.profile, decision.provider) for decision in load_selection_decisions()}
+    return retired - active
+
+
 def _model_registry_format_valid() -> bool:
     payload = _load_object(_registry_path(), label="model registry")
     return bool(
@@ -459,10 +481,9 @@ def configured_model_for_provider(
     # path is missing or malformed. Never broaden execution because a
     # configured allowlist cannot be read or does not contain this provider.
     if ENV_SLOT_CONFIG in os.environ:
-        configured_slots = load_slot_config()
-        if not configured_slots:
+        if not _load_positional_slots():
             return ""
-        for slot in apply_slot_env_overrides(configured_slots):
+        for slot in _effective_slots():
             if (
                 slot.provider == normalized_provider
                 and slot.model
@@ -480,19 +501,41 @@ def configured_model_for_provider(
 
 
 def default_slots(*, github_default_model: str = "") -> list[SlotDefinition]:
-    """Build no-slot-config defaults from registry decisions, never version constants."""
+    """Build no-slot-config defaults from registry decisions, never version constants.
+
+    GitHub Models is not a default slot (owner decision 2026-10-31): auto-select falls back
+    only between OpenAI and Anthropic. ``github_default_model`` is kept for callers' signatures.
+    """
+    del github_default_model
     slots: list[SlotDefinition] = []
-    for index, provider in enumerate(
-        (PROVIDER_OPENAI, PROVIDER_ANTHROPIC, PROVIDER_GITHUB), start=1
-    ):
+    for index, provider in enumerate((PROVIDER_OPENAI, PROVIDER_ANTHROPIC), start=1):
         model = select_model_for_profile(provider=provider)
-        if not model and provider == PROVIDER_GITHUB:
-            model = github_default_model.strip()
         slots.append(SlotDefinition(name=f"slot{index}", provider=provider, model=model or ""))
     return slots
 
 
 def load_slot_config(*, github_default_model: str = "") -> list[SlotDefinition]:
+    """Usable configured slots, retired selections excluded (positions are not exposed)."""
+    return [
+        slot
+        for _position, _profile, slot, retired in _load_positional_slots(
+            github_default_model=github_default_model
+        )
+        if not retired
+    ]
+
+
+def _load_positional_slots(
+    *, github_default_model: str = ""
+) -> list[tuple[int, str, SlotDefinition, bool]]:
+    """(configured position, profile, slot, retired) for every slot the config yields.
+
+    Positions are the 1-based index of the entry in the slot file, so environment
+    overrides (``LANGCHAIN_SLOT<n>_*``) keep addressing the slot the operator numbered
+    even when an earlier entry is skipped. Retired selections are kept as positional
+    placeholders: an override may replace one, and only the effective selection after
+    overrides is rejected when retired (Workflows#4367).
+    """
     path = _slot_path()
     payload = _load_object(path, label="slot config")
     fallback_slots = default_slots(github_default_model=github_default_model)
@@ -501,7 +544,7 @@ def load_slot_config(*, github_default_model: str = "") -> list[SlotDefinition]:
         # closed. Only an unconfigured default path permits default slots.
         if ENV_SLOT_CONFIG in os.environ:
             return []
-        return fallback_slots
+        return _positional_defaults(fallback_slots)
 
     registry = load_model_registry()
     # Keep the type and fail-closed contract explicit even though a non-null
@@ -518,15 +561,32 @@ def load_slot_config(*, github_default_model: str = "") -> list[SlotDefinition]:
         ).strip()
         for entry in slot_entries
     ):
-        return [] if ENV_SLOT_CONFIG in os.environ else fallback_slots
+        return [] if ENV_SLOT_CONFIG in os.environ else _positional_defaults(fallback_slots)
 
-    slots: list[SlotDefinition] = []
+    slots: list[tuple[int, str, SlotDefinition, bool]] = []
     fallback_by_provider = {slot.provider: slot for slot in fallback_slots}
+    retired = retired_selection_keys()
     for idx, entry in enumerate(slot_entries, start=1):
         provider = normalize_provider(str(entry.get("provider", "")))
         explicit_model = str(entry.get("model", "")).strip()
         configured_profile = str(entry.get("profile") or "").strip()
         profile = configured_profile or DEFAULT_SELECTION_PROFILE
+        # Missing/unknown providers cannot form a slot identity (including a
+        # retired placeholder). Reject early so every SlotDefinition call below
+        # receives a str — consumer mypy rejects str | None (Workflows#4485).
+        if provider is None:
+            continue
+        if (profile, provider) in retired:
+            name = str(entry.get("name") or f"slot{idx}").strip() or f"slot{idx}"
+            slots.append(
+                (
+                    idx,
+                    profile,
+                    SlotDefinition(name=name, provider=provider, model=explicit_model),
+                    True,
+                )
+            )
+            continue
         model = ""
         if provider:
             model = (
@@ -589,10 +649,20 @@ def load_slot_config(*, github_default_model: str = "") -> list[SlotDefinition]:
             logger.warning("Skipping blocked LLM model in slot config: %s/%s", provider, model)
             continue
         name = str(entry.get("name") or f"slot{idx}").strip() or f"slot{idx}"
-        slots.append(SlotDefinition(name=name, provider=provider, model=model))
+        slots.append(
+            (idx, profile, SlotDefinition(name=name, provider=provider, model=model), False)
+        )
     # A present slot file is an allowlist.  If every configured slot is
     # unusable, fail closed instead of broadening execution to default providers.
     return slots
+
+
+def _positional_defaults(
+    slots: list[SlotDefinition],
+) -> list[tuple[int, str, SlotDefinition, bool]]:
+    return [
+        (idx, DEFAULT_SELECTION_PROFILE, slot, False) for idx, slot in enumerate(slots, start=1)
+    ]
 
 
 def apply_slot_env_overrides(
@@ -600,26 +670,77 @@ def apply_slot_env_overrides(
     *,
     env_model_name: str = "LANGCHAIN_MODEL",
     env_slot_prefix: str = "LANGCHAIN_SLOT",
+    positions: list[int] | None = None,
+    profiles: list[str] | None = None,
+    retired_flags: list[bool] | None = None,
 ) -> list[SlotDefinition]:
+    """Apply ``<prefix><n>_PROVIDER/_MODEL`` overrides.
+
+    ``positions`` gives each slot's configured position (default: its list index), so a
+    skipped entry never shifts which slot an override addresses. With ``profiles``, a
+    retired (profile, provider) selection is rejected AFTER overrides, so an override can
+    neither reintroduce a retired provider nor be dropped because its slot was retired.
+    """
     registry = load_model_registry()
+    retired = retired_selection_keys() if profiles is not None else set()
     updated: list[SlotDefinition] = []
-    for idx, slot in enumerate(slots, start=1):
+    for index, slot in enumerate(slots):
+        idx = positions[index] if positions is not None else index + 1
+        profile = profiles[index] if profiles is not None else DEFAULT_SELECTION_PROFILE
+        slot_retired = bool(retired_flags[index]) if retired_flags is not None else False
         provider_override = normalize_provider(os.environ.get(f"{env_slot_prefix}{idx}_PROVIDER"))
         model_override = os.environ.get(f"{env_slot_prefix}{idx}_MODEL")
         if idx == 1:
             model_override = model_override or os.environ.get(env_model_name)
         provider = provider_override or slot.provider
-        model = (model_override or slot.model).strip()
+        if slot_retired and provider_override and not model_override:
+            # A retired slot's model belongs to the retired provider (e.g. ``openai/gpt-5`` on
+            # GitHub Models); a provider-only override takes the reviewed model for the new one.
+            model = (
+                select_model_for_profile(provider=provider, profile=profile, registry=registry)
+                or ""
+            )
+        else:
+            model = (model_override or slot.model).strip()
+        chosen: SlotDefinition | None = SlotDefinition(
+            name=slot.name, provider=provider, model=model
+        )
         if is_model_blocked(provider, model, registry=registry):
             logger.warning("Skipping blocked LLM slot override: %s/%s", provider, model)
             override_requested = provider_override is not None or model_override is not None
-            if override_requested and not is_model_blocked(
-                slot.provider, slot.model, registry=registry
-            ):
-                updated.append(slot)
+            chosen = (
+                slot
+                if override_requested
+                and not slot_retired
+                and not is_model_blocked(slot.provider, slot.model, registry=registry)
+                else None
+            )
+        if chosen is None:
             continue
-        updated.append(SlotDefinition(name=slot.name, provider=provider, model=model))
+        if profiles is not None and (profile, chosen.provider) in retired:
+            logger.warning("Skipping slot for retired selection: %s/%s", profile, chosen.provider)
+            continue
+        if not chosen.provider or not chosen.model:
+            continue
+        updated.append(chosen)
     return updated
+
+
+def _effective_slots(
+    *,
+    github_default_model: str = "",
+    env_model_name: str = "LANGCHAIN_MODEL",
+    env_slot_prefix: str = "LANGCHAIN_SLOT",
+) -> list[SlotDefinition]:
+    positional = _load_positional_slots(github_default_model=github_default_model)
+    return apply_slot_env_overrides(
+        [slot for _p, _prof, slot, _r in positional],
+        env_model_name=env_model_name,
+        env_slot_prefix=env_slot_prefix,
+        positions=[p for p, _prof, _slot, _r in positional],
+        profiles=[prof for _p, prof, _slot, _r in positional],
+        retired_flags=[r for _p, _prof, _slot, r in positional],
+    )
 
 
 def resolve_slots(
@@ -628,9 +749,8 @@ def resolve_slots(
     env_model_name: str = "LANGCHAIN_MODEL",
     env_slot_prefix: str = "LANGCHAIN_SLOT",
 ) -> list[SlotDefinition]:
-    slots = load_slot_config(github_default_model=github_default_model)
-    return apply_slot_env_overrides(
-        slots,
+    return _effective_slots(
+        github_default_model=github_default_model,
         env_model_name=env_model_name,
         env_slot_prefix=env_slot_prefix,
     )
