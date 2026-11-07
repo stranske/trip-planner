@@ -538,9 +538,92 @@ def test_product_probe_report_lists_every_contract_id():
     assert len(rows) == 7
     assert all(row["verdict"] in verifier.CONTRACT_VERDICTS and row["evidence"] for row in rows)
     planner = rows[3]
-    assert planner["verdict"] in {"PARTIAL", "FABRICATED"}
-    assert len(planner["evidence"]["reply_sha256"]) == 2
+    assert planner["verdict"] == "PARTIAL"
+    assert len(set(planner["evidence"]["reply_sha256"])) == 2
     assert all(item["mode"] == "fallback" for item in planner["evidence"]["runtimes"])
+
+
+@pytest.mark.parametrize(
+    ("first_reply", "second_reply", "mode", "expected"),
+    [
+        ("Static canned planner reply.", "Static canned planner reply.", "model", "FABRICATED"),
+        (
+            "Understood, canceling this trip now.",
+            "Could you clarify what you need?",
+            "fallback",
+            "PARTIAL",
+        ),
+        (
+            "You asked: Cancel my trip. I no longer want to travel.",
+            "Unrecognized input.",
+            "model",
+            "PARTIAL",
+        ),
+        (
+            "Understood, canceling this trip and holding bookings.",
+            "Could you clarify your travel request?",
+            "model",
+            "WORKS",
+        ),
+        (
+            "I cannot help with cancelling this trip",
+            "Could you clarify your travel request?",
+            "model",
+            "PARTIAL",
+        ),
+        (
+            "Understood, cancelling this trip and holding bookings.",
+            "Could you clarify your travel request?",
+            "model",
+            "WORKS",
+        ),
+        (
+            "I cannot issue a refund, but I am cancelling your trip.",
+            "Could you clarify your travel request?",
+            "model",
+            "WORKS",
+        ),
+        (
+            "I cannot issue a refund but I am cancelling your trip.",
+            "Could you clarify your travel request?",
+            "model",
+            "WORKS",
+        ),
+    ],
+    ids=[
+        "byte-identical",
+        "fallback-mode",
+        "echoed-request",
+        "cancellation-acknowledged",
+        "cancellation-refused",
+        "cancelling-acknowledged",
+        "refund-refused-cancellation-acknowledged",
+        "refund-refused-cancellation-acknowledged-without-comma",
+    ],
+)
+def test_product_probe_planner_cancellation_classifications(
+    monkeypatch, first_reply, second_reply, mode, expected
+):
+    from fastapi.testclient import TestClient
+    import httpx
+
+    replies = iter((first_reply, second_reply))
+    original = TestClient.request
+
+    def turn_override(self, method, url, **kwargs):
+        response = original(self, method, url, **kwargs)
+        if method.upper() == "POST" and str(url).endswith("/turns"):
+            payload = response.json()
+            payload["messages"].append({"role": "assistant", "content": next(replies)})
+            payload["runtime"] = {**payload.get("runtime", {}), "mode": mode}
+            return httpx.Response(response.status_code, json=payload)
+        return response
+
+    monkeypatch.setattr(TestClient, "request", turn_override)
+    rows = verifier.run_contract_report()
+    planner = next(row for row in rows if row["id"] == "TP4")
+    assert planner["verdict"] == expected
+    assert len(planner["evidence"]["reply_sha256"]) == 2
 
 
 def test_contract_report_survives_negative_journey_and_keeps_exit_zero(

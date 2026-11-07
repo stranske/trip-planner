@@ -1346,9 +1346,17 @@ def _probe_planner(client: TestClient, evidence: dict[str, Any]) -> str:
         return "FABRICATED"
     if any(runtime.get("mode") == "fallback" for runtime in runtimes):
         return "PARTIAL"
+    # Cancellation language in a refusal does not acknowledge the request.
+    if re.search(
+        r"\b(?:cannot|can['’]t|unable to|won['’]t|will not|refuse to)\b"
+        r"(?:(?!\b(?:but|however|yet)\b)[^,;.!?\n])*\bcancel\w*",
+        replies[0],
+        re.IGNORECASE,
+    ):
+        return "PARTIAL"
     # An echoed user message is not an acknowledgement of cancellation.
     acknowledged = re.search(
-        r"(?:cancel(?:led|ed|ling)|won.t (?:book|plan)|stop(?:ped)? planning)",
+        r"(?:cancel(?:led|ed|l?ing)|won.t (?:book|plan)|stop(?:ped)? planning)",
         replies[0],
         re.IGNORECASE,
     )
