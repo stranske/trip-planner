@@ -565,8 +565,27 @@ def test_product_probe_report_lists_every_contract_id():
             "model",
             "WORKS",
         ),
+        (
+            "I cannot help with cancelling this trip",
+            "Could you clarify your travel request?",
+            "model",
+            "PARTIAL",
+        ),
+        (
+            "Understood, cancelling this trip and holding bookings.",
+            "Could you clarify your travel request?",
+            "model",
+            "WORKS",
+        ),
     ],
-    ids=["byte-identical", "fallback-mode", "echoed-request", "cancellation-acknowledged"],
+    ids=[
+        "byte-identical",
+        "fallback-mode",
+        "echoed-request",
+        "cancellation-acknowledged",
+        "cancellation-refused",
+        "cancelling-acknowledged",
+    ],
 )
 def test_product_probe_planner_cancellation_classifications(
     monkeypatch, first_reply, second_reply, mode, expected
