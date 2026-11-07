@@ -1348,7 +1348,7 @@ def _probe_planner(client: TestClient, evidence: dict[str, Any]) -> str:
         return "PARTIAL"
     # An echoed user message is not an acknowledgement of cancellation.
     acknowledged = re.search(
-        r"(?:cancel(?:led|ed|ling)|won.t (?:book|plan)|stop(?:ped)? planning)",
+        r"(?:cancel(?:led|ed|l?ing)|won.t (?:book|plan)|stop(?:ped)? planning)",
         replies[0],
         re.IGNORECASE,
     )
