@@ -1349,7 +1349,7 @@ def _probe_planner(client: TestClient, evidence: dict[str, Any]) -> str:
     # Cancellation language in a refusal does not acknowledge the request.
     if re.search(
         r"\b(?:cannot|can['’]t|unable to|won['’]t|will not|refuse to)\b"
-        r"[^.!?\n]*\bcancel\w*",
+        r"(?:(?!\b(?:but|however|yet)\b)[^,;.!?\n])*\bcancel\w*",
         replies[0],
         re.IGNORECASE,
     ):

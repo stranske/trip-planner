@@ -577,6 +577,18 @@ def test_product_probe_report_lists_every_contract_id():
             "model",
             "WORKS",
         ),
+        (
+            "I cannot issue a refund, but I am cancelling your trip.",
+            "Could you clarify your travel request?",
+            "model",
+            "WORKS",
+        ),
+        (
+            "I cannot issue a refund but I am cancelling your trip.",
+            "Could you clarify your travel request?",
+            "model",
+            "WORKS",
+        ),
     ],
     ids=[
         "byte-identical",
@@ -585,6 +597,8 @@ def test_product_probe_report_lists_every_contract_id():
         "cancellation-acknowledged",
         "cancellation-refused",
         "cancelling-acknowledged",
+        "refund-refused-cancellation-acknowledged",
+        "refund-refused-cancellation-acknowledged-without-comma",
     ],
 )
 def test_product_probe_planner_cancellation_classifications(
