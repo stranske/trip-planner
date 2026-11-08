@@ -857,3 +857,128 @@ Full-suite acceptance remains **unverified**. Run the current source on supporte
 Python in an environment permitting local socket operations, and record the
 actual exit status and terminal summary. Retain all earlier focused,
 deliberate-break, regenerated-gate, and controller evidence above.
+
+## Issue #2012 collection-hook audit and task reconciliation — 2026-11-08
+
+Reviewed the recent commits through `b171d4a9`, including the collection-hook
+removal, Jinja2 dependency declaration, and whole-suite collection guard.
+The isolated execution and failure-diagnosis tasks have recorded evidence and
+can be checked in both copies of the PR checklist. The unrestricted exit-0
+acceptance criterion remains unchecked.
+
+### Clean, reviewer-accessible source and unrestricted attempt
+
+Created `/tmp/trip-planner-issue-2012-round5` with
+`git clone --shared --no-hardlinks . /tmp/trip-planner-issue-2012-round5`.
+The checkout was clean at tested commit
+[`b171d4a9757f7d91b5b51946229227d7a1fbf8af`](https://github.com/stranske/trip-planner/commit/b171d4a9757f7d91b5b51946229227d7a1fbf8af).
+Both merged-PR ancestry checks exited **0**:
+
+```sh
+git merge-base --is-ancestor 29c6aa01064f9eb3cbf15debd32cac3327ec43b8 HEAD
+git merge-base --is-ancestor 4c6ff3e81b412db4039f7d1a48fa95d0aecff753 HEAD
+```
+
+Selected **CPython 3.14.10**, GCC **15.2.0**, executable
+`/opt/hostedtoolcache/Python/3.14.10/x64/bin/python`, pytest **9.2.0**.
+This matches `.python-version` (**3.14**) and satisfies `pyproject.toml`
+(**>=3.13,<3.15**). `PYTEST_ADDOPTS` and `TPP_REPO_PATH` were unset.
+The exact Makefile:test equivalent was **`python -m pytest`**, without
+exclusions or a marker filter. The watchdog invocation was:
+
+```sh
+timeout --signal=INT --kill-after=5s 30s python -m pytest > /tmp/issue-2012-round5-full.log 2>&1
+```
+
+Observed wrapper exit: **137**. The terminal output ended with:
+
+```text
+collected 2871 items / 2 skipped
+
+tests/app/test_auth.py
+```
+
+**No tests finished and no pytest result summary was emitted.** SIGINT after
+30 seconds did not stop the blocked process; the watchdog killed it five
+seconds later. This is a terminated run, not a successful suite or an assertion
+failure.
+
+The first blocked node was again
+`tests/app/test_auth.py::test_signup_creates_account_sets_cookie_and_restores_session`.
+The separate diagnostic command exited **137**:
+
+```sh
+timeout --signal=INT --kill-after=5s 20s python -m pytest tests/app/test_auth.py::test_signup_creates_account_sets_cookie_and_restores_session -vv -o faulthandler_timeout=10 > /tmp/issue-2012-round5-auth.log 2>&1
+```
+
+Its traceback showed the same fixture-setup wait:
+
+```text
+Timeout (0:00:10)!
+Thread [asyncio-portal-]:
+  File ".../python3.14/selectors.py", line 452 in select
+  File ".../python3.14/asyncio/base_events.py", line 2026 in _run_once
+Thread [python]:
+  File ".../python3.14/threading.py", line 369 in wait
+  File ".../python3.14/concurrent/futures/_base.py", line 449 in result
+  File ".../site-packages/anyio/_backends/_asyncio.py", line 2715 in run_sync_from_thread
+  File ".../site-packages/starlette/testclient.py", line 696 in __enter__
+  File "/tmp/trip-planner-issue-2012-round5/tests/app/test_auth.py", line 21 in client
+```
+
+An independent standard-library socketpair write again raised
+`PermissionError: [Errno 1] Operation not permitted` before repository imports.
+Classification remains **environmental blocker, high confidence**, rather than
+a demonstrated changed-pin regression. The focused pin tests pass below;
+later full-suite tests remain unverified.
+
+### Close the shared-filter blind spot
+
+The previous collection comparison could miss a hook that silently removed
+the same nodes from both default and explicit-file collection. Added an audit
+plugin, loaded only by the guard's collection subprocesses, that compares nodes
+before and after collection-modification hooks and fails with the removed
+nodes. Parametrized subprocess regressions verify unchanged collection,
+reordering, and silent removal of one parametrized case.
+
+In the isolated checkout, temporarily added a hook removing the first
+authentication node from both collections. The guard failed, exit **1**,
+with `Collection hooks removed regressions` and the omitted node's name.
+Restored `tests/conftest.py` byte-for-byte before validation. This change
+protects unrestricted collection; it does not resolve the socket restriction.
+
+Focused validation of the changed guard and existing renderer/pin tests exited
+**0** in the isolated checkout:
+
+```sh
+python -m pytest tests/test_pytest_collection.py tests/test_pytest_collection_audit.py tests/test_build_html.py tests/scripts/test_cross_repo_dev_pins.py tests/scripts/test_cross_repo_smoke_workflow.py -m 'not slow' -q -rs
+```
+
+```text
+82 passed, 3 skipped, 14 warnings in 18.79s
+```
+
+The skips require the live producer checkout (two) and actionlint (one).
+The clean full-suite attempt above predates this audit change and remains
+separate from these focused results.
+
+Black **26.10.1** formatted the changed Python files. Serial checks populated a
+writable cache without socket operations; the required whole-tree gate exited
+**0**, reporting **525 files would be left unchanged**:
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue-2012-round5-black-cache black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+Ruff on the three changed Python files and `git diff --check` also exited **0**.
+The workspace's `.git` directory is read-only, so the changes are committed in
+the isolated checkout and exported to `/tmp/issue-2012-round5-commits.patch`.
+The committed files match the workspace byte-for-byte.
+
+GitHub rejected the PR-body reconciliation, `needs-human` label, and blocker
+comment with `MCP tool call requires approval, but approval policy is never`.
+None of those remote writes was applied. The prepared reconciled body is
+`/tmp/issue-2012-round5-pr-body.md`; only the duplicated execution and diagnosis
+checkboxes change. Full-suite acceptance stays **unverified** until the current
+source exits **0** under `python -m pytest` on supported Python with local
+socket operations permitted.

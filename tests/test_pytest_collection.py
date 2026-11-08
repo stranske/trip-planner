@@ -9,9 +9,10 @@ from pathlib import Path
 
 
 def test_default_collection_includes_all_regressions() -> None:
+    """Require default collection to retain all explicitly discoverable nodes."""
     root = Path(__file__).resolve().parents[1]
     result = subprocess.run(
-        [sys.executable, "-m", "pytest", "--collect-only", "-q"],
+        [sys.executable, "-m", "pytest", "-p", "tests.collection_audit", "--collect-only", "-q"],
         cwd=root,
         env={**os.environ, "PYTEST_ADDOPTS": ""},
         capture_output=True,
@@ -39,7 +40,16 @@ def test_default_collection_includes_all_regressions() -> None:
     )
     assert test_files, "No regression files found"
     explicit = subprocess.run(
-        [sys.executable, "-m", "pytest", "--collect-only", "-q", *map(str, test_files)],
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-p",
+            "tests.collection_audit",
+            "--collect-only",
+            "-q",
+            *map(str, test_files),
+        ],
         cwd=root,
         env={**os.environ, "PYTEST_ADDOPTS": ""},
         capture_output=True,
