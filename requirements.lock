@@ -111,6 +111,7 @@ orjson==3.11.9 ; platform_python_implementation != 'PyPy'
     # via langsmith
 packaging==26.2
     # via
+    #   trip-planner (pyproject.toml)
     #   black
     #   langchain-core
     #   langsmith
