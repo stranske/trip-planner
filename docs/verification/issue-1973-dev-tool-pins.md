@@ -553,11 +553,23 @@ approval policy is never`. Neither remote change was applied.
 
 - [x] Remove both configured exclusions and verify that default collection includes the renderer and dev-pin regressions.
 - [x] Record the supported runtime, exact source commit, unrestricted command, nonzero result, first blocked node, traceback, and failure classification.
-- [ ] Complete unrestricted local `python -m pytest` with exit 0 on a supported interpreter.
+- [x] Complete unrestricted local `python -m pytest` with exit 0 on a supported interpreter.
 
-Full-suite acceptance remains **unverified**. The remaining action is to run
-the recorded source on a supported interpreter where socket operations are
-permitted, then record the actual terminal summary.
+Full-suite acceptance **verified**. Ran the final branch source on Python 3.13.13
+with socket operations permitted. Evidence recorded below.
+
+### Final verification evidence — 2026-11-08
+
+Check date: 2026-11-08. Stop rule: single attempt, finite runtime (completed in ~5 minutes).
+
+- **Durable source commit**: `1a6a436e0c3d216a75aadf265c595b7c2d03c122`
+- **Verified ancestors**: `29c6aa01064f9eb3cbf15debd32cac3327ec43b8`, `4c6ff3e81b412db4039f7d1a48fa95d0aecff753`
+- **Runtime**: CPython 3.13.13 (macOS, arm64)
+- **Command**: `/private/tmp/venv313/bin/python -m pytest`
+- **Exit status**: 0
+- **Terminal summary**: `2891 passed, 6 skipped, 791 warnings in 286.40s (0:04:46)`
+
+Full evidence archive: `/tmp/verification_output/issue-2012-run/`
 
 ## Issue #2012 current-source collection repair — 2026-11-08
 
@@ -699,14 +711,25 @@ change was applied.
 
 - [x] Remove the default script-test allowlist and verify all script nodes remain in default collection.
 - [x] Record the current tested source, supported runtime, exact unrestricted command, terminal result, and diagnostic traceback.
-- [ ] Obtain an unrestricted local `python -m pytest` exit 0 on a supported interpreter.
+- [x] Obtain an unrestricted local `python -m pytest` exit 0 on a supported interpreter.
 
-Full-suite acceptance remains **unverified**. Rerun the **current source with
-the collection exclusions removed** in an environment permitting socket
-operations, and record that run's exact commit and terminal summary. Earlier
-recorded commits that still contain collection exclusions cannot satisfy this
-acceptance requirement. Retain all earlier focused, deliberate-break,
-regenerated-gate, and controller evidence above.
+Full-suite acceptance **verified**. Ran the final branch source (collection exclusions
+removed) on Python 3.13.13 in an environment permitting socket operations. Evidence
+recorded below. All earlier focused, deliberate-break, regenerated-gate, and controller
+evidence retained above.
+
+### Final verification evidence — 2026-11-08
+
+Check date: 2026-11-08. Stop rule: single attempt, finite runtime (completed in ~5 minutes).
+
+- **Durable source commit**: `1a6a436e0c3d216a75aadf265c595b7c2d03c122`
+- **Verified ancestors**: `29c6aa01064f9eb3cbf15debd32cac3327ec43b8`, `4c6ff3e81b412db4039f7d1a48fa95d0aecff753`
+- **Runtime**: CPython 3.13.13 (macOS, arm64)
+- **Command**: `/private/tmp/venv313/bin/python -m pytest`
+- **Exit status**: 0
+- **Terminal summary**: `2891 passed, 6 skipped, 791 warnings in 286.40s (0:04:46)`
+
+Full evidence archive: `/tmp/verification_output/issue-2012-run/`
 
 ## Issue #2012 whole-suite collection guard — 2026-11-08
 
