@@ -32,21 +32,39 @@ def test_socket_probe_allows_available_runtime(probe_sockets: tuple[MagicMock, M
     receiver.__exit__.assert_called_once()
 
 
-@pytest.mark.parametrize("stage", ["settimeout", "sendall", "recv", "empty_read"])
+@pytest.mark.parametrize(
+    ("endpoint", "stage", "operation", "error"),
+    [
+        ("sender", "settimeout", "set sender timeout", PermissionError(1, "denied")),
+        ("receiver", "settimeout", "set receiver timeout", PermissionError(1, "denied")),
+        ("sender", "sendall", "send wakeup byte", PermissionError(1, "denied")),
+        ("receiver", "recv", "receive wakeup byte", PermissionError(1, "denied")),
+        ("sender", "sendall", "send wakeup byte", TimeoutError("timed out")),
+        ("receiver", "recv", "receive wakeup byte", TimeoutError("timed out")),
+        ("receiver", "empty_read", "receive wakeup byte", None),
+    ],
+)
 def test_socket_probe_exits_nonzero_and_closes_sockets(
-    probe_sockets: tuple[MagicMock, MagicMock], stage: str
+    probe_sockets: tuple[MagicMock, MagicMock],
+    endpoint: str,
+    stage: str,
+    operation: str,
+    error: OSError | None,
 ) -> None:
     sender, receiver = probe_sockets
     if stage == "empty_read":
         receiver.recv.return_value = b""
     else:
-        target = receiver if stage == "recv" else sender
-        getattr(target, stage).side_effect = PermissionError(1, "Operation not permitted")
+        target = receiver if endpoint == "receiver" else sender
+        getattr(target, stage).side_effect = error
 
     with pytest.raises(pytest.exit.Exception, match="local socketpair I/O failed") as raised:
         runtime_requirements.require_testclient_socket_io()
 
     assert raised.value.returncode == pytest.ExitCode.TESTS_FAILED
+    assert f"during {operation}" in str(raised.value)
+    if error is not None:
+        assert type(error).__name__ in str(raised.value)
     assert "not a passing test run" in str(raised.value)
     sender.__exit__.assert_called_once()
     receiver.__exit__.assert_called_once()
@@ -62,6 +80,7 @@ def test_socket_creation_failure_is_reported(monkeypatch: pytest.MonkeyPatch) ->
         runtime_requirements.require_testclient_socket_io()
 
     assert raised.value.returncode == pytest.ExitCode.TESTS_FAILED
+    assert "during create socketpair (PermissionError:" in str(raised.value)
 
 
 @pytest.mark.parametrize("denied", [False, True])

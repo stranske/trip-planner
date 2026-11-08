@@ -1100,3 +1100,89 @@ Full-suite acceptance remains **unverified**. The required next step is to run
 the current source in an environment permitting local socket operations and
 record an actual unrestricted exit **0**. All earlier producer, deliberate-break,
 regenerated-gate, and controller evidence remains above.
+
+## Issue #2012 operation-specific runtime evidence — 2026-11-08
+
+Created `/tmp/trip-planner-issue-2012-round7` with
+`git clone --shared --no-hardlinks . /tmp/trip-planner-issue-2012-round7`.
+The initial clean checkout at `0f501cb1ab9fa5d087f0ee6fd76018a86faacead`
+ran unrestricted `python -m pytest`, exited **1**, and reported the existing
+socketpair precondition failure before any test body completed.
+
+Improved that diagnostic to name the failing operation and exception class.
+Expanded regressions cover receiver timeout setup and send/receive timeouts,
+alongside the existing denial, empty-read, cleanup, and fixture checks.
+The source is committed in the isolated checkout at
+**`17b68e66a48f0357d7103afc37782413a303dd4a`**. Its working tree was clean
+before the final run. Both ancestry checks exited **0** on this commit:
+
+```sh
+git merge-base --is-ancestor 29c6aa01064f9eb3cbf15debd32cac3327ec43b8 HEAD
+git merge-base --is-ancestor 4c6ff3e81b412db4039f7d1a48fa95d0aecff753 HEAD
+```
+
+Selected **CPython 3.14.10**, GCC **15.2.0**, executable
+`/opt/hostedtoolcache/Python/3.14.10/x64/bin/python`, pytest **9.2.0**.
+This matches `.python-version` (**3.14**) and `pyproject.toml`
+(**>=3.13,<3.15**). `PYTEST_ADDOPTS` and `TPP_REPO_PATH` were unset.
+The exact unrestricted Makefile:test equivalent, without a watchdog or filters:
+
+```sh
+python -m pytest > /tmp/issue-2012-round7-committed-full.log 2>&1
+```
+
+Exit **1**; terminal output excerpt:
+
+```text
+collected 2885 items / 2 skipped
+tests/app/test_auth.py
+======================= 2 skipped, 14 warnings in 2.62s ========================
+! _pytest.outcomes.Exit: TestClient runtime unavailable: local socketpair I/O failed during send wakeup byte (PermissionError: [Errno 1] Operation not permitted). Run the unchanged suite in an environment permitting local socket operations. This is an environment failure, not a passing test run. !
+```
+
+No test bodies completed. The first selected node remains
+`tests/app/test_auth.py::test_signup_creates_account_sets_cookie_and_restores_session`,
+blocked during `require_app_test_runtime` setup. A separate direct invocation
+of the helper exited **1** and exposed the underlying traceback:
+
+```text
+File "/tmp/trip-planner-issue-2012-round7/tests/runtime_requirements.py", line 19, in require_testclient_socket_io
+  sender.sendall(b"x")
+PermissionError: [Errno 1] Operation not permitted
+```
+
+A standalone standard-library socketpair write also failed with the same error
+before repository imports. Classification: **environmental blocker, high
+confidence**, with no evidence of a changed-pin regression. The diagnostic
+change does not resolve the restriction; later tests remain unverified.
+
+Focused validation in the isolated checkout exited **0**:
+
+```sh
+python -m pytest tests/test_runtime_requirements.py tests/test_pytest_collection.py tests/test_pytest_collection_audit.py -m 'not slow' -q
+```
+
+Terminal summary: **15 passed, 14 warnings in 22.22s**. Black formatted both
+changed Python files. After serial Black checks populated a writable cache,
+the required gate exited **0**, reporting **527 files would be left unchanged**:
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue-2012-round7-black-cache black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+Ruff on both changed files and `git diff --check` passed. Source and evidence
+commits reside in the isolated checkout because the workspace `.git` is
+read-only; the export is `/tmp/issue-2012-round7-commits.patch`. Changed files
+match the workspace byte-for-byte. PR #2013 readback was **open, draft=false**.
+Both the `needs-human` label and blocker comment were rejected with
+`MCP tool call requires approval, but approval policy is never`; neither was
+applied remotely.
+
+- [x] Execute unrestricted `python -m pytest` on an isolated checkout containing merged #2005 and #2011 with a supported interpreter.
+- [x] Verify the operation-specific diagnostic and record the committed-source full-suite failure.
+- [ ] Obtain unrestricted local `python -m pytest` exit 0 on supported Python.
+
+The exit-0 acceptance criterion remains unmet. Run the current source in an
+environment permitting local socket operations and record the resulting full
+terminal summary. Further collection or diagnostic changes cannot establish
+that acceptance while this runtime restriction remains.
