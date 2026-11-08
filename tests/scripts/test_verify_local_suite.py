@@ -93,6 +93,31 @@ def test_pass_and_existing_evidence_is_not_overwritten(repository: Path, tmp_pat
     assert (output / "result.json").read_bytes() == evidence
 
 
+def test_relative_virtualenv_interpreter_survives_isolated_checkout(
+    repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    environment = tmp_path / "local environment"
+    subprocess.run(
+        [sys.executable, "-m", "venv", "--without-pip", "--system-site-packages", str(environment)],
+        check=True,
+    )
+    interpreter = environment / "bin" / "python"
+    monkeypatch.chdir(tmp_path)
+    output = tmp_path / "relative interpreter evidence"
+
+    assert verify(repository, output, str(interpreter.relative_to(tmp_path))) == 1
+
+    record = json.loads((output / "result.json").read_text(encoding="utf-8"))
+    # Preserve the venv executable path rather than dereferencing its symlink;
+    # using the base interpreter would select a different installed environment.
+    assert record["runtime"]["executable"] == str(interpreter)
+    assert record["command"] == [str(interpreter), "-m", "pytest"]
+    assert record["exit_status"] == 1
+    log = (output / "pytest.log").read_text(encoding="utf-8")
+    assert "retained failure traceback" in log
+    assert "1 failed, 1 passed" in log
+
+
 def test_inherited_plugin_cannot_deselect_failing_tests(
     repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

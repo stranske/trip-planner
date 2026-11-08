@@ -22,6 +22,10 @@ from packaging.version import Version
 def verify(source: Path, output: Path, interpreter: str, ancestors: tuple[str, ...] = ()) -> int:
     """Record an exact committed-tree run; return pytest's failure status unchanged."""
     source, output = source.resolve(), output.resolve()
+    # Anchor explicit interpreter paths before running from the cloned checkout.
+    # Do not resolve symlinks: venv executables must retain their environment.
+    if os.path.dirname(interpreter):
+        interpreter = os.path.abspath(interpreter)
     # Inherited pytest plugins can remove collected tests just like addopts filters.
     # Keep plugins declared by the repository and installed entry points available.
     env = {

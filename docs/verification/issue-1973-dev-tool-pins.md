@@ -1367,3 +1367,93 @@ matching files remain in the workspace, and the commit export is
 
 The remaining acceptance requires a runtime permitting local socket operations.
 Additional diagnostic changes cannot supply the missing exit-0 evidence here.
+
+## Issue #2012 relative-interpreter execution fix — 2026-11-08
+
+Rechecked the first unchecked execution task in a fresh isolated checkout. The
+baseline run on `d0a5214a7c3175d8833948501364553424dd7216` exited **1** with the
+same socketpair restriction before the first test body. This establishes an
+environmental blocker rather than a reason to change the planner/producer pins.
+
+Found a separate execution bug in `scripts/verify_local_suite.py`: passing a
+relative virtual-environment executable to `--python` looked for that executable
+inside the new clone, where the local environment is absent. A real-venv regression
+failed before the fix with `FileNotFoundError: 'local environment/bin/python'`.
+Explicit interpreter paths are now made absolute before changing the subprocess
+working directory, without dereferencing venv symlinks. The regression verifies
+that the selected venv executes both committed tests, retains the deliberate
+failure, and records its own executable path. It uses no dependency installation.
+This corrects execution setup; it does not resolve the runner's socket restriction.
+
+### Full suite on committed source
+
+Tested source commit: **`0eca47878bfda800b1c5378377390604b98e9241`**, committed in
+`/tmp/issue-2012-round10-baseline/checkout`, with a clean working tree before
+verification. The verifier confirmed ancestry of merged #2005
+(`29c6aa01064f9eb3cbf15debd32cac3327ec43b8`) and #2011
+(`4c6ff3e81b412db4039f7d1a48fa95d0aecff753`). Selected **CPython 3.14.10**,
+executable `/opt/hostedtoolcache/Python/3.14.10/x64/bin/python`, matches
+`.python-version` **3.14** and satisfies `requires-python = ">=3.13,<3.15"`;
+pytest is **9.2.0**. From the fresh isolated checkout
+`/tmp/issue-2012-round10-full/checkout`, the exact Makefile:test equivalent ran
+without exclusions or a watchdog:
+
+```sh
+/opt/hostedtoolcache/Python/3.14.10/x64/bin/python -m pytest
+```
+
+Exit **1**; terminal result:
+
+```text
+collected 2892 items / 2 skipped
+tests/app/test_auth.py
+======================= 2 skipped, 14 warnings in 7.59s ========================
+! _pytest.outcomes.Exit: TestClient runtime unavailable: local socketpair I/O failed during send wakeup byte (PermissionError: [Errno 1] Operation not permitted). Run the unchanged suite in an environment permitting local socket operations. This is an environment failure, not a passing test run. !
+```
+
+First selected node:
+`tests/app/test_auth.py::test_signup_creates_account_sets_cookie_and_restores_session`,
+blocked in `require_app_test_runtime` before any test body. A direct call to the
+unchanged runtime helper reproduced the underlying traceback:
+
+```text
+File "tests/runtime_requirements.py", line 19, in require_testclient_socket_io
+  sender.sendall(b"x")
+PermissionError: [Errno 1] Operation not permitted
+```
+
+Classification: **environmental blocker, high confidence**, with no evidence of a
+changed-pin regression. Later tests remain unverified. Complete artifacts are
+`/tmp/issue-2012-round10-full/result.json` and `pytest.log` in that directory.
+
+Focused validation of the source fix and existing execution guards:
+
+```sh
+python -m pytest tests/scripts/test_verify_local_suite.py tests/test_runtime_requirements.py tests/test_pytest_collection.py tests/test_pytest_collection_audit.py -m 'not slow' -q
+```
+
+Exit **0**: **22 passed, 14 warnings in 39.28s**. Black formatted the changed
+Python files. After serial cache preparation to avoid Black's blocked worker
+sockets, the required whole-tree gate exited **0**, reporting **529 files would
+be left unchanged**:
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue-2012-round10-black-cache black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+Ruff on both changed Python files and `git diff --check` passed. Commits reside
+in the isolated checkout because workspace `.git` is read-only; matching files
+remain in the workspace for automation pickup. The export is
+`/tmp/issue-2012-round10-commits.patch`.
+
+PR #2013 readback was **open, draft=false**. GitHub rejected both the requested
+`needs-human` label and blocker comment with `MCP tool call requires approval,
+but approval policy is never`; neither write was applied.
+
+- [x] Execute the unrestricted suite on isolated committed source containing both required merges with a supported interpreter.
+- [x] Reproduce and verify the fix for relative virtual-environment interpreter paths.
+- [ ] Obtain unrestricted local `python -m pytest` exit 0 on supported Python.
+
+The remaining acceptance still requires a runtime permitting local socket
+operations. Earlier focused, deliberate-break, regenerated-gate, and controller
+evidence is retained above.
