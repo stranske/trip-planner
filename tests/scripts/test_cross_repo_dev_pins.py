@@ -289,13 +289,16 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
     else:
         assert result.returncode == 0, diagnostics
         resolved = json.loads(report.read_text(encoding="utf-8"))["install"]
+        expected: dict[str, str | None] = {
+            tool: _exact_pin(projects["planner"][tool][0]) for tool in old_versions
+        }
+        expected.update(
+            {canonicalize_name(name): "0.1.0" for name in project_names.values()}
+        )
         assert {
             canonicalize_name(entry["metadata"]["name"]): entry["metadata"]["version"]
             for entry in resolved
-        } == {
-            **{tool: _exact_pin(projects["planner"][tool][0]) for tool in old_versions},
-            **{canonicalize_name(name): "0.1.0" for name in project_names.values()},
-        }
+        } == expected
 
 
 @pytest.mark.parametrize(
