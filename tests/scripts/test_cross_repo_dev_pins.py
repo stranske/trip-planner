@@ -32,6 +32,21 @@ from packaging.utils import canonicalize_name
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+def _checkout_git_env() -> dict[str, str]:
+    """Use the requested checkout while preserving unrelated Git configuration."""
+    repository_variables = {
+        "GIT_DIR",
+        "GIT_COMMON_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_NAMESPACE",
+        "GIT_SHALLOW_FILE",
+    }
+    return {key: value for key, value in os.environ.items() if key not in repository_variables}
+
+
 def _requirements(pyproject: Path) -> dict[str, list[Requirement]]:
     project = tomllib.loads(pyproject.read_text())["project"]
     entries = list(project.get("dependencies", []))
@@ -185,6 +200,7 @@ def test_live_tpp_checkout_matches_workflow_snapshot() -> None:
         text=True,
         timeout=10,
         check=True,
+        env=_checkout_git_env(),
     ).stdout.strip()
     assert resolved == pinned_ref, (
         f"TPP checkout HEAD {resolved} does not match TPP_PINNED_REF {pinned_ref}. "
@@ -204,10 +220,26 @@ def test_live_tpp_checkout_matches_workflow_snapshot() -> None:
 
 
 @pytest.mark.parametrize("mismatch", [None, "head", "runtime", "dev"])
+@pytest.mark.parametrize("inherit_git_locations", [False, True])
 def test_live_snapshot_guard_rejects_unverified_producer_metadata(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mismatch: str | None
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mismatch: str | None,
+    inherit_git_locations: bool,
 ) -> None:
     """Matching dev pins alone cannot establish that the pinned source was tested."""
+    if inherit_git_locations:
+        for key, value in {
+            "GIT_DIR": str(tmp_path / "outer.git"),
+            "GIT_COMMON_DIR": str(tmp_path / "common.git"),
+            "GIT_WORK_TREE": str(tmp_path / "outer"),
+            "GIT_INDEX_FILE": str(tmp_path / "outer.index"),
+            "GIT_OBJECT_DIRECTORY": str(tmp_path / "objects"),
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(tmp_path / "alternates"),
+            "GIT_NAMESPACE": "outer",
+            "GIT_SHALLOW_FILE": str(tmp_path / "outer.shallow"),
+        }.items():
+            monkeypatch.setenv(key, value)
     checkout = tmp_path / "tpp"
     checkout.mkdir()
     pyproject = checkout / "pyproject.toml"
@@ -232,9 +264,17 @@ def test_live_snapshot_guard_rejects_unverified_producer_metadata(
             "Producer snapshot",
         ],
     ):
-        subprocess.run(["git", "-C", str(checkout), *command], check=True, timeout=10)
+        subprocess.run(
+            ["git", "-C", str(checkout), *command],
+            check=True,
+            timeout=10,
+            env=_checkout_git_env(),
+        )
     pinned_ref = subprocess.check_output(
-        ["git", "-C", str(checkout), "rev-parse", "HEAD"], text=True, timeout=10
+        ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+        text=True,
+        timeout=10,
+        env=_checkout_git_env(),
     ).strip()
     workflow_directory = tmp_path / ".github" / "workflows"
     workflow_directory.mkdir(parents=True)

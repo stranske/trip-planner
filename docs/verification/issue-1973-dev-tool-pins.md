@@ -2,50 +2,51 @@
 
 ## Latest keepalive verification
 
-This run adds `test_live_tpp_checkout_matches_workflow_snapshot` so a local live
-verification rejects a checkout whose HEAD differs from `TPP_PINNED_REF`, even
-when its tool pins happen to match. It also compares both runtime and dev
-dependencies with the reviewed snapshot. Four regression cases use temporary Git
-repositories to verify matching metadata, the wrong HEAD, runtime drift, and dev drift.
+Reviewed recent commits through `5e041d77` and reconciled PR #2005's body.
+The source fix, regression test, and deliberate-break/revert are already checked;
+no additional acceptance checkbox is justified by the current evidence.
+
+This round fixes inherited Git repository-location variables in the local
+verification harness. The live checkout HEAD guard and the temporary repository's
+init/add/commit/HEAD commands now use a checkout-local environment while retaining
+unrelated environment variables and Git configuration. Four additional cases run
+the existing matching-HEAD, wrong-HEAD, runtime-drift, and dev-drift checks with
+inherited Git locations pointing outside the intended checkout. The new matching
+case failed before the fix with a Git repository error and passes afterward.
 
 Current results supersede earlier environment-specific validation claims below:
 
-- Focused cross-repo tests: **69 passed, 2 skipped** with
-  `python -m pytest tests/scripts/test_cross_repo_dev_pins.py tests/scripts/test_cross_repo_smoke_workflow.py -q -m 'not slow'`.
-  The live checks skip because this workspace has no sibling TPP checkout.
-- The connected GitHub tool fetched the producer's `pyproject.toml` at
-  `b56d92b389736c70370aa9134f379ac8cd1f3ad1`; a local comparison confirmed that
-  both snapshot dependency sections match that source. This is metadata evidence,
-  not a live checkout or installation result.
-- Ruff and `git diff --check` pass. Black formatted the changed Python file.
-  The required repository-wide Black check initially failed with a sandbox
-  `PermissionError` when starting its process pool; with `BLACK_NUM_WORKERS=1`,
-  it hung waiting for thread communication and was interrupted. Running genuine
-  single-file Black checks serially verified all 520 files and populated a cache
-  in `/tmp/issue-1973-black-cache`. The required command then passed with
-  `BLACK_CACHE_DIR` pointing to that cache: **520 files would be left unchanged**.
-- The requested commit was attempted after formatting passed. `git add` failed
-  creating `.git/index.lock` because `.git` is mounted read-only. Both changes
-  remain unstaged and uncommitted; existing session log files were left untouched.
+- `python -m pytest tests/scripts/test_cross_repo_dev_pins.py tests/scripts/test_cross_repo_smoke_workflow.py -q -m 'not slow'`:
+  **73 passed, 2 skipped**. The live checks skip because no sibling TPP checkout
+  is available; temporary-repository guard checks run successfully.
 - `python -m pytest -q -m 'not slow' -x -o faulthandler_timeout=20` hangs entering
   the first Starlette TestClient fixture (`tests/app/test_auth.py:21`). The timeout
-  trace shows the main thread waiting on the AnyIO portal. The run was interrupted;
-  a passing full suite is not established here.
-- `gh run view 41956043710 --repo stranske/trip-planner` fails to connect to
-  `api.github.com`. The connected GitHub tools independently confirm that this
-  run's `Cross-Repo Smoke / cross-repo-full-product` job failed.
-- Live GitHub reads still show #1972 closed without merging. Replacement #2006
-  is open and ready at `4ea6a28d050bbcf2233b725de13ade495f132002`; its named job
-  in run `42449207902` failed installing TPP dependencies. Source-fix #2005
-  remains open and ready at `c966a595fcdd5e33435e4f3ea59bad83d3e25623`.
-- Issue #1973's comments contain no subsequent sync-core classification.
+  trace shows the main thread waiting on the AnyIO portal; the run was interrupted.
+  A passing full suite is not established here.
+- Ruff and `git diff --check` pass. Black formatted the changed Python file.
+- The required repository-wide Black check passes: **520 files would be left
+  unchanged**. The sandbox prevents Black's process pool from starting, so genuine
+  single-file Black CLI checks populated `/tmp/issue-1973-black-cache` first;
+  the aggregate command then passed using that writable cache.
+- After formatting passed, the requested commit was attempted. `git add` failed
+  creating `.git/index.lock` because `.git` is mounted read-only. The two changed
+  files remain unstaged and uncommitted; existing session logs were left untouched.
+- `gh run view 41956043710 --repo stranske/trip-planner` cannot connect to
+  `api.github.com`. Connected GitHub reads confirm
+  the Evidence run `41956043710` concluded with failure. PR #1972 remains closed;
+  replacement #2006 remains open and ready at
+  `4ea6a28d050bbcf2233b725de13ade495f132002`. Its named cross-repo job in run
+  `42449207902` failed at TPP dependency installation.
+- Issue #1973 still has no subsequent sync-core classification. PR #2005 remains
+  open and ready at `5e041d77df5d17f1e4139b7882841a5ec298d470`.
+- Attempts to update the PR reconciliation note, add `needs-human`, and post the
+  blocker comment were rejected because GitHub writes require approval and this
+  run's approval policy is `never`. No GitHub metadata was changed.
 
 Both remaining acceptance criteria stay unchecked. The owning producer/controller
-must land the reviewed paired-pin fix, regenerate the sync delivery, and collect a
-passing named job on its current head plus a new sync-core classification. Do not
-manually edit generated PR #1972. The requested `needs-human` label and blocker
-comment could not be added because GitHub writes require tool approval and this
-run forbids approval.
+must land the paired-pin fix, regenerate the sync delivery, and collect a passing
+named job on the delivery's current head plus a new sync-core classification.
+Protected workflows and the generated sync PR were left unchanged.
 
 The existing source fix on PR #2005 head `93618b4ddef75a60ef37ea42f51ba05d1c9869aa`
 preserves the paired dev-tool pin update and TPP_PINNED_REF alignment from
