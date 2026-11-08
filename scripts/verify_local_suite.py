@@ -22,10 +22,13 @@ from packaging.version import Version
 def verify(source: Path, output: Path, interpreter: str, ancestors: tuple[str, ...] = ()) -> int:
     """Record an exact committed-tree run; return pytest's failure status unchanged."""
     source, output = source.resolve(), output.resolve()
+    # Inherited pytest plugins can remove collected tests just like addopts filters.
+    # Keep plugins declared by the repository and installed entry points available.
     env = {
         key: value
         for key, value in os.environ.items()
-        if not key.startswith("GIT_") and key not in {"PYTEST_ADDOPTS", "PYTHONPATH"}
+        if not key.startswith("GIT_")
+        and key not in {"PYTEST_ADDOPTS", "PYTEST_PLUGINS", "PYTHONPATH"}
     }
 
     def git(root: Path, *args: str) -> str:

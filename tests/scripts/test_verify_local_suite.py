@@ -93,6 +93,48 @@ def test_pass_and_existing_evidence_is_not_overwritten(repository: Path, tmp_pat
     assert (output / "result.json").read_bytes() == evidence
 
 
+def test_inherited_plugin_cannot_deselect_failing_tests(
+    repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (repository / "external_selection.py").write_text(
+        "def pytest_collection_modifyitems(items):\n"
+        "    items[:] = [item for item in items if item.name == 'test_pass']\n",
+        encoding="utf-8",
+    )
+    git(repository, "add", ".")
+    git(
+        repository,
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.invalid",
+        "commit",
+        "-qm",
+        "plugin fixture",
+    )
+    monkeypatch.setenv("PYTEST_PLUGINS", "external_selection")
+    # Demonstrate that the inherited plugin really conceals the failure.
+    contaminated = subprocess.run(
+        [sys.executable, "-m", "pytest"],
+        cwd=repository,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert contaminated.returncode == 0, contaminated.stdout + contaminated.stderr
+    assert "1 passed" in contaminated.stdout
+
+    output = tmp_path / "plugin evidence"
+    assert verify(repository, output, sys.executable) == 1
+
+    record = json.loads((output / "result.json").read_text(encoding="utf-8"))
+    assert record["command"] == [sys.executable, "-m", "pytest"]
+    assert record["exit_status"] == 1
+    log = (output / "pytest.log").read_text(encoding="utf-8")
+    assert "test_example.py::test_failure" in log
+    assert "1 failed, 1 passed" in log
+
+
 def test_unsupported_runtime_is_rejected_before_pytest(repository: Path, tmp_path: Path) -> None:
     output = tmp_path / "unsupported"
     # The runtime probe is real, while metadata makes this interpreter unsupported.

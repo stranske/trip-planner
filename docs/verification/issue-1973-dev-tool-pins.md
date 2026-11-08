@@ -1290,3 +1290,80 @@ write was applied. Final PR #2013 readback was **open, draft=false**.
 Run this committed source in an environment permitting local socket operations
 to establish the remaining exit-0 acceptance. Earlier producer, deliberate-break,
 regenerated-gate, and controller evidence is retained above.
+
+## Issue #2012 inherited-plugin isolation — 2026-11-08
+
+Reviewed the latest commits before continuing. The duplicate unrestricted-run
+task is already verified; both exit-0 acceptance boxes remain unverified.
+Attempted to reconcile the PR body, add `needs-human`, and document the blocker
+in a PR comment. Each write was rejected with `MCP tool call requires approval,
+but approval policy is never`; no remote updates were applied. PR #2013 readback
+remains **open, draft=false**.
+
+Found and reproduced an evidence gap in `scripts/verify_local_suite.py`:
+inherited `PYTEST_PLUGINS` can load a collection hook that removes a failing
+test and makes the verifier report exit 0. The new regression demonstrates the
+false pass before exercising the verifier; it failed against the previous
+implementation. The verifier now removes this inherited setting alongside
+`PYTEST_ADDOPTS` and `PYTHONPATH`. Repository-declared and installed plugins
+remain available, and the child command remains unchanged. After the fix the
+regression confirms both tests execute and the committed failure is retained.
+
+Source commit **`f6f34298d8ac82108c1205b05d614c77b9e27f80`** resides in
+`/tmp/trip-planner-issue-2012-round9`, whose working tree was clean before
+verification. The verifier confirmed merged #2005
+(`29c6aa01064f9eb3cbf15debd32cac3327ec43b8`) and #2011
+(`4c6ff3e81b412db4039f7d1a48fa95d0aecff753`) are ancestors. Selected
+**CPython 3.14.10**, executable
+`/opt/hostedtoolcache/Python/3.14.10/x64/bin/python`, matches `.python-version`
+**3.14** and satisfies `requires-python = ">=3.13,<3.15"`; pytest is **9.2.0**.
+From the fresh isolated `/tmp/issue-2012-round9-full/checkout`, the exact
+Makefile:test equivalent ran without exclusions or a watchdog:
+
+```sh
+/opt/hostedtoolcache/Python/3.14.10/x64/bin/python -m pytest
+```
+
+Exit **1**; terminal result:
+
+```text
+collected 2891 items / 2 skipped
+tests/app/test_auth.py
+======================= 2 skipped, 14 warnings in 7.01s ========================
+! _pytest.outcomes.Exit: TestClient runtime unavailable: local socketpair I/O failed during send wakeup byte (PermissionError: [Errno 1] Operation not permitted). Run the unchanged suite in an environment permitting local socket operations. This is an environment failure, not a passing test run. !
+```
+
+The first selected node remains
+`tests/app/test_auth.py::test_signup_creates_account_sets_cookie_and_restores_session`,
+blocked in `require_app_test_runtime` before any test body executes. A fresh
+standalone socketpair write also raised the same `PermissionError`, before
+repository imports; the underlying helper traceback recorded above still
+applies. Classification remains **environmental blocker, high confidence**,
+with no evidence of a changed-pin regression. Full artifacts are
+`/tmp/issue-2012-round9-full/result.json` and `pytest.log` in that directory.
+
+Focused validation of the changed source and existing runtime/collection guards:
+
+```sh
+python -m pytest tests/scripts/test_verify_local_suite.py tests/test_runtime_requirements.py tests/test_pytest_collection.py tests/test_pytest_collection_audit.py -m 'not slow' -q
+```
+
+Exit **0**: **21 passed, 14 warnings in 35.41s**. Black formatted both changed
+Python files; after serial cache preparation the required whole-tree gate
+exited **0**, reporting **529 files would be left unchanged**:
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue-2012-round9-black-cache black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+Ruff on both changed Python files and `git diff --check` passed. Commits are
+retained in the isolated checkout because workspace `.git` is read-only;
+matching files remain in the workspace, and the commit export is
+`/tmp/issue-2012-round9-commits.patch`.
+
+- [x] Verify the unrestricted supported-runtime attempt on committed source containing both required merges.
+- [x] Reproduce and prevent an inherited plugin from silently hiding a failing test.
+- [ ] Obtain unrestricted local `python -m pytest` exit 0 on supported Python.
+
+The remaining acceptance requires a runtime permitting local socket operations.
+Additional diagnostic changes cannot supply the missing exit-0 evidence here.
