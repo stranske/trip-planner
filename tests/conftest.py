@@ -18,8 +18,9 @@ DEFAULT_SCRIPT_TESTS = {
 
 def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool | None:
     """Keep live-maintenance script tests opt-in during default collection."""
-    if collection_path.parent != SCRIPT_TEST_DIRECTORY or not collection_path.name.startswith(
-        "test_"
+    if (
+        collection_path.parent != SCRIPT_TEST_DIRECTORY
+        or not collection_path.name.startswith("test_")
     ):
         return None
     explicit_paths = {Path(arg).resolve() for arg in config.args if Path(arg).exists()}
