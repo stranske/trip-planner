@@ -14,10 +14,14 @@ producer dependency snapshot. The live checkout check additionally needs
 
 from __future__ import annotations
 
+import json
 import os
+import subprocess
+import sys
 import tomllib
 from itertools import product
 from pathlib import Path
+from zipfile import ZipFile
 
 import pytest
 import yaml
@@ -187,6 +191,91 @@ def test_workflow_tpp_pin_resolves_with_planner_dev_pins(
     monkeypatch.setenv("TPP_REPO_PATH", str(snapshot))
 
     test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
+
+
+@pytest.mark.parametrize("restore_old_tpp_pins", [True, False], ids=["old-tpp", "paired-update"])
+def test_pip_resolves_paired_dev_tool_pins_offline(
+    tmp_path: Path, restore_old_tpp_pins: bool
+) -> None:
+    """Exercise pip's resolver for the failing tool pins without network or installs.
+
+    Metadata-only wheels isolate the three tools reported in #1973. The passing
+    case reads the real planner requirements and the snapshot selected by the
+    workflow; the failing case restores the producer's original tool versions.
+    This verifies resolution only, not a complete cross-repo installation.
+    """
+    workflow = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "cross-repo-smoke.yml").read_text()
+    )
+    snapshot = REPO_ROOT / "tests" / "fixtures" / "tpp_dev_pins" / workflow["env"]["TPP_PINNED_REF"]
+    old_versions = {"ruff": "0.17.2", "mypy": "2.4.0", "pytest": "9.1.1"}
+    projects = {
+        "planner": _requirements(REPO_ROOT / "pyproject.toml"),
+        "tpp": _requirements(snapshot / "pyproject.toml"),
+    }
+    requirement_files = []
+    for name, requirements in projects.items():
+        selected = [str(req) for tool in old_versions for req in requirements[tool]]
+        if name == "tpp" and restore_old_tpp_pins:
+            selected = [f"{tool}=={version}" for tool, version in old_versions.items()]
+        requirement_file = tmp_path / f"{name}.txt"
+        requirement_file.write_text("\n".join(selected) + "\n", encoding="utf-8")
+        requirement_files.extend(["-r", str(requirement_file)])
+
+    # Supply both old and current candidates so a failure proves conflicting
+    # requirements, rather than a missing wheel in the offline index.
+    for tool, old_version in old_versions.items():
+        current_version = _exact_pin(projects["planner"][tool][0])
+        assert current_version is not None
+        for version in {old_version, current_version}:
+            dist_info = f"{tool}-{version}.dist-info"
+            with ZipFile(tmp_path / f"{tool}-{version}-py3-none-any.whl", "w") as wheel:
+                wheel.writestr(
+                    f"{dist_info}/METADATA",
+                    f"Metadata-Version: 2.1\nName: {tool}\nVersion: {version}\n",
+                )
+                wheel.writestr(
+                    f"{dist_info}/WHEEL",
+                    "Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+                )
+                wheel.writestr(f"{dist_info}/RECORD", "")
+
+    report = tmp_path / "resolution.json"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "--isolated",
+            "--disable-pip-version-check",
+            "install",
+            "--dry-run",
+            "--ignore-installed",
+            "--no-index",
+            "--no-cache-dir",
+            "--find-links",
+            str(tmp_path),
+            "--report",
+            str(report),
+            *requirement_files,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    diagnostics = result.stdout + result.stderr
+    if restore_old_tpp_pins:
+        assert result.returncode != 0, diagnostics
+        assert "ResolutionImpossible" in diagnostics
+        assert f"ruff=={old_versions['ruff']}" in diagnostics
+        assert str(projects["planner"]["ruff"][0]) in diagnostics
+    else:
+        assert result.returncode == 0, diagnostics
+        resolved = json.loads(report.read_text(encoding="utf-8"))["install"]
+        assert {entry["metadata"]["name"]: entry["metadata"]["version"] for entry in resolved} == {
+            tool: _exact_pin(projects["planner"][tool][0]) for tool in old_versions
+        }
 
 
 @pytest.mark.parametrize(
