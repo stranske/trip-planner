@@ -22,7 +22,7 @@ def probe_sockets(monkeypatch: pytest.MonkeyPatch) -> tuple[MagicMock, MagicMock
 def test_socket_probe_allows_available_runtime(probe_sockets: tuple[MagicMock, MagicMock]) -> None:
     sender, receiver = probe_sockets
 
-    assert runtime_requirements.require_testclient_socket_io() is None
+    runtime_requirements.require_testclient_socket_io()
 
     sender.settimeout.assert_called_once_with(1)
     receiver.settimeout.assert_called_once_with(1)
