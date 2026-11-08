@@ -4,7 +4,7 @@ The cross-repo smoke job installs ``TPP[dev]`` and ``trip-planner[dev]`` into on
 interpreter. When a dev-tool sync bumps an exact pin here (for example
 ``ruff==0.17.2`` -> ``ruff==0.17.3``) while ``TPP_PINNED_REF`` still points at a
 TPP revision carrying the old pin, pip fails with ``ResolutionImpossible``
-(issue #1967). This test names the conflicting package and the fix up front.
+(issues #1967 and #1973). This test names the conflicting package and the fix up front.
 
 It needs a TPP checkout: set ``TPP_REPO_PATH`` (the smoke workflow does) or
 the test is skipped. Run with
@@ -82,3 +82,62 @@ def test_planner_dev_pins_resolve_with_pinned_tpp_checkout() -> None:
         + "\nMove TPP_PINNED_REF in .github/workflows/cross-repo-smoke.yml to a TPP "
         "revision with matching pins, in the same PR as the pin update."
     )
+
+
+@pytest.mark.parametrize(
+    ("tpp_versions", "conflicting_tools"),
+    [
+        pytest.param(("0.17.2", "2.4.0", "9.1.1"), ("mypy", "pytest", "ruff"), id="old-tpp"),
+        pytest.param(("0.17.2", "2.4.1", "9.2.0"), ("ruff",), id="ruff-only"),
+        pytest.param(("0.17.3", "2.4.0", "9.2.0"), ("mypy",), id="mypy-only"),
+        pytest.param(("0.17.3", "2.4.1", "9.1.1"), ("pytest",), id="pytest-only"),
+        pytest.param(("0.17.3", "2.4.1", "9.2.0"), (), id="paired-update"),
+    ],
+)
+def test_pinned_checkout_guard_reproduces_dev_tool_sync_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tpp_versions: tuple[str, str, str],
+    conflicting_tools: tuple[str, ...],
+) -> None:
+    """Exercise the workflow entry point without needing a sibling checkout.
+
+    Issue #1973's evidence run 41956043710 installed planner's updated pins
+    with TPP acc4aed's old pins. TPP b56d92b carries the matching versions.
+    Keep the historical versions fixed so later tool updates retain this regression.
+    """
+    planner_versions = ("0.17.3", "2.4.1", "9.2.0")
+    tools = ("ruff", "mypy", "pytest")
+    for directory, versions in ((tmp_path, planner_versions), (tmp_path / "tpp", tpp_versions)):
+        directory.mkdir(exist_ok=True)
+        pins = [f"{tool}=={version}" for tool, version in zip(tools, versions, strict=True)]
+        (directory / "pyproject.toml").write_text(
+            "[project]\ndependencies = []\n[project.optional-dependencies]\n" f"dev = {pins!r}\n",
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(f"{__name__}.REPO_ROOT", tmp_path)
+    monkeypatch.setenv("TPP_REPO_PATH", "tpp")
+
+    if not conflicting_tools:
+        test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
+        return
+
+    with pytest.raises(AssertionError, match="cannot be installed together") as failure:
+        test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
+
+    diagnostics = str(failure.value)
+    for tool, planner_version, tpp_version in zip(
+        tools, planner_versions, tpp_versions, strict=True
+    ):
+        if tool in conflicting_tools:
+            assert (
+                f"{tool}: trip-planner '{tool}=={planner_version}' vs TPP '{tool}=={tpp_version}'"
+                in diagnostics
+            )
+        else:
+            assert f"{tool}: trip-planner" not in diagnostics
+    assert (
+        "Move TPP_PINNED_REF in .github/workflows/cross-repo-smoke.yml to a TPP "
+        "revision with matching pins, in the same PR as the pin update."
+    ) in diagnostics
