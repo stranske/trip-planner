@@ -558,3 +558,152 @@ approval policy is never`. Neither remote change was applied.
 Full-suite acceptance remains **unverified**. The remaining action is to run
 the recorded source on a supported interpreter where socket operations are
 permitted, then record the actual terminal summary.
+
+## Issue #2012 current-source collection repair — 2026-11-08
+
+### Remove the later collection hook
+
+Commits `5f9b16e7`, `cd69a40e`, and `ed95fe4c` added and adjusted a
+`pytest_ignore_collect` hook after the preceding evidence run. It excluded all
+but two Python script test modules during default collection. Removed the hook
+and its allowlist from `tests/conftest.py`: that exclusion conflicts with the
+required unrestricted run. No workflow, dependency pin, or application code changed.
+
+Strengthened the collection regression to compare default collection against
+explicit collection of every `tests/scripts/test_*.py` file. This exercises real
+pytest collection and detects omitted test nodes, including parametrized cases.
+The new assertion failed with the hook present (**1 failed, 14 warnings in
+11.30s**) and passes after its removal. Default `python -m pytest --collect-only
+-q` exits **0** with **2,871 tests collected**, including **197 script cases
+across all 10 Python script modules**.
+
+### Exact source and unrestricted terminal result
+
+Created `/tmp/trip-planner-issue-2012-final` using
+`git clone --shared --no-hardlinks . /tmp/trip-planner-issue-2012-final`.
+Tested source commit **`d7e1b0ddc5fe6735b27d9bdc186b938ffc41b830`**, based on
+**`ed95fe4c47c9896ea9a8eaaaad0d34739dcf45b8`**, contains the hook removal and
+expanded regression. The checkout was clean before the full run. Both ancestry
+checks exited **0**, confirming merged #2005 and #2011 are included:
+
+```sh
+git merge-base --is-ancestor 29c6aa01064f9eb3cbf15debd32cac3327ec43b8 HEAD
+git merge-base --is-ancestor 4c6ff3e81b412db4039f7d1a48fa95d0aecff753 HEAD
+```
+
+Selected **CPython 3.14.10**, built with GCC 15.2.0, executable
+**`/opt/hostedtoolcache/Python/3.14.10/x64/bin/python`**, with pytest **9.2.0**.
+This matches `.python-version` (**3.14**) and satisfies `pyproject.toml`
+(**>=3.13,<3.15**). `PYTEST_ADDOPTS` and `TPP_REPO_PATH` were unset.
+
+The exact Makefile:test equivalent was **`python -m pytest`**, with no test
+exclusions or marker filters. A watchdog bounded the reproduced environmental
+hang without changing pytest's arguments:
+
+```sh
+timeout --signal=INT --kill-after=5s 30s python -m pytest > /tmp/issue-2012-final-full-pytest.log 2>&1
+```
+
+Observed wrapper exit status: **137**. Complete terminal output:
+
+```text
+============================= test session starts ==============================
+platform linux -- Python 3.14.10, pytest-9.2.0, pluggy-1.7.0
+rootdir: /tmp/trip-planner-issue-2012-final
+configfile: pyproject.toml
+testpaths: tests
+plugins: cov-7.1.0, regressions-2.11.0, platformdirs-4.14.5, datadir-1.9.0, langsmith-0.14.17, pytest_httpserver-1.1.5, anyio-4.14.2
+collected 2871 items / 2 skipped
+
+tests/app/test_auth.py
+```
+
+**No tests finished; pytest emitted no result summary.** SIGINT was sent after
+30 seconds, followed by a kill five seconds later. Exit 137 is the watchdog's
+termination result, not a pytest assertion-failure result or a full-suite pass.
+
+### First blocked node and classification
+
+The first blocked node remains
+`tests/app/test_auth.py::test_signup_creates_account_sets_cookie_and_restores_session`.
+The separate diagnostic command was:
+
+```sh
+timeout --signal=INT --kill-after=5s 20s python -m pytest tests/app/test_auth.py::test_signup_creates_account_sets_cookie_and_restores_session -vv -o faulthandler_timeout=10 > /tmp/issue-2012-final-auth.log 2>&1
+```
+
+It exited **137**. Its timeout traceback excerpt again identifies fixture setup:
+
+```text
+tests/app/test_auth.py::test_signup_creates_account_sets_cookie_and_restores_session Timeout (0:00:10)!
+Thread [asyncio-portal-] (most recent call first):
+  File ".../python3.14/selectors.py", line 452 in select
+  File ".../python3.14/asyncio/base_events.py", line 2026 in _run_once
+  File ".../python3.14/asyncio/base_events.py", line 678 in run_forever
+  File ".../site-packages/anyio/from_thread.py", line 536 in run_blocking_portal
+Thread [python] (most recent call first):
+  File ".../python3.14/threading.py", line 369 in wait
+  File ".../python3.14/concurrent/futures/_base.py", line 449 in result
+  File ".../site-packages/anyio/_backends/_asyncio.py", line 2715 in run_sync_from_thread
+  File ".../site-packages/anyio/from_thread.py", line 301 in _spawn_task_from_thread
+  File ".../site-packages/anyio/from_thread.py", line 382 in start_task_soon
+  File ".../site-packages/starlette/testclient.py", line 696 in __enter__
+  File "/tmp/trip-planner-issue-2012-final/tests/app/test_auth.py", line 21 in client
+```
+
+The independent standard-library socketpair probe still raises
+`PermissionError: [Errno 1] Operation not permitted` at `a.send(b"x")`, exit
+**1**, without importing the repository or dev tools. Classification remains
+**environmental blocker, high confidence**. The traceback and denied wakeup
+operation do not establish a changed-pin regression. Tests after this fixture
+remain unverified; the collection repair does not resolve the socket restriction.
+
+### Focused validation and handoff
+
+In the isolated checkout, the following focused command exited **0**:
+
+```sh
+python -m pytest tests/test_pytest_collection.py tests/test_build_html.py tests/scripts/test_cross_repo_dev_pins.py tests/scripts/test_cross_repo_smoke_workflow.py -m 'not slow' -q -rs
+```
+
+```text
+SKIPPED [1] tests/scripts/test_cross_repo_dev_pins.py:173: TPP_REPO_PATH not set; the cross-repo smoke workflow provides it
+SKIPPED [1] tests/scripts/test_cross_repo_dev_pins.py:191: TPP_REPO_PATH not set; the cross-repo smoke workflow provides it
+SKIPPED [1] tests/scripts/test_cross_repo_smoke_workflow.py:222: actionlint not found (checked .workflows-lib/actionlint and PATH)
+79 passed, 3 skipped, 14 warnings in 10.17s
+```
+
+Black **26.10.1** formatted both changed Python files individually. Its parallel
+runner hit the socket restriction, so all 523 tracked Python files were checked
+individually to populate the cache. The required whole-tree gate then exited **0**:
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue-2012-final-black-cache black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+```text
+All done! ✨ 🍰 ✨
+523 files would be left unchanged.
+```
+
+`ruff check tests/conftest.py tests/test_pytest_collection.py` and
+`git diff --check` exited **0**. The workspace's `.git` remains read-only, so
+commits were created in the isolated checkout; the changed files match the
+workspace byte-for-byte. Commits are exported to
+`/tmp/issue-2012-final-commits.patch`.
+
+PR #2013 was read back as **open**, **draft=false**. Attempts to add
+`needs-human` and a blocker comment were rejected by both GitHub write tools:
+`MCP tool call requires approval, but approval policy is never`. Neither remote
+change was applied.
+
+- [x] Remove the default script-test allowlist and verify all script nodes remain in default collection.
+- [x] Record the current tested source, supported runtime, exact unrestricted command, terminal result, and diagnostic traceback.
+- [ ] Obtain an unrestricted local `python -m pytest` exit 0 on a supported interpreter.
+
+Full-suite acceptance remains **unverified**. Rerun the **current source with
+the collection exclusions removed** in an environment permitting socket
+operations, and record that run's exact commit and terminal summary. Earlier
+recorded commits that still contain collection exclusions cannot satisfy this
+acceptance requirement. Retain all earlier focused, deliberate-break,
+regenerated-gate, and controller evidence above.
