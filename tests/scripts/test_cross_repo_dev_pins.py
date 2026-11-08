@@ -169,6 +169,97 @@ def test_planner_dev_pins_resolve_with_pinned_tpp_checkout() -> None:
     )
 
 
+def test_live_tpp_checkout_matches_workflow_snapshot() -> None:
+    """Keep local verification tied to the producer revision used by the gate."""
+    tpp_repo = os.environ.get("TPP_REPO_PATH")
+    if not tpp_repo:
+        pytest.skip("TPP_REPO_PATH not set; the cross-repo smoke workflow provides it")
+    checkout = (REPO_ROOT / tpp_repo).resolve()
+    workflow = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "cross-repo-smoke.yml").read_text()
+    )
+    pinned_ref = workflow["env"]["TPP_PINNED_REF"]
+    resolved = subprocess.run(
+        ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    ).stdout.strip()
+    assert resolved == pinned_ref, (
+        f"TPP checkout HEAD {resolved} does not match TPP_PINNED_REF {pinned_ref}. "
+        "Check out the workflow's pinned revision before recording live verification."
+    )
+    snapshot = REPO_ROOT / "tests" / "fixtures" / "tpp_dev_pins" / pinned_ref / "pyproject.toml"
+    producer = tomllib.loads((checkout / "pyproject.toml").read_text())["project"]
+    reviewed = tomllib.loads(snapshot.read_text())["project"]
+    for section, actual, expected in (
+        ("runtime", producer["dependencies"], reviewed["dependencies"]),
+        ("dev", producer["optional-dependencies"]["dev"], reviewed["optional-dependencies"]["dev"]),
+    ):
+        assert sorted(actual) == sorted(expected), (
+            f"TPP {section} dependency snapshot differs from checkout {pinned_ref}; "
+            "refresh the snapshot from the pinned source before recording verification."
+        )
+
+
+@pytest.mark.parametrize("mismatch", [None, "head", "runtime", "dev"])
+def test_live_snapshot_guard_rejects_unverified_producer_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mismatch: str | None
+) -> None:
+    """Matching dev pins alone cannot establish that the pinned source was tested."""
+    checkout = tmp_path / "tpp"
+    checkout.mkdir()
+    pyproject = checkout / "pyproject.toml"
+    metadata = (
+        '[project]\ndependencies = ["httpx>=0.28.1"]\n'
+        '[project.optional-dependencies]\ndev = ["ruff==0.17.3"]\n'
+    )
+    pyproject.write_text(metadata, encoding="utf-8")
+    for command in (
+        ["init", "--quiet"],
+        ["add", "pyproject.toml"],
+        [
+            "-c",
+            "user.name=Pin regression",
+            "-c",
+            "user.email=pins@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "--quiet",
+            "-m",
+            "Producer snapshot",
+        ],
+    ):
+        subprocess.run(["git", "-C", str(checkout), *command], check=True, timeout=10)
+    pinned_ref = subprocess.check_output(
+        ["git", "-C", str(checkout), "rev-parse", "HEAD"], text=True, timeout=10
+    ).strip()
+    workflow_directory = tmp_path / ".github" / "workflows"
+    workflow_directory.mkdir(parents=True)
+    workflow_ref = "0" * 40 if mismatch == "head" else pinned_ref
+    (workflow_directory / "cross-repo-smoke.yml").write_text(
+        yaml.safe_dump({"env": {"TPP_PINNED_REF": workflow_ref}}), encoding="utf-8"
+    )
+    snapshot = tmp_path / "tests" / "fixtures" / "tpp_dev_pins" / pinned_ref
+    snapshot.mkdir(parents=True)
+    (snapshot / "pyproject.toml").write_text(metadata, encoding="utf-8")
+    if mismatch == "runtime":
+        pyproject.write_text(metadata.replace("httpx>=0.28.1", "httpx>=0.29"), encoding="utf-8")
+    elif mismatch == "dev":
+        pyproject.write_text(metadata.replace("ruff==0.17.3", "ruff==0.17.2"), encoding="utf-8")
+    monkeypatch.setattr(f"{__name__}.REPO_ROOT", tmp_path)
+    monkeypatch.setenv("TPP_REPO_PATH", "tpp")
+
+    if mismatch is None:
+        test_live_tpp_checkout_matches_workflow_snapshot()
+    else:
+        message = "does not match TPP_PINNED_REF" if mismatch == "head" else "snapshot differs"
+        with pytest.raises(AssertionError, match=message):
+            test_live_tpp_checkout_matches_workflow_snapshot()
+
+
 def test_workflow_tpp_pin_resolves_with_planner_dev_pins(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -292,9 +383,7 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
         expected: dict[str, str | None] = {
             tool: _exact_pin(projects["planner"][tool][0]) for tool in old_versions
         }
-        expected.update(
-            {canonicalize_name(name): "0.1.0" for name in project_names.values()}
-        )
+        expected.update({canonicalize_name(name): "0.1.0" for name in project_names.values()})
         assert {
             canonicalize_name(entry["metadata"]["name"]): entry["metadata"]["version"]
             for entry in resolved

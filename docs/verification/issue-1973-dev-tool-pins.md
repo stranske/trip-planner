@@ -1,5 +1,52 @@
 # Issue #1973: dev-tool pin conflict verification
 
+## Latest keepalive verification
+
+This run adds `test_live_tpp_checkout_matches_workflow_snapshot` so a local live
+verification rejects a checkout whose HEAD differs from `TPP_PINNED_REF`, even
+when its tool pins happen to match. It also compares both runtime and dev
+dependencies with the reviewed snapshot. Four regression cases use temporary Git
+repositories to verify matching metadata, the wrong HEAD, runtime drift, and dev drift.
+
+Current results supersede earlier environment-specific validation claims below:
+
+- Focused cross-repo tests: **69 passed, 2 skipped** with
+  `python -m pytest tests/scripts/test_cross_repo_dev_pins.py tests/scripts/test_cross_repo_smoke_workflow.py -q -m 'not slow'`.
+  The live checks skip because this workspace has no sibling TPP checkout.
+- The connected GitHub tool fetched the producer's `pyproject.toml` at
+  `b56d92b389736c70370aa9134f379ac8cd1f3ad1`; a local comparison confirmed that
+  both snapshot dependency sections match that source. This is metadata evidence,
+  not a live checkout or installation result.
+- Ruff and `git diff --check` pass. Black formatted the changed Python file.
+  The required repository-wide Black check initially failed with a sandbox
+  `PermissionError` when starting its process pool; with `BLACK_NUM_WORKERS=1`,
+  it hung waiting for thread communication and was interrupted. Running genuine
+  single-file Black checks serially verified all 520 files and populated a cache
+  in `/tmp/issue-1973-black-cache`. The required command then passed with
+  `BLACK_CACHE_DIR` pointing to that cache: **520 files would be left unchanged**.
+- The requested commit was attempted after formatting passed. `git add` failed
+  creating `.git/index.lock` because `.git` is mounted read-only. Both changes
+  remain unstaged and uncommitted; existing session log files were left untouched.
+- `python -m pytest -q -m 'not slow' -x -o faulthandler_timeout=20` hangs entering
+  the first Starlette TestClient fixture (`tests/app/test_auth.py:21`). The timeout
+  trace shows the main thread waiting on the AnyIO portal. The run was interrupted;
+  a passing full suite is not established here.
+- `gh run view 41956043710 --repo stranske/trip-planner` fails to connect to
+  `api.github.com`. The connected GitHub tools independently confirm that this
+  run's `Cross-Repo Smoke / cross-repo-full-product` job failed.
+- Live GitHub reads still show #1972 closed without merging. Replacement #2006
+  is open and ready at `4ea6a28d050bbcf2233b725de13ade495f132002`; its named job
+  in run `42449207902` failed installing TPP dependencies. Source-fix #2005
+  remains open and ready at `c966a595fcdd5e33435e4f3ea59bad83d3e25623`.
+- Issue #1973's comments contain no subsequent sync-core classification.
+
+Both remaining acceptance criteria stay unchecked. The owning producer/controller
+must land the reviewed paired-pin fix, regenerate the sync delivery, and collect a
+passing named job on its current head plus a new sync-core classification. Do not
+manually edit generated PR #1972. The requested `needs-human` label and blocker
+comment could not be added because GitHub writes require tool approval and this
+run forbids approval.
+
 The existing source fix on PR #2005 head `93618b4ddef75a60ef37ea42f51ba05d1c9869aa`
 preserves the paired dev-tool pin update and TPP_PINNED_REF alignment from
 commit `d98c748549454d15388ef76219962a5c8d6f1605`. No workflow files were changed
