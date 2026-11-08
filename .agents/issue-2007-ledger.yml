@@ -10,39 +10,73 @@ tasks:
     started_at: '2026-11-08T05:39:41Z'
     finished_at: null
     commit: ''
-    notes: []
+    notes:
+      - PR lifecycle receipts recorded via gh pr view commands on 2026-11-08:
+      - PR #2008: state=MERGED, mergedAt=2026-11-08T06:04:38Z, mergeCommit=79e8cbf4fa867e597b9d54120c318d02158f198d, headRefOid=37b81b467dd39a1a32f7e7fbd24d6279dcae72b9
+      - PR #2010: state=OPEN, mergedAt=null, mergeCommit=null, headRefOid=3487bad75a49932b1a5e77ee270e994462324246
+      - PR #2006: state=OPEN, title="deps: sync dev tool versions", headRefOid=4ea6a28d050bbcf2233b725de13ade495f132002
   - id: task-02
     title: 'Inspect the linked failing job logs to identify which packages (verify:
       confirm completion in repo)'
-    status: todo
-    started_at: null
-    finished_at: null
+    status: done
+    started_at: '2026-11-08T05:39:41Z'
+    finished_at: '2026-11-08T05:45:00Z'
     commit: ''
-    notes: []
+    notes:
+      - Identified conflicting packages via gh pr checks 2006 and gh run view 42449207754 --log-failed:
+      - Conflicting packages: ruff==0.17.2 (from travel-plan-permission[dev] 0.1.0) vs ruff==0.17.3 (from trip-planner[dev] 0.1.0)
+      - Error: ResolutionImpossible: Cannot install travel-plan-permission[dev]==0.1.0 and trip-planner[dev]==0.1.0 because these package versions have conflicting dependencies
+      - Failing check: Cross-Repo Smoke / cross-repo-full-product
+      - Failing run IDs: 42449207902, 42449207754
   - id: task-03
     title: 'version pins produce the ResolutionImpossible error (verify: confirm completion
       in repo)'
-    status: todo
-    started_at: null
-    finished_at: null
+    status: done
+    started_at: '2026-11-08T05:39:41Z'
+    finished_at: '2026-11-08T05:45:00Z'
     commit: ''
-    notes: []
+    notes:
+      - Confirmed: version pins produce ResolutionImpossible error
+      - Source pin file in sync source repository: stranske/Workflows/.github/workflows/autofix-versions.env
+      - Current pins in Workflows: RUFF_VERSION=0.17.3, BLACK_VERSION=26.10.1, ISORT_VERSION=9.0.2, MYPY_VERSION=2.4.1
+      - Pins in trip-planner before sync: RUFF_VERSION=0.17.2 (in autofix-versions.env), ruff==0.17.2 (in pyproject.toml)
+      - PR #2006 updates trip-planner pins to match Workflows (RUFF_VERSION=0.17.3)
+      - Published package conflict: travel-plan-permission 0.1.0 on PyPI has ruff==0.17.2, trip-planner 0.1.0 on PyPI has ruff==0.17.3
   - id: task-04
     title: 'Identify the source file in the sync source repository that defines the
       conflicting dev-tool pins (verify: confirm completion in repo)'
-    status: todo
-    started_at: null
-    finished_at: null
+    status: done
+    started_at: '2026-11-08T05:39:41Z'
+    finished_at: '2026-11-08T05:45:00Z'
     commit: ''
-    notes: []
+    notes:
+      - Owning source repository: stranske/Workflows
+      - Owning source file: .github/workflows/autofix-versions.env
+      - Exact path: stranske/Workflows/.github/workflows/autofix-versions.env
+      - Pins in owning source file:
+        - BLACK_VERSION=26.10.1
+        - RUFF_VERSION=0.17.3
+        - ISORT_VERSION=9.0.2
+        - DOCFORMATTER_VERSION=1.7.8
+        - MYPY_VERSION=2.4.1
+        - PYTEST_VERSION=9.2.0
+        - PYTEST_COV_VERSION=7.1.0
+        - PYTEST_XDIST_VERSION=3.8.0
+        - COVERAGE_VERSION=7.17.2
   - id: task-05
     title: 'Update the conflicting dev-tool pins in the source file so pip dependency
       resolution succeeds (verify: dependencies updated)'
-    status: todo
-    started_at: null
+    status: blocked
+    started_at: '2026-11-08T05:39:41Z'
     finished_at: null
     commit: ''
-    notes: []
+    notes:
+      - BLOCKED: Critical instruction forbids editing dependency pins
+      - File to edit: stranske/Workflows/.github/workflows/autofix-versions.env
+      - Required change: RUFF_VERSION needs to be synchronized across all consumer repos
+      - Current state: Workflows has RUFF_VERSION=0.17.3, travel-plan-permission has RUFF_VERSION=0.17.3 in repo but published package 0.1.0 has ruff==0.17.2
+      - Root cause: Published package travel-plan-permission 0.1.0 on PyPI has ruff==0.17.2
+      - Solution requires: Re-publish travel-plan-permission with ruff==0.17.3 to PyPI
   - id: task-06
     title: 'Run pip install against the updated pins locally to confirm that dependency
       resolution completes without conflicts (verify: dependencies updated)'
@@ -54,11 +88,17 @@ tasks:
   - id: task-07
     title: Add or extend a regression test reproducing the conflict and passing after
       the fix, using `pytest` or `node --test`, whichever the source uses.
-    status: todo
-    started_at: null
+    status: blocked
+    started_at: '2026-11-08T05:39:41Z'
     finished_at: null
     commit: ''
-    notes: []
+    notes:
+      - BLOCKED: Cannot add tests to owning source repository (stranske/Workflows) from consumer repo
+      - Owning source repository uses pytest (not node --test)
+      - Required test: bounded resolver regression test for pip dependency resolution
+      - Test should fail with original pins (ruff==0.17.2) and pass with corrected pins (ruff==0.17.3)
+      - Test location should be: stranske/Workflows/tests/ (or appropriate test directory)
+      - Test command: pytest tests/test_dependency_resolution.py (or similar)
   - id: task-08
     title: 'Determine whether the source repository uses pytest or node --test (verify:
       confirm completion in repo)'
@@ -107,11 +147,18 @@ tasks:
     title: '`Dev-tool pin update breaks Cross-Repo Smoke / cross-repo-full-product`
       passes on regenerated stranske/trip-planner#2006, verified with `gh run view
       <run-id>`, and the repository''s test command passes locally.'
-    status: todo
-    started_at: null
+    status: blocked
+    started_at: '2026-11-08T05:39:41Z'
     finished_at: null
     commit: ''
-    notes: []
+    notes:
+      - BLOCKED: Cannot trigger regeneration via .github/workflows/maint-68-sync-consumer-repos.yml
+      - Regeneration path: stranske/Workflows/.github/workflows/maint-68-sync-consumer-repos.yml
+      - Target PR: stranske/trip-planner#2006 (deps: sync dev tool versions)
+      - Current PR #2006 head: 4ea6a28d050bbcf2233b725de13ade495f132002
+      - Failing run IDs: 42449207902, 42449207754
+      - Verification requires: gh run view <regenerated-run-id> --repo stranske/trip-planner
+      - Expected result: Cross-Repo Smoke / cross-repo-full-product should pass after regeneration
   - id: task-15
     title: Reintroducing the reported behavior makes the regression test fail; reverting
       restores a passing result.
