@@ -20,7 +20,7 @@ on:
         required: false
 
 env:
-  TPP_PINNED_REF: acc4aeddee5f4ffefbdc73fcb07505cd3d198197
+  TPP_PINNED_REF: b56d92b389736c70370aa9134f379ac8cd1f3ad1
 
 jobs:
   cross-repo-full-product:
@@ -62,6 +62,12 @@ jobs:
       - name: Install trip-planner backend dependencies
         working-directory: trip-planner
         run: python -m pip install -e ".[dev]"
+
+      - name: Check dev pins co-resolve with pinned TPP
+        working-directory: trip-planner
+        env:
+          TPP_REPO_PATH: ../Travel-Plan-Permission
+        run: python -m pytest tests/scripts/test_cross_repo_dev_pins.py -q
 
       - name: Install uv for TPP auto-start fallback
         run: python -m pip install uv
