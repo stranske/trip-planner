@@ -553,10 +553,10 @@ approval policy is never`. Neither remote change was applied.
 
 - [x] Remove both configured exclusions and verify that default collection includes the renderer and dev-pin regressions.
 - [x] Record the supported runtime, exact source commit, unrestricted command, nonzero result, first blocked node, traceback, and failure classification.
-- [x] Complete unrestricted local `python -m pytest` with exit 0 on a supported interpreter.
+- [ ] Complete unrestricted local `python -m pytest` with exit 0 on current source on a supported interpreter.
 
-Full-suite acceptance **verified**. Ran the final branch source on Python 3.13.13
-with socket operations permitted. Evidence recorded below.
+Historical full-suite success **reported for source `1a6a436e0c3d216a75aadf265c595b7c2d03c122` only**.
+This does not verify subsequent branch source; see the current-source result at the end.
 
 ### Final verification evidence — 2026-11-08
 
@@ -711,12 +711,11 @@ change was applied.
 
 - [x] Remove the default script-test allowlist and verify all script nodes remain in default collection.
 - [x] Record the current tested source, supported runtime, exact unrestricted command, terminal result, and diagnostic traceback.
-- [x] Obtain an unrestricted local `python -m pytest` exit 0 on a supported interpreter.
+- [ ] Obtain an unrestricted local `python -m pytest` exit 0 on current source on a supported interpreter.
 
-Full-suite acceptance **verified**. Ran the final branch source (collection exclusions
-removed) on Python 3.13.13 in an environment permitting socket operations. Evidence
-recorded below. All earlier focused, deliberate-break, regenerated-gate, and controller
-evidence retained above.
+Historical full-suite success **reported for source `1a6a436e0c3d216a75aadf265c595b7c2d03c122` only**.
+This duplicates the historical record above, rather than establishing a second run
+or acceptance of subsequent source. Predecessor evidence is retained below.
 
 ### Final verification evidence — 2026-11-08
 
@@ -1590,3 +1589,76 @@ socket operations. Earlier producer and controller evidence is retained above.
 GitHub rejected this round's `needs-human` label and blocker comment with
 `MCP tool call requires approval, but approval policy is never`; neither remote
 write was applied. PR #2013 readback was **open, draft=false**.
+
+## Issue #2012 bounded current-source acceptance — 2026-11-08
+
+Before editing, recorded check date **2026-11-08**, success outcome
+`result.json` exit status **0** for current committed source with the retained
+`pytest.log`, and stop rule **one full-suite attempt bounded at 15 minutes**.
+No helper, test, pin, or lockfile changes were made. No listed worktree held a
+preserved copy of `codex/issue-2012`; the existing holder was clean at the tested
+commit. Existing unrelated preserved branches were left intact.
+
+Tested reviewer-accessible source:
+[`5af4a103d1799589e12b04b57f24911611630c36`](https://github.com/stranske/trip-planner/commit/5af4a103d1799589e12b04b57f24911611630c36),
+the remote PR head before this documentation-only update. The verifier confirmed
+both required ancestors. Existing CPython **3.13.13**, optimization **0**, satisfies
+`>=3.13,<3.15`; pytest is **9.1.1**. The preferred `.python-version` **3.14**
+interpreter exists but lacks pytest. No repository virtual environment exists.
+An independent socketpair send/receive succeeded with the selected interpreter.
+This environment has not been established to match the pinned development set.
+
+Executed once, with an external 900-second process-group deadline:
+
+```sh
+/opt/homebrew/opt/python@3.13/bin/python3.13 scripts/verify_local_suite.py --source . --output /private/tmp/issue-2012-current-20261108T230425Z --python /opt/homebrew/opt/python@3.13/bin/python3.13 --require-ancestor 29c6aa01064f9eb3cbf15debd32cac3327ec43b8 --require-ancestor 4c6ff3e81b412db4039f7d1a48fa95d0aecff753
+```
+
+The child was exactly:
+
+```sh
+/opt/homebrew/opt/python@3.13/bin/python3.13 -m pytest
+```
+
+Actual helper and child exit status: **2**. Started **2026-11-08T23:04:38Z**,
+finished **2026-11-08T23:04:41Z**; the deadline did not fire. Terminal summary:
+
+```text
+collected 1455 items / 25 errors / 1 skipped
+!!!!!!!!!!!!!!!!!!! Interrupted: 25 errors during collection !!!!!!!!!!!!!!!!!!!
+=================== 1 skipped, 1 warning, 25 errors in 1.89s ===================
+```
+
+First broken step: collection of `tests/app`, importing
+`tests/app/conftest.py` → `trip_planner/app/main.py` →
+`trip_planner/app/routes/auth.py:7`, `from sqlalchemy.orm import Session`:
+`ModuleNotFoundError: No module named 'sqlalchemy'`. Other collection errors
+include missing `baseline_kit`. Classification: **incomplete execution-environment
+dependencies, high confidence**. This is not a socket denial or evidence of a
+pin regression. No test bodies completed. The single-attempt stop rule has
+tripped; no dependency installation, retry, or diagnostic-framework change was
+made. All subsequent test behavior remains unknown.
+
+Durable artifacts: [result.json](issue-2012-20261108-current/result.json) and
+[pytest.log](issue-2012-20261108-current/pytest.log), copied byte-for-byte from
+the new output directory. Paths inside the JSON describe the original run.
+The duplicated historical success blocks above concern their recorded source
+only; they do not establish current-source exit-0 acceptance.
+
+Parent-workflow dispositions (proposed, not remotely resolved):
+
+- `PRRT_kwDOOzvyds61B5L2`: current committed source was executed, with both
+  ancestors verified and durable source/evidence references. The stale-source
+  evidence concern is addressed; exit-0 acceptance remains blocked by collection.
+- `PRRT_kwDOOzvyds61CY6K`: **remain unresolved / acceptance unmet**. Actual exit
+  2 and the first failure are documented. The authorized parent workflow must
+  disposition the thread using this evidence; no guarded merge is authorized
+  by this failed run.
+
+- [ ] Current-source unrestricted supported-Python suite exits 0.
+- [x] Identify durable tested source, runtime, command, actual exit, and summary.
+- [ ] Both acceptance threads receive parent-workflow dispositions before merge.
+
+Blocking/drainable pair: exit-0 acceptance blocks merge; evidence publication
+and parent-workflow handoff remain drainable. Preserve review, post-push floor,
+exact-head CI, guarded merge, and verification gates. No merge was attempted.
