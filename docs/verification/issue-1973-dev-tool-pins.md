@@ -1186,3 +1186,107 @@ The exit-0 acceptance criterion remains unmet. Run the current source in an
 environment permitting local socket operations and record the resulting full
 terminal summary. Further collection or diagnostic changes cannot establish
 that acceptance while this runtime restriction remains.
+
+## Issue #2012 repeatable isolated-suite verification — 2026-11-08
+
+Reviewed the preceding keepalive and autofix commits before continuing. They
+verify unrestricted execution and failure documentation, but do not establish
+exit-0 acceptance. The duplicate execution checkbox in PR #2013's embedded issue
+text is stale; the corresponding task in its automated summary is already checked.
+An attempted PR-body reconciliation was rejected with
+`MCP tool call requires approval, but approval policy is never`. The remote body
+therefore remains unchanged; the exit-0 acceptance boxes must remain unchecked.
+
+Added `scripts/verify_local_suite.py` and five real-repository regressions. This
+repository-local verification tool clones the committed source into a new output
+directory, validates required merge ancestry, reads `.python-version` and
+`pyproject.toml`, and checks the selected interpreter against `requires-python`.
+It runs exactly the selected interpreter's `-m pytest`, with no exclusions,
+marker filters, watchdog, or dependency installation. Inherited `PYTEST_ADDOPTS`,
+`PYTHONPATH`, and Git location variables are removed. The tool retains combined
+terminal output in `pytest.log` and writes the tested commit, runtime, ancestry,
+command, checkout directory, timestamps, and actual exit status into `result.json`.
+Existing evidence directories are never overwritten.
+
+The tests verify that dirty source edits and inherited exclusions cannot hide a
+committed failing test, failure tracebacks and nonzero statuses are retained,
+passing runs record zero, old evidence survives another attempt, unsupported
+interpreters are rejected, and required commits must actually be ancestors.
+These synthetic passing runs test the tool; they are not repository acceptance.
+
+### Committed-source full-suite result
+
+Source commit: **`ec168e79590e97121c2b11f9a73c90a892e6798d`**, committed in
+`/tmp/trip-planner-issue-2012-round8`. Its working tree was clean before running.
+The runner verified ancestry of merged #2005
+(`29c6aa01064f9eb3cbf15debd32cac3327ec43b8`) and #2011
+(`4c6ff3e81b412db4039f7d1a48fa95d0aecff753`).
+
+Reproduction from a checkout containing the committed source:
+
+```sh
+python scripts/verify_local_suite.py --source . --output /tmp/issue-2012-round8-full --python /opt/hostedtoolcache/Python/3.14.10/x64/bin/python --require-ancestor 29c6aa01064f9eb3cbf15debd32cac3327ec43b8 --require-ancestor 4c6ff3e81b412db4039f7d1a48fa95d0aecff753
+```
+
+Use a new output directory for another run and the absolute path to the supported
+interpreter in that environment. Selected runtime: **CPython 3.14.10**, executable
+`/opt/hostedtoolcache/Python/3.14.10/x64/bin/python`; pytest **9.2.0**.
+This matches `.python-version` (**3.14**) and `pyproject.toml`
+(**>=3.13,<3.15**). The runner's unrestricted child command, from isolated
+`/tmp/issue-2012-round8-full/checkout`, was exactly:
+
+```sh
+/opt/hostedtoolcache/Python/3.14.10/x64/bin/python -m pytest
+```
+
+Both child and runner exited **1**. Terminal result:
+
+```text
+collected 2890 items / 2 skipped
+tests/app/test_auth.py
+======================= 2 skipped, 14 warnings in 7.17s ========================
+! _pytest.outcomes.Exit: TestClient runtime unavailable: local socketpair I/O failed during send wakeup byte (PermissionError: [Errno 1] Operation not permitted). Run the unchanged suite in an environment permitting local socket operations. This is an environment failure, not a passing test run. !
+```
+
+The first selected node remains
+`tests/app/test_auth.py::test_signup_creates_account_sets_cookie_and_restores_session`,
+blocked in `require_app_test_runtime` before any test body executes. The underlying
+`sender.sendall(b"x")` failure and traceback recorded above remain applicable;
+a fresh standalone standard-library socketpair write failed identically before
+repository imports. Classification: **environmental blocker, high confidence**;
+there is no evidence of a changed-pin regression. Later test bodies remain
+unverified. Complete artifacts are `/tmp/issue-2012-round8-full/result.json` and
+`/tmp/issue-2012-round8-full/pytest.log`.
+
+Focused validation on that same committed isolated checkout exited **0**:
+
+```sh
+python -m pytest tests/scripts/test_verify_local_suite.py tests/test_runtime_requirements.py tests/test_pytest_collection.py tests/test_pytest_collection_audit.py -m 'not slow' -q
+```
+
+Terminal summary: **20 passed, 14 warnings in 28.12s**.
+
+Black formatted the new Python files. After serial cache preparation, the
+required whole-tree command exited **0**, reporting **529 files would be left
+unchanged**:
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue-2012-round8-black-cache black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+Ruff on both new Python files and `git diff --check` passed. Source commits reside
+in the isolated checkout because workspace `.git` is read-only; matching files
+remain in the workspace for automation pickup. The commit export is
+`/tmp/issue-2012-round8-commits.patch`.
+
+GitHub also rejected the requested `needs-human` label and blocker comment with
+`MCP tool call requires approval, but approval policy is never`; neither remote
+write was applied. Final PR #2013 readback was **open, draft=false**.
+
+- [x] Reconcile prior evidence and execute the unrestricted command on an isolated supported-runtime checkout containing both required merges.
+- [x] Implement and verify reproducible full-suite execution and exact evidence capture.
+- [ ] Obtain unrestricted local `python -m pytest` exit 0 on supported Python.
+
+Run this committed source in an environment permitting local socket operations
+to establish the remaining exit-0 acceptance. Earlier producer, deliberate-break,
+regenerated-gate, and controller evidence is retained above.
