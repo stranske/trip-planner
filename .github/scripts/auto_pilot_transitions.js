@@ -40,7 +40,7 @@ const TRANSITION_CONTRACT = Object.freeze({
   states: STATES,
   nextSteps: NEXT_STEPS,
   guards: Object.freeze([
-    'closed issues require verify:evaluate before done',
+    'closed issues require a PR-bound verify handoff before done',
     'format requires agents:formatted, not the old agents:format trigger label',
     'optimize advances only after an optimizer suggestions comment exists',
     'apply advances only after agents:apply-suggestions is present',
@@ -100,9 +100,9 @@ function resolveCurrentState(event = {}) {
   const linkedPr = hasLinkedPr(event.linkedPr);
 
   if (issueState === 'closed') {
-    return normalizeBoolean(event.hasVerify)
-      ? STATES.CLOSED_VERIFIED
-      : STATES.CLOSED_NEEDS_VERIFY;
+    // Closed issues must go through verify_step to confirm actual PR-bound handoff.
+    // Label-only verify:pr-handoff cannot bypass verification.
+    return STATES.CLOSED_NEEDS_VERIFY;
   }
 
   if (!linkedPr) {
@@ -203,6 +203,9 @@ function redispatchForceStep(currentStep) {
     [NEXT_STEPS.CAPABILITY_CHECK]: 'auto',
     [NEXT_STEPS.CREATE_PR]: 'auto',
     [NEXT_STEPS.MONITOR_PR]: 'auto',
+    // Only dispatched after verify_step confirms a PR/head-bound handoff;
+    // Report - Done re-validates that evidence before completing.
+    [NEXT_STEPS.VERIFY]: NEXT_STEPS.DONE,
   };
   return nextStepMap[step] || 'auto';
 }
