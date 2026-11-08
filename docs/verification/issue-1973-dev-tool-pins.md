@@ -1457,3 +1457,53 @@ but approval policy is never`; neither write was applied.
 The remaining acceptance still requires a runtime permitting local socket
 operations. Earlier focused, deliberate-break, regenerated-gate, and controller
 evidence is retained above.
+
+## Issue #2012 runtime-abort evidence regression — 2026-11-08
+
+Reviewed the six recently changed paths and reconciled the task list: execution
+of the unrestricted command is verified; exit-0 acceptance is still incomplete.
+The attempted duplicate-checkbox update, `needs-human` label, and blocker comment
+were each rejected by GitHub tooling with `MCP tool call requires approval, but
+approval policy is never`. No remote writes were applied. PR #2013 remains
+**open, draft=false**.
+
+Added an end-to-end regression in `tests/scripts/test_verify_local_suite.py`.
+It runs the real socket-runtime helper in a committed fixture repository through
+the verifier, simulates the denied wakeup write, and confirms exit 1, finished
+evidence, the failure diagnostic, and that the test body never executes. This
+checks evidence handling without changing the suite's runtime requirement.
+Focused verifier, runtime, and collection checks exited **0**: **23 passed,
+14 warnings in 46.44s**. Ruff and `git diff --check` passed. After serial cache
+preparation, the required whole-tree Black command exited **0**:
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue-2012-round11-black-cache black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+Result: **529 files would be left unchanged**. The test change is committed as
+**`990cb8a36bd8f41d4d4c516dfd0210be3ba42bb8`** in
+`/tmp/issue-2012-round11-source`; workspace `.git` is read-only.
+
+The verifier checked both required merge ancestors and ran that exact committed
+source in fresh `/tmp/issue-2012-round11-full/checkout`. Selected **CPython
+3.14.10**, executable `/opt/hostedtoolcache/Python/3.14.10/x64/bin/python`, matches
+`.python-version` **3.14** and satisfies `>=3.13,<3.15`. Exact unrestricted command:
+
+```sh
+/opt/hostedtoolcache/Python/3.14.10/x64/bin/python -m pytest
+```
+
+Exit **1**, with terminal summary:
+
+```text
+======================= 2 skipped, 14 warnings in 8.24s ========================
+! _pytest.outcomes.Exit: TestClient runtime unavailable: local socketpair I/O failed during send wakeup byte (PermissionError: [Errno 1] Operation not permitted). Run the unchanged suite in an environment permitting local socket operations. This is an environment failure, not a passing test run. !
+```
+
+The first selected node remains
+`tests/app/test_auth.py::test_signup_creates_account_sets_cookie_and_restores_session`,
+blocked in `require_app_test_runtime`. An independent socketpair write reproduced
+`PermissionError` at `sender.sendall(b"x")`, matching the helper traceback above.
+Classification remains **environmental blocker, high confidence**; no changed-pin
+regression is established. Full artifacts: `/tmp/issue-2012-round11-full/result.json`
+and `/tmp/issue-2012-round11-full/pytest.log`. The exit-0 boxes remain unchecked.

@@ -93,6 +93,56 @@ def test_pass_and_existing_evidence_is_not_overwritten(repository: Path, tmp_pat
     assert (output / "result.json").read_bytes() == evidence
 
 
+def test_runtime_abort_is_retained_as_failed_full_suite(repository: Path, tmp_path: Path) -> None:
+    """A pre-test runtime exit must not become successful verification evidence."""
+    helper = Path(__file__).resolve().parents[1] / "runtime_requirements.py"
+    (repository / "runtime_requirements.py").write_bytes(helper.read_bytes())
+    (repository / "conftest.py").write_text(
+        "from unittest.mock import MagicMock\n"
+        "import pytest\n"
+        "import runtime_requirements\n"
+        "@pytest.fixture(scope='session', autouse=True)\n"
+        "def runtime_check():\n"
+        "    sender, receiver = MagicMock(), MagicMock()\n"
+        "    sender.sendall.side_effect = PermissionError(1, 'Operation not permitted')\n"
+        "    runtime_requirements.socket.socketpair = lambda: (sender, receiver)\n"
+        "    runtime_requirements.require_testclient_socket_io()\n",
+        encoding="utf-8",
+    )
+    (repository / "test_example.py").write_text(
+        "from pathlib import Path\n"
+        "def test_body():\n"
+        "    Path('body-ran').write_text('yes')\n",
+        encoding="utf-8",
+    )
+    git(repository, "add", ".")
+    git(
+        repository,
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.invalid",
+        "commit",
+        "-qm",
+        "runtime-blocked fixture",
+    )
+    output = tmp_path / "runtime-blocked evidence"
+
+    assert verify(repository, output, sys.executable) == pytest.ExitCode.TESTS_FAILED
+
+    record = json.loads((output / "result.json").read_text(encoding="utf-8"))
+    assert record["commit"] == git(repository, "rev-parse", "HEAD")
+    assert record["command"] == [sys.executable, "-m", "pytest"]
+    assert record["exit_status"] == pytest.ExitCode.TESTS_FAILED
+    assert record["finished_at"] >= record["started_at"]
+    assert not (Path(record["cwd"]) / "body-ran").exists()
+    log = Path(record["log"]).read_text(encoding="utf-8")
+    assert "test_example.py" in log
+    assert "during send wakeup byte (PermissionError:" in log
+    assert "not a passing test run" in log
+    assert "1 passed" not in log
+
+
 def test_relative_virtualenv_interpreter_survives_isolated_checkout(
     repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
