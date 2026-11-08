@@ -38,9 +38,9 @@ def _requirements(pyproject: Path) -> dict[str, list[Requirement]]:
 
 
 def _exact_pin(req: Requirement) -> str | None:
-    specs = list(req.specifier)
-    if len(specs) == 1 and specs[0].operator == "==":
-        return specs[0].version
+    for spec in req.specifier:
+        if spec.operator == "==" and not spec.version.endswith(".*"):
+            return spec.version
     return None
 
 
@@ -74,6 +74,50 @@ def test_find_pin_conflicts_flags_diverged_exact_pin(tmp_path: Path) -> None:
     assert find_pin_conflicts(planner, tpp) == [
         "ruff: trip-planner 'ruff==0.17.3' vs TPP 'ruff==0.17.2'"
     ]
+
+
+@pytest.mark.parametrize("constrained_project", ["planner", "tpp"])
+@pytest.mark.parametrize(
+    ("constraint", "other_requirement", "conflicting"),
+    [
+        pytest.param("ruff==0.17.2,>=0.17", "ruff>=0.17.3", True, id="conflicting-compound-pin"),
+        pytest.param("ruff==0.17.3,>=0.17", "ruff>=0.17.3", False, id="matching-compound-pin"),
+        pytest.param("ruff==0.16.*", "ruff==0.17.3", True, id="conflicting-prefix"),
+        pytest.param("ruff==0.17.*", "ruff==0.17.3", False, id="matching-prefix"),
+    ],
+)
+def test_find_pin_conflicts_checks_compound_and_prefix_constraints(
+    tmp_path: Path,
+    constrained_project: str,
+    constraint: str,
+    other_requirement: str,
+    conflicting: bool,
+) -> None:
+    """A range beside an exact pin must not hide the co-install conflict."""
+    projects = {name: tmp_path / f"{name}.toml" for name in ("planner", "tpp")}
+    requirements = {
+        name: constraint if name == constrained_project else other_requirement for name in projects
+    }
+    for name, path in projects.items():
+        path.write_text(
+            "[project]\ndependencies = []\n[project.optional-dependencies]\n"
+            f"dev = {[requirements[name]]!r}\n",
+            encoding="utf-8",
+        )
+
+    conflicts = find_pin_conflicts(projects["planner"], projects["tpp"])
+
+    expected = (
+        [
+            (
+                f"ruff: trip-planner '{Requirement(requirements['planner'])}' "
+                f"vs TPP '{Requirement(requirements['tpp'])}'"
+            )
+        ]
+        if conflicting
+        else []
+    )
+    assert conflicts == expected
 
 
 @pytest.mark.parametrize("constrained_project", ["planner", "tpp"])
