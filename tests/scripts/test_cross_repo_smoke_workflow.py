@@ -138,6 +138,31 @@ def test_portal_contract_installs_both_projects_in_its_interpreter(workflow: dic
     assert steps.index(install) < steps.index(contract)
 
 
+def test_workflow_checks_live_dev_pins_before_joint_install(workflow: dict) -> None:
+    """The pin guard must inspect the live checkout before pip can hit #1973."""
+    steps = workflow["jobs"]["cross-repo-full-product"]["steps"]
+    guard = next(
+        step for step in steps if step["name"] == "Check dev pins co-resolve with pinned TPP"
+    )
+    planner_install = next(
+        step for step in steps if step["name"] == "Install trip-planner backend dependencies"
+    )
+    joint_install = next(
+        step for step in steps if step["name"] == "Install Travel-Plan-Permission dependencies"
+    )
+
+    assert guard["working-directory"] == "trip-planner"
+    assert guard["env"]["TPP_REPO_PATH"] == "../Travel-Plan-Permission"
+    assert shlex.split(guard["run"]) == [
+        "python",
+        "-m",
+        "pytest",
+        "tests/scripts/test_cross_repo_dev_pins.py",
+        "-q",
+    ]
+    assert steps.index(planner_install) < steps.index(guard) < steps.index(joint_install)
+
+
 def test_workflow_runs_full_product_check_with_repo_path(workflow: dict) -> None:
     job = workflow["jobs"]["cross-repo-full-product"]
     run_step = next(
