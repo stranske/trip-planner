@@ -325,6 +325,52 @@ def test_workflow_tpp_pin_resolves_with_planner_dev_pins(
     test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
 
 
+@pytest.mark.parametrize("restored_tool", ["all", "ruff", "mypy", "pytest"])
+def test_offline_workflow_guard_rejects_original_producer_pins(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, restored_tool: str
+) -> None:
+    """The actual offline gate must catch an unpaired sync without a live checkout."""
+    workflow = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "cross-repo-smoke.yml").read_text()
+    )
+    pinned_ref = workflow["env"]["TPP_PINNED_REF"]
+    producer = REPO_ROOT / "tests" / "fixtures" / "tpp_dev_pins" / pinned_ref / "pyproject.toml"
+    metadata = producer.read_text(encoding="utf-8")
+    requirements = _requirements(producer)
+    old_versions = {"ruff": "0.17.2", "mypy": "2.4.0", "pytest": "9.1.1"}
+    restored = (
+        old_versions if restored_tool == "all" else {restored_tool: old_versions[restored_tool]}
+    )
+    for tool, version in restored.items():
+        current = str(requirements[tool][0])
+        assert current in metadata
+        metadata = metadata.replace(current, f"{tool}=={version}")
+
+    # Preserve real planner requirements and the workflow's snapshot selection;
+    # change only the producer pins that caused the reported installation failure.
+    (tmp_path / "pyproject.toml").write_text(
+        (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    workflow_directory = tmp_path / ".github" / "workflows"
+    workflow_directory.mkdir(parents=True)
+    (workflow_directory / "cross-repo-smoke.yml").write_text(
+        yaml.safe_dump({"env": {"TPP_PINNED_REF": pinned_ref}}), encoding="utf-8"
+    )
+    snapshot = tmp_path / "tests" / "fixtures" / "tpp_dev_pins" / pinned_ref
+    snapshot.mkdir(parents=True)
+    (snapshot / "pyproject.toml").write_text(metadata, encoding="utf-8")
+    monkeypatch.setattr(f"{__name__}.REPO_ROOT", tmp_path)
+    monkeypatch.delenv("TPP_REPO_PATH", raising=False)
+
+    with pytest.raises(AssertionError, match="cannot be installed together") as failure:
+        test_workflow_tpp_pin_resolves_with_planner_dev_pins(monkeypatch)
+
+    for tool, version in restored.items():
+        assert f"{tool}: trip-planner '{requirements[tool][0]}' vs TPP '{tool}=={version}'" in str(
+            failure.value
+        )
+
+
 @pytest.mark.parametrize("restored_tool", ["all", "ruff", "mypy", "pytest", None])
 def test_pip_resolves_paired_dev_tool_pins_offline(
     tmp_path: Path, restored_tool: str | None

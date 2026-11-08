@@ -1,5 +1,41 @@
 # Issue #1973: dev-tool pin verification
 
+## Hosted runner follow-up — 2026-11-08
+
+This follow-up starts from `329833003b4c6e2be805f22ed3c88308730f5b0a` on
+Python **3.14.10**. The working-tree test change adds four cases exercising the
+actual offline workflow guard against real planner requirements and the selected
+producer snapshot, with all or individual original Ruff/Mypy/Pytest pins restored.
+Bypassing the pin-conflict check makes all four cases fail with `DID NOT RAISE`;
+restoring the guard byte-for-byte returns them to passing.
+
+`python -m pytest tests/scripts/test_cross_repo_dev_pins.py tests/scripts/test_cross_repo_smoke_workflow.py -q -m 'not slow'`
+reports **77 passed, 2 skipped**. Both skips require a real TPP checkout, which
+is absent on this runner. The changed test file passes Black (line length 100)
+and Ruff; `git diff --check` passes.
+
+The full `python -m pytest -m 'not slow' -q` run stalled and was interrupted.
+A separate 25-second diagnostic of its first authentication test also timed out;
+the stack dump locates the wait in Starlette TestClient / AnyIO portal setup.
+The required repository-wide Black command fails with a sandbox
+`PermissionError` starting its worker processes; single-worker retries stall.
+Neither full-suite nor repository-wide formatting acceptance is established.
+No commit was made: `git add` fails because `.git/index.lock` is on a read-only
+filesystem, and the required formatting gate has not passed.
+
+GitHub's connector confirms #2005 is open and ready at the starting head, with
+successful source CI, Cross-Repo Smoke and Gate runs. #1972 remains closed and
+unmerged. Candidate delivery #2006 remains open and ready at
+`4ea6a28d050bbcf2233b725de13ade495f132002`; Gate run `42449207902`
+still fails `Cross-Repo Smoke / cross-repo-full-product` at joint dependency
+installation. `gh run view 41956043710 --repo stranske/trip-planner` could not
+connect to GitHub; the connector separately confirms its original failed job.
+Issue #1973 still has no next sync-core classification. Both remaining PR
+acceptance criteria therefore stay unchecked. A runner with writable Git
+metadata and working full-suite/formatting execution is needed to commit this
+follow-up; controller-owned regenerated delivery and classification evidence
+are still needed after integration.
+
 ## Current reconciliation — 2026-11-08
 
 This note supersedes all previous open-head, uncommitted-file and local full-suite
