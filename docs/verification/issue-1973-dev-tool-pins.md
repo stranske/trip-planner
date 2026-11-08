@@ -1,47 +1,11 @@
 # Issue #1973: dev-tool pin verification
 
-## Hosted runner follow-up — 2026-11-08
-
-This follow-up starts from `329833003b4c6e2be805f22ed3c88308730f5b0a` on
-Python **3.14.10**. The working-tree test change adds four cases exercising the
-actual offline workflow guard against real planner requirements and the selected
-producer snapshot, with all or individual original Ruff/Mypy/Pytest pins restored.
-Bypassing the pin-conflict check makes all four cases fail with `DID NOT RAISE`;
-restoring the guard byte-for-byte returns them to passing.
-
-`python -m pytest tests/scripts/test_cross_repo_dev_pins.py tests/scripts/test_cross_repo_smoke_workflow.py -q -m 'not slow'`
-reports **77 passed, 2 skipped**. Both skips require a real TPP checkout, which
-is absent on this runner. The changed test file passes Black (line length 100)
-and Ruff; `git diff --check` passes.
-
-The full `python -m pytest -m 'not slow' -q` run stalled and was interrupted.
-A separate 25-second diagnostic of its first authentication test also timed out;
-the stack dump locates the wait in Starlette TestClient / AnyIO portal setup.
-The required repository-wide Black command fails with a sandbox
-`PermissionError` starting its worker processes; single-worker retries stall.
-Neither full-suite nor repository-wide formatting acceptance is established.
-No commit was made: `git add` fails because `.git/index.lock` is on a read-only
-filesystem, and the required formatting gate has not passed.
-
-GitHub's connector confirms #2005 is open and ready at the starting head, with
-successful source CI, Cross-Repo Smoke and Gate runs. #1972 remains closed and
-unmerged. Candidate delivery #2006 remains open and ready at
-`4ea6a28d050bbcf2233b725de13ade495f132002`; Gate run `42449207902`
-still fails `Cross-Repo Smoke / cross-repo-full-product` at joint dependency
-installation. `gh run view 41956043710 --repo stranske/trip-planner` could not
-connect to GitHub; the connector separately confirms its original failed job.
-Issue #1973 still has no next sync-core classification. Both remaining PR
-acceptance criteria therefore stay unchecked. A runner with writable Git
-metadata and working full-suite/formatting execution is needed to commit this
-follow-up; controller-owned regenerated delivery and classification evidence
-are still needed after integration.
-
 ## Current reconciliation — 2026-11-08
 
 This note supersedes all previous open-head, uncommitted-file and local full-suite
 pass claims in this file. The retained implementation is committed on
 `vibe/issue-1973`; this continuation changes only this verification note.
-Implementation/test head: `a5dc565c88a8c04d52772f6911515c2b665af5b6`.
+Latest reviewed implementation/test head: `a8253804861ff9bc6ea1ff9b268e90d1bd5e08b4`.
 
 Before changes, the real-input outcome was defined as all focused cross-repo
 checks passing without live-check skips against the workflow's exact producer
@@ -57,7 +21,8 @@ observed relevant failure; preserve the implementation and dependency-pin writer
 ## Diff review and local evidence
 
 Reviewed the complete current diff against `origin/main` for both test files,
-including all offline extras resolver assertions. Retain it unchanged:
+including all offline extras resolver assertions and the four additional guard
+cases committed by the completed keepalive job. Retain it unchanged:
 
 - Offline wheels declare both projects' real tool requirements through `[dev]`.
   Old-producer and individual Ruff/Mypy/Pytest conflicts require
@@ -67,10 +32,14 @@ including all offline extras resolver assertions. Retain it unchanged:
   and dev metadata with the reviewed snapshot. Temporary Git repositories and
   live HEAD reads isolate inherited repository-location variables.
 - Workflow assertions require the live pin check between planner and TPP installs.
-- Re-read all three PR review threads: all resolved; no remaining thread repair.
+- Re-read the original three PR review threads: all resolved. A subsequent
+  inactive-marker nit was deferred and resolved: neither actual project metadata
+  contains marker-bearing requirements, so it identifies no current delivery
+  failure. Follow-up: https://github.com/stranske/trip-planner/pull/2005#discussion_r4505950443.
+  No claim is made that marker handling was implemented.
 
 No repository `.venv` exists. `/opt/anaconda3/bin/python3 --version` printed
-`Python 3.12.2`. The exact command above printed **75 passed in 4.11s**, no skips.
+`Python 3.12.2`. The exact command above printed **79 passed in 5.46s**, no skips.
 `git -C ../Travel-Plan-Permission rev-parse HEAD` printed
 `b56d92b389736c70370aa9134f379ac8cd1f3ad1`, equal to workflow `TPP_PINNED_REF`.
 
@@ -124,3 +93,27 @@ acceptance remain unproven / retain the implementation, reconcile evidence, push
 this note and attempt normal guarded integration. Do not edit generated deliveries
 or protected dependency pins, bypass merge gates, or substitute source CI for the
 missing regenerated-delivery and controller evidence.
+
+## Integration continuation — 2026-11-08
+
+Documentation reconciliation commit `2355a80135226d4b7f536969b208e127f0e0b015`
+was pushed to this branch. The initial guard refused a behind-main head. A local
+base merge could not write `.agents/issue-2007-ledger.yml` in this sandbox; its
+partial untracked files were removed. GitHub's supported update-branch endpoint
+then merged main as `329833003b4c6e2be805f22ed3c88308730f5b0a`.
+Its checks completed without failures. The active guarded merge did not execute:
+it printed a remaining exact-head review floor of 237 seconds.
+
+During that wait, keepalive committed `a8253804861ff9bc6ea1ff9b268e90d1bd5e08b4`.
+Run `42473123372` confirms its Codex keepalive and Finish keepalive round jobs
+completed successfully. Its four added original-producer guard cases were
+reviewed and retained; the specified focused command then printed **79 passed
+in 5.46s**, no skips, using the same exact sibling and fallback runtime above.
+The keepalive note's uncommitted-file and unavailable-network claims are
+superseded by this reconciliation. Its reported Python 3.14 diagnostic still
+does not establish a complete local repository pass.
+
+The latest source Cross-Repo Smoke run is `42473616922` on `a8253804`.
+Neither it nor the earlier source runs supplies regenerated-delivery acceptance.
+The current #2005 head must complete its checks and review floor before the
+next guarded integration attempt. No merge or producer regeneration is claimed.
