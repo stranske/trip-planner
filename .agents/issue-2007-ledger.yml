@@ -1,0 +1,182 @@
+version: 1
+issue: 2007
+base: main
+branch: codex/issue-2007
+tasks:
+  - id: task-01
+    title: Fix the source dependency-pin conflict causing `Dev-tool pin update breaks
+      Cross-Repo Smoke / cross-repo-full-product`, using the linked logs.
+    status: doing
+    started_at: '2026-11-08T05:39:41Z'
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-02
+    title: 'Inspect the linked failing job logs to identify which packages (verify:
+      confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-03
+    title: 'version pins produce the ResolutionImpossible error (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-04
+    title: 'Identify the source file in the sync source repository that defines the
+      conflicting dev-tool pins (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-05
+    title: 'Update the conflicting dev-tool pins in the source file so pip dependency
+      resolution succeeds (verify: dependencies updated)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-06
+    title: 'Run pip install against the updated pins locally to confirm that dependency
+      resolution completes without conflicts (verify: dependencies updated)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-07
+    title: Add or extend a regression test reproducing the conflict and passing after
+      the fix, using `pytest` or `node --test`, whichever the source uses.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-08
+    title: 'Determine whether the source repository uses pytest or node --test (verify:
+      confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-09
+    title: 'locate its existing test directory (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-10
+    title: 'Write a regression test that runs a pip dry-run resolution against the
+      dev-tool pin file (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-11
+    title: 'fails on ResolutionImpossible (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-12
+    title: Verify the new regression test fails against the original conflicting pins
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-13
+    title: 'passes against the fixed pins (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-14
+    title: '`Dev-tool pin update breaks Cross-Repo Smoke / cross-repo-full-product`
+      passes on regenerated stranske/trip-planner#2006, verified with `gh run view
+      <run-id>`, and the repository''s test command passes locally.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-15
+    title: Reintroducing the reported behavior makes the regression test fail; reverting
+      restores a passing result.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-16
+    title: The next sync-core round classifies stranske/trip-planner#2006 without
+      this finding.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-17
+    title: Fix the failure named in the title (`Dev-tool pin update breaks Cross-Repo
+      Smoke / cross-repo-full-product`) at its source; the failing check's log is
+      linked under Evidence and the sync PR is stranske/trip-planner#2006.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-18
+    title: Add or extend a test that reproduces the failure and passes after the fix
+      (`pytest` or `node --test`, whichever the source uses).
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-19
+    title: '`Dev-tool pin update breaks Cross-Repo Smoke / cross-repo-full-product`
+      passes on regenerated stranske/trip-planner#2006, verified with `gh run view
+      <run-id>` (Regeneration of the sync PR happens through `.github/workflows/maint-68-sync-consumer-repos.yml`,
+      which the agent cannot modify or trigger-retry. The agent also cannot retry
+      CI pipelines, and the check runs in a different repository (stranske/trip-planner).
+      | Narrow the agent''s responsibility to fixing the source pin and adding the
+      test. A human or the sync workflow should handle regeneration and confirm the
+      check on stranske/trip-planner#2006.)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-20
+    title: The next sync-core round classifies stranske/trip-planner#2006 without
+      this finding. (This depends on a future external sync-core run that the agent
+      can neither trigger nor observe. | Move this to a post-merge manual verification
+      step owned by a maintainer, outside the agent's acceptance criteria.)
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-21
+    title: Possible need to edit `.github/workflows/maint-68-sync-consumer-repos.yml`
+      (The non-goals mention this workflow only as the regeneration mechanism. If
+      the fix turns out to need a workflow change, the agent is blocked because workflow
+      files are protected. | State explicitly that the fix must live in non-workflow
+      source files. If a workflow change is needed, escalate to a human.)
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
