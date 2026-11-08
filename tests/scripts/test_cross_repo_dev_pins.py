@@ -6,8 +6,9 @@ interpreter. When a dev-tool sync bumps an exact pin here (for example
 TPP revision carrying the old pin, pip fails with ``ResolutionImpossible``
 (issues #1967 and #1973). This test names the conflicting package and the fix up front.
 
-It needs a TPP checkout: set ``TPP_REPO_PATH`` (the smoke workflow does) or
-the test is skipped. Run with
+The offline regression checks the workflow's actual pin against a reviewed
+producer dependency snapshot. The live checkout check additionally needs
+``TPP_REPO_PATH`` (the smoke workflow sets it). Run with
 ``TPP_REPO_PATH=../Travel-Plan-Permission pytest tests/scripts/test_cross_repo_dev_pins.py``.
 """
 
@@ -18,6 +19,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+import yaml
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
@@ -82,6 +84,31 @@ def test_planner_dev_pins_resolve_with_pinned_tpp_checkout() -> None:
         + "\nMove TPP_PINNED_REF in .github/workflows/cross-repo-smoke.yml to a TPP "
         "revision with matching pins, in the same PR as the pin update."
     )
+
+
+def test_workflow_tpp_pin_resolves_with_planner_dev_pins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify the paired pin update locally even without a sibling checkout.
+
+    Unlike synthetic matching-version cases, this checks the repository's
+    real planner requirements and workflow ref. The producer snapshot contains
+    the dependency sections from that exact commit, so updating dev pins alone
+    must fail here before pip attempts the cross-repo installation.
+    """
+    workflow = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "cross-repo-smoke.yml").read_text()
+    )
+    pinned_ref = workflow["env"]["TPP_PINNED_REF"]
+    snapshot = REPO_ROOT / "tests" / "fixtures" / "tpp_dev_pins" / pinned_ref
+    assert (snapshot / "pyproject.toml").is_file(), (
+        f"Missing TPP dependency snapshot for {pinned_ref}. Copy the dependencies "
+        "and dev extra from the pinned producer's pyproject.toml into "
+        f"{snapshot / 'pyproject.toml'} when reviewing a TPP pin update."
+    )
+    monkeypatch.setenv("TPP_REPO_PATH", str(snapshot))
+
+    test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
 
 
 @pytest.mark.parametrize(
