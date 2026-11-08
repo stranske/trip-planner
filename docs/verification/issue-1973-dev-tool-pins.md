@@ -1507,3 +1507,63 @@ blocked in `require_app_test_runtime`. An independent socketpair write reproduce
 Classification remains **environmental blocker, high confidence**; no changed-pin
 regression is established. Full artifacts: `/tmp/issue-2012-round11-full/result.json`
 and `/tmp/issue-2012-round11-full/pytest.log`. The exit-0 boxes remain unchecked.
+
+## Issue #2012 optimized-interpreter evidence guard — 2026-11-08
+
+Reproduced a false-pass bug: inherited `PYTHONOPTIMIZE=1` disabled an application
+assertion, and the verification helper recorded exit **0** for a deliberately
+failing fixture. The new regression failed before the fix. The helper now probes
+the selected interpreter's optimization level, records it with runtime metadata,
+and rejects optimized execution before pytest starts. Real-subprocess regressions
+cover levels **1** and **2**, proving the same fixture fails normally, passes
+under optimization, and cannot produce evidence through the fixed helper.
+These fixture passes are not repository acceptance.
+
+Source fix commit: **`fad6a110bfedaf537444dcd1158159e72d126610`**, committed in
+`/tmp/issue-2012-round12-baseline/checkout` because workspace `.git` is read-only.
+Matching source files remain in the workspace for automation pickup.
+Focused verification exited **0**: **25 passed, 14 warnings in 51.06s**:
+
+```sh
+python -m pytest tests/scripts/test_verify_local_suite.py tests/test_runtime_requirements.py tests/test_pytest_collection.py tests/test_pytest_collection_audit.py -m 'not slow' -q
+```
+
+Ruff and `git diff --check` passed. Black formatted both changed Python files.
+After serial cache preparation, the required whole-tree Black check exited **0**
+with **529 files would be left unchanged**:
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue-2012-round12-black-cache black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+The unrestricted suite ran on that exact committed source in fresh isolated
+`/tmp/issue-2012-round12-full/checkout`. The verifier confirmed both required
+merge ancestors, #2005 (`29c6aa01064f9eb3cbf15debd32cac3327ec43b8`) and #2011
+(`4c6ff3e81b412db4039f7d1a48fa95d0aecff753`). Selected **CPython 3.14.10** matches
+`.python-version` **3.14** and satisfies `>=3.13,<3.15`; optimization is **0**,
+and pytest is **9.2.0**. Exact command without exclusions or watchdog:
+
+```sh
+/opt/hostedtoolcache/Python/3.14.10/x64/bin/python -m pytest
+```
+
+Exit **1**, terminal result:
+
+```text
+======================= 2 skipped, 14 warnings in 7.01s ========================
+! _pytest.outcomes.Exit: TestClient runtime unavailable: local socketpair I/O failed during send wakeup byte (PermissionError: [Errno 1] Operation not permitted). Run the unchanged suite in an environment permitting local socket operations. This is an environment failure, not a passing test run. !
+```
+
+The first selected node remains
+`tests/app/test_auth.py::test_signup_creates_account_sets_cookie_and_restores_session`,
+blocked in `require_app_test_runtime` before its test body. A fresh standalone
+socketpair probe reproduced `PermissionError` at `sender.sendall(b"x")`, matching
+the helper traceback above. Classification: **environmental blocker, high
+confidence**; no changed-pin regression is established. Artifacts:
+`/tmp/issue-2012-round12-full/result.json` and `pytest.log` in that directory.
+Exit-0 acceptance remains unchecked and requires a runtime permitting local
+socket operations. Earlier producer and controller evidence is retained above.
+
+GitHub rejected this round's `needs-human` label and blocker comment with
+`MCP tool call requires approval, but approval policy is never`; neither remote
+write was applied. PR #2013 readback was **open, draft=false**.

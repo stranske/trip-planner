@@ -64,7 +64,8 @@ def verify(source: Path, output: Path, interpreter: str, ancestors: tuple[str, .
                 (
                     "import json, platform, sys; "
                     "print(json.dumps({'version': platform.python_version(), "
-                    "'executable': sys.executable, 'implementation': platform.python_implementation()}))"
+                    "'executable': sys.executable, 'implementation': platform.python_implementation(), "
+                    "'optimization': sys.flags.optimize}))"
                 ),
             ],
             cwd=checkout,
@@ -74,6 +75,11 @@ def verify(source: Path, output: Path, interpreter: str, ancestors: tuple[str, .
     )
     if Version(runtime["version"]) not in SpecifierSet(requirement):
         raise ValueError(f"Python {runtime['version']} does not satisfy {requirement}")
+    if runtime["optimization"]:
+        raise ValueError(
+            "Cannot verify with an optimized interpreter: application assertions are disabled. "
+            "Unset PYTHONOPTIMIZE and select an interpreter without -O or -OO."
+        )
     command = [runtime["executable"], "-m", "pytest"]
     record = {
         "commit": commit,

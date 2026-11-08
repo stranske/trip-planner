@@ -235,6 +235,61 @@ def test_unsupported_runtime_is_rejected_before_pytest(repository: Path, tmp_pat
     assert not (output / "result.json").exists()
 
 
+@pytest.mark.parametrize("optimization", ["1", "2"])
+def test_optimized_runtime_cannot_produce_false_passing_evidence(
+    repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, optimization: str
+) -> None:
+    (repository / "application.py").write_text(
+        "def validate(value):\n    assert value, 'application assertion must execute'\n",
+        encoding="utf-8",
+    )
+    (repository / "test_example.py").write_text(
+        "from application import validate\n"
+        "def test_application_validation():\n    validate(False)\n",
+        encoding="utf-8",
+    )
+    git(repository, "add", ".")
+    git(
+        repository,
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.invalid",
+        "commit",
+        "-qm",
+        "application assertion fixture",
+    )
+    monkeypatch.delenv("PYTHONOPTIMIZE", raising=False)
+    baseline = subprocess.run(
+        [sys.executable, "-m", "pytest"],
+        cwd=repository,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert baseline.returncode == 1, baseline.stdout + baseline.stderr
+    assert "application assertion must execute" in baseline.stdout
+
+    monkeypatch.setenv("PYTHONOPTIMIZE", optimization)
+    # Pytest rewrites test assertions, but application assertions still disappear.
+    contaminated = subprocess.run(
+        [sys.executable, "-m", "pytest"],
+        cwd=repository,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert contaminated.returncode == 0, contaminated.stdout + contaminated.stderr
+    assert "1 passed" in contaminated.stdout
+
+    output = tmp_path / "optimized runtime evidence"
+    with pytest.raises(ValueError, match="optimized interpreter"):
+        verify(repository, output, sys.executable)
+
+    assert not (output / "pytest.log").exists()
+    assert not (output / "result.json").exists()
+
+
 @pytest.mark.parametrize("exists", [False, True])
 def test_missing_required_merge_is_rejected_before_pytest(
     repository: Path, tmp_path: Path, exists: bool
