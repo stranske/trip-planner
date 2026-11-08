@@ -196,4 +196,214 @@ local suite remains unverified under this repair's explicit test restriction;
 no formal predecessor edge was added to the producer metadata. Source-PR CI and
 issue closure were not used to establish downstream acceptance.
 
-Refs #1973
+## Issue #2012 local full-suite follow-up — 2026-11-08
+
+This follow-up attempts the previously missing unrestricted local suite. The
+earlier repair restriction and its focused, deliberate-break, regenerated-gate,
+and controller results above remain historical evidence; they do not establish
+a full-suite pass.
+
+### Checkout and supported runtime
+
+Created an isolated checkout with
+`git clone --shared --no-hardlinks . /tmp/trip-planner-issue-2012` at
+`795b770dadce7002a912d857ff592f1f087c5242`. Both ancestry checks exited **0**:
+
+```sh
+git merge-base --is-ancestor 29c6aa01064f9eb3cbf15debd32cac3327ec43b8 HEAD
+git merge-base --is-ancestor 4c6ff3e81b412db4039f7d1a48fa95d0aecff753 HEAD
+```
+
+These are the merged #2005 and #2011 revisions. `.python-version` selects
+**3.14**, and `pyproject.toml` supports **>=3.13,<3.15**. The selected local
+interpreter is **CPython 3.14.10**, executable
+`/opt/hostedtoolcache/Python/3.14.10/x64/bin/python`, built with GCC 15.2.0.
+Installed pytest is **9.2.0**, Black **26.10.1**, and Ruff **0.17.3**.
+`PYTEST_ADDOPTS` and `TPP_REPO_PATH` are unset.
+
+### Initial attempt and failure classification
+
+From the isolated checkout, ran the Makefile's exact test command:
+
+```sh
+python -m pytest
+```
+
+Output was redirected to `/tmp/issue-2012-initial-pytest.log`. The process
+stalled during setup of the first test and was interrupted; observed exit
+status **130**. Its complete terminal output before interruption was:
+
+```text
+============================= test session starts ==============================
+platform linux -- Python 3.14.10, pytest-9.2.0, pluggy-1.7.0
+rootdir: /tmp/trip-planner-issue-2012
+configfile: pyproject.toml
+testpaths: tests
+plugins: cov-7.1.0, regressions-2.11.0, platformdirs-4.14.5, datadir-1.9.0, langsmith-0.14.17, pytest_httpserver-1.1.5, anyio-4.14.2
+collected 2671 items / 2 skipped
+
+tests/app/test_auth.py
+```
+
+No pytest terminal result or assertion failure was produced. The first blocked
+node is
+`tests/app/test_auth.py::test_signup_creates_account_sets_cookie_and_restores_session`,
+inside its `client` fixture at `tests/app/test_auth.py:21`. A separate diagnostic
+run used:
+
+```sh
+python -m pytest tests/app/test_auth.py::test_signup_creates_account_sets_cookie_and_restores_session -vv -o faulthandler_timeout=10
+```
+
+It also stalled and was interrupted with exit **130**. The timeout traceback
+excerpt identifies the wait before the test body executes:
+
+```text
+tests/app/test_auth.py::test_signup_creates_account_sets_cookie_and_restores_session Timeout (0:00:10)!
+Thread [asyncio-portal-] (most recent call first):
+  File ".../python3.14/selectors.py", line 452 in select
+  File ".../python3.14/asyncio/base_events.py", line 2026 in _run_once
+  File ".../python3.14/asyncio/base_events.py", line 678 in run_forever
+  File ".../python3.14/asyncio/base_events.py", line 707 in run_until_complete
+  File ".../python3.14/asyncio/runners.py", line 128 in run
+  File ".../site-packages/anyio/_backends/_asyncio.py", line 2481 in run
+  File ".../site-packages/anyio/_core/_eventloop.py", line 83 in run
+  File ".../site-packages/anyio/from_thread.py", line 536 in run_blocking_portal
+Thread [python] (most recent call first):
+  File ".../python3.14/threading.py", line 369 in wait
+  File ".../python3.14/concurrent/futures/_base.py", line 449 in result
+  File ".../site-packages/anyio/_backends/_asyncio.py", line 2715 in run_sync_from_thread
+  File ".../site-packages/anyio/from_thread.py", line 118 in run_sync
+  File ".../site-packages/anyio/from_thread.py", line 301 in _spawn_task_from_thread
+  File ".../site-packages/anyio/from_thread.py", line 382 in start_task_soon
+  File ".../site-packages/starlette/testclient.py", line 696 in __enter__
+  File "/tmp/trip-planner-issue-2012/tests/app/test_auth.py", line 21 in client
+```
+
+Independent standard-library probes establish a sandbox restriction. Creating
+an IPv4 socket raises `PermissionError: [Errno 1] Operation not permitted`.
+Creating a local socketpair succeeds, but sending one byte fails, exit **1**:
+
+```sh
+python -c 'import socket; a, b = socket.socketpair(); print("socketpair created"); a.send(b"x"); print(b.recv(1))'
+```
+
+```text
+socketpair created
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import socket; a, b = socket.socketpair(); print("socketpair created"); a.send(b"x"); print(b.recv(1))
+                                                                            ~~~~~~^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+```
+
+Classification: **environmental blocker, with high confidence**, rather than
+evidence of a changed dev-tool pin regression. Asyncio's cross-thread wakeup
+requires the socketpair operation denied here; the diagnostic waits at that
+boundary. The socket probes do not import repository code or dev tools. The
+focused pin/workflow tests still pass, as recorded below. This does not prove
+the remainder of the full suite passes: rerun on a supported local interpreter
+where socket operations are permitted before granting acceptance. No dependency
+or application changes are proposed to conceal this restriction.
+
+### Restoring default collection
+
+The original pytest configuration also contained
+`--ignore=tests/test_build_html.py`, so the initial run cannot satisfy
+"without exclusions." Removed that ignore and changed the renderer smoke test
+to create its JSON and templates under `tmp_path`, assert both rendered bundle
+contents, and cover populated and empty itineraries. It can now run during
+default collection without overwriting the repository's HTML source files.
+
+The focused validation command, exit **0**, was:
+
+```sh
+python -m pytest tests/test_build_html.py tests/scripts/test_cross_repo_dev_pins.py tests/scripts/test_cross_repo_smoke_workflow.py -m 'not slow' -q
+```
+
+```text
+79 passed, 2 skipped, 14 warnings in 3.31s
+```
+
+The two skips require `TPP_REPO_PATH`; these focused results do not replace the
+earlier exact-producer verification. In the isolated checkout the renderer test
+alone also passed: **2 passed, 14 warnings in 0.15s**, exit **0**.
+
+### Unrestricted attempt against the committed test change
+
+Tested source commit **`0f30404dbead0e1c4dcca3a4f37a50dc2b443ca6`**, based on
+`795b770dadce7002a912d857ff592f1f087c5242`, in the clean isolated checkout
+`/tmp/trip-planner-issue-2012`, using the same **CPython 3.14.10** executable
+listed above. This commit includes both merged PRs and the restored HTML test.
+
+The exact test command was **`python -m pytest`**, with no command-line or
+configured test exclusions and no marker filter. A watchdog bounded the
+already-reproduced hang; the complete shell invocation was:
+
+```sh
+timeout --signal=INT --kill-after=5s 30s python -m pytest > /tmp/issue-2012-unrestricted-pytest.log 2>&1
+```
+
+Observed wrapper exit status: **137**. After 30 seconds the watchdog sent
+SIGINT; the blocked process did not exit within the next five seconds and was
+killed. This is a terminated run, not a pytest assertion-failure exit or a
+passing full-suite result. Complete terminal output:
+
+```text
+============================= test session starts ==============================
+platform linux -- Python 3.14.10, pytest-9.2.0, pluggy-1.7.0
+rootdir: /tmp/trip-planner-issue-2012
+configfile: pyproject.toml
+testpaths: tests
+plugins: cov-7.1.0, regressions-2.11.0, platformdirs-4.14.5, datadir-1.9.0, langsmith-0.14.17, pytest_httpserver-1.1.5, anyio-4.14.2
+collected 2673 items / 2 skipped
+
+tests/app/test_auth.py
+```
+
+Terminal result: **no tests finished and no pytest result summary was emitted**.
+The first blocked node and diagnostic traceback remain those recorded above.
+Collection includes the two restored HTML cases (2,673 versus 2,671); the two
+collection-time skips are existing suite behavior, not added exclusions.
+
+The required Black gate initially failed when multiprocessing attempted a
+denied socket operation; setting one worker still stalled on an asyncio
+wakeup. Checked all 522 tracked Python files individually with Black, with
+**522 passing and 0 failing**, to populate a writable cache without parallel
+socket operations. The required whole-tree command then exited **0**:
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue-2012-black-cache black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+```text
+All done! ✨ 🍰 ✨
+522 files would be left unchanged.
+```
+
+`ruff check tests/test_build_html.py` and `git diff --check` also exited **0**.
+The original workspace's `.git` directory is read-only (`git add` failed to
+create `.git/index.lock`), so the source commit was made in the isolated
+checkout. The workspace's changed source files were verified byte-for-byte
+against that commit. The documentation update is a subsequent evidence-only
+commit; it does not change the tested source.
+
+### Follow-up status
+
+- [x] Restore the excluded HTML renderer test to default collection and verify its populated and empty cases.
+- [x] Record the tested source commit, supported interpreter, exact full-suite invocation, nonzero exit, terminal output, and first blocked node with diagnostic traceback.
+- [x] Distinguish the observed environmental blocker from the changed-pin regression before proposing application or dependency changes.
+- [ ] Complete an unrestricted local `python -m pytest` run with exit 0 on a supported interpreter.
+
+Remaining action: repeat the exact test command against the recorded source
+in a local environment permitting socket operations, then record its actual
+terminal summary. Full-suite acceptance remains **unverified**.
+
+Attempted to add `needs-human` and a blocker comment to PR #2013. Both GitHub
+write tools refused the operation: `MCP tool call requires approval, but approval
+policy is never`. Neither remote change was applied. PR #2013 was read back as
+open and ready for review. The original workspace retains the three changed
+files; the isolated checkout holds the commits, also exported to
+`/tmp/issue-2012-commits.patch` for handoff.
+
+Refs #1973, #2012
