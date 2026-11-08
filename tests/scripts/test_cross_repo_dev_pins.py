@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import tomllib
+from itertools import product
 from pathlib import Path
 
 import pytest
@@ -26,11 +27,14 @@ from packaging.utils import canonicalize_name
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def _requirements(pyproject: Path) -> dict[str, Requirement]:
+def _requirements(pyproject: Path) -> dict[str, list[Requirement]]:
     project = tomllib.loads(pyproject.read_text())["project"]
     entries = list(project.get("dependencies", []))
     entries += project.get("optional-dependencies", {}).get("dev", [])
-    return {canonicalize_name(req.name): req for req in map(Requirement, entries)}
+    requirements: dict[str, list[Requirement]] = {}
+    for req in map(Requirement, entries):
+        requirements.setdefault(canonicalize_name(req.name), []).append(req)
+    return requirements
 
 
 def _exact_pin(req: Requirement) -> str | None:
@@ -46,10 +50,13 @@ def find_pin_conflicts(planner_pyproject: Path, tpp_pyproject: Path) -> list[str
     tpp = _requirements(tpp_pyproject)
     conflicts = []
     for name in sorted(planner.keys() & tpp.keys()):
-        for pinned, other in ((planner[name], tpp[name]), (tpp[name], planner[name])):
-            version = _exact_pin(pinned)
-            if version is not None and not other.specifier.contains(version, prereleases=True):
-                conflicts.append(f"{name}: trip-planner '{planner[name]}' vs TPP '{tpp[name]}'")
+        for planner_req, tpp_req in product(planner[name], tpp[name]):
+            if any(
+                (version := _exact_pin(pinned)) is not None
+                and not other.specifier.contains(version, prereleases=True)
+                for pinned, other in ((planner_req, tpp_req), (tpp_req, planner_req))
+            ):
+                conflicts.append(f"{name}: trip-planner '{planner_req}' vs TPP '{tpp_req}'")
                 break
     return conflicts
 
@@ -67,6 +74,33 @@ def test_find_pin_conflicts_flags_diverged_exact_pin(tmp_path: Path) -> None:
     assert find_pin_conflicts(planner, tpp) == [
         "ruff: trip-planner 'ruff==0.17.3' vs TPP 'ruff==0.17.2'"
     ]
+
+
+@pytest.mark.parametrize("constrained_project", ["planner", "tpp"])
+@pytest.mark.parametrize("runtime_pin", ["0.17.2", "0.17.3"])
+def test_find_pin_conflicts_preserves_runtime_and_dev_requirements(
+    tmp_path: Path, constrained_project: str, runtime_pin: str
+) -> None:
+    """Installing [dev] keeps runtime constraints, even for repeated packages."""
+    projects = {name: tmp_path / f"{name}.toml" for name in ("planner", "tpp")}
+    for name, path in projects.items():
+        runtime = [f"ruff=={runtime_pin}"] if name == constrained_project else []
+        dev = ["ruff>=0.17"] if name == constrained_project else ["ruff==0.17.3"]
+        path.write_text(
+            f"[project]\ndependencies = {runtime!r}\n"
+            f"[project.optional-dependencies]\ndev = {dev!r}\n",
+            encoding="utf-8",
+        )
+
+    conflicts = find_pin_conflicts(projects["planner"], projects["tpp"])
+
+    if runtime_pin == "0.17.3":
+        assert conflicts == []
+    else:
+        planner_pin, tpp_pin = (
+            (runtime_pin, "0.17.3") if constrained_project == "planner" else ("0.17.3", runtime_pin)
+        )
+        assert conflicts == [f"ruff: trip-planner 'ruff=={planner_pin}' vs TPP 'ruff=={tpp_pin}'"]
 
 
 def test_planner_dev_pins_resolve_with_pinned_tpp_checkout() -> None:
