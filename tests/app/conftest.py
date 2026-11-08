@@ -14,12 +14,18 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.app.tpp_intercept import TPP_SENT, _blocked_response
+from tests.runtime_requirements import require_testclient_socket_io
 from trip_planner.app.main import create_app
 from trip_planner.integrations.tpp import client as tpp_client_module
 from trip_planner.integrations.tpp.contracts import TPPResponseEnvelope
-
-from tests.app.tpp_intercept import TPP_SENT, _blocked_response
 from trip_planner.persistence.db import ensure_database_ready, reset_database_state
+
+
+@pytest.fixture(scope="session", autouse=True)
+def require_app_test_runtime() -> None:
+    """Fail before TestClient hangs if the runner denies asyncio wakeup writes."""
+    require_testclient_socket_io()
 
 
 @pytest.fixture

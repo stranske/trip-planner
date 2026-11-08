@@ -982,3 +982,121 @@ None of those remote writes was applied. The prepared reconciled body is
 checkboxes change. Full-suite acceptance stays **unverified** until the current
 source exits **0** under `python -m pytest` on supported Python with local
 socket operations permitted.
+
+## Issue #2012 explicit runtime failure — 2026-11-08
+
+Created a fresh isolated checkout using
+`git clone --shared --no-hardlinks . /tmp/trip-planner-issue-2012-round6`,
+initially clean at `d2ca5e40cc4e8f4240bccbd411d5fd396ae964b3`.
+Both merged-PR ancestry checks exited **0**:
+
+```sh
+git merge-base --is-ancestor 29c6aa01064f9eb3cbf15debd32cac3327ec43b8 HEAD
+git merge-base --is-ancestor 4c6ff3e81b412db4039f7d1a48fa95d0aecff753 HEAD
+```
+
+Selected **CPython 3.14.10**, GCC **15.2.0**, executable
+`/opt/hostedtoolcache/Python/3.14.10/x64/bin/python`, with pytest **9.2.0**.
+This matches `.python-version` (**3.14**) and satisfies `pyproject.toml`
+(**>=3.13,<3.15**). `PYTEST_ADDOPTS` and `TPP_REPO_PATH` were unset.
+
+The initial unrestricted attempt used the exact Makefile:test command with an
+external watchdog:
+
+```sh
+timeout --signal=INT --kill-after=5s 30s python -m pytest > /tmp/issue-2012-round6-initial-full.log 2>&1
+```
+
+It collected **2874 items / 2 skipped**, then stalled before completing the
+first authentication test; wrapper exit **137**. A separate diagnostic
+invocation of
+`tests/app/test_auth.py::test_signup_creates_account_sets_cookie_and_restores_session`
+with `-vv -o faulthandler_timeout=10` and a 20-second watchdog also exited
+**137**, identifying the same fixture-setup wait:
+
+```text
+Thread [asyncio-portal-]:
+  File ".../python3.14/selectors.py", line 452 in select
+  File ".../python3.14/asyncio/base_events.py", line 2026 in _run_once
+Thread [python]:
+  File ".../python3.14/threading.py", line 369 in wait
+  File ".../python3.14/concurrent/futures/_base.py", line 449 in result
+  File ".../site-packages/anyio/_backends/_asyncio.py", line 2715 in run_sync_from_thread
+  File ".../site-packages/starlette/testclient.py", line 696 in __enter__
+  File "/tmp/trip-planner-issue-2012-round6/tests/app/test_auth.py", line 21 in client
+```
+
+A standalone `socket.socketpair()` write again raised
+`PermissionError: [Errno 1] Operation not permitted`, before repository imports.
+Classification remains **environmental blocker, high confidence**; no evidence
+implicates the changed dev-tool pins. Later full-suite tests remain unverified.
+
+### Fail explicitly before entering the blocked portal
+
+Added a session fixture in the app test directory that verifies bounded local
+socketpair I/O before TestClient starts. A denied operation now terminates
+pytest with exit **1** and the underlying error. It neither excludes tests nor
+turns the restriction into a successful run. Eight regressions exercise allowed
+I/O, denial during socket creation/setup/write/read, an empty read, resource
+cleanup, and subprocess execution of the actual app fixture on both allowed and
+denied runtimes.
+
+Committed source in the isolated checkout at
+**`6d528142da7c34f88f22f9f108c4b70285403310`**. The checkout was clean, and the
+same merged-PR ancestry checks still exited **0**. Ran the exact unrestricted
+command on that commit without a watchdog, exclusions, or a marker filter:
+
+```sh
+python -m pytest > /tmp/issue-2012-round6-committed-full.log 2>&1
+```
+
+Observed exit **1**; terminal result:
+
+```text
+collected 2882 items / 2 skipped
+tests/app/test_auth.py
+======================= 2 skipped, 14 warnings in 2.42s ========================
+! _pytest.outcomes.Exit: TestClient runtime unavailable: local socketpair I/O failed ([Errno 1] Operation not permitted). Run the unchanged suite in an environment permitting local socket operations. This is an environment failure, not a passing test run. !
+```
+
+No test bodies completed in this full-suite attempt. The two collection-time
+skips predate the runtime check. The first selected authentication node remains
+blocked, now explicitly at the new runtime fixture.
+
+Focused validation in the isolated checkout exited **0**:
+
+```sh
+python -m pytest tests/test_runtime_requirements.py tests/test_pytest_collection.py tests/test_pytest_collection_audit.py tests/test_build_html.py tests/scripts/test_cross_repo_dev_pins.py tests/scripts/test_cross_repo_smoke_workflow.py -m 'not slow' -q -rs
+```
+
+```text
+90 passed, 3 skipped, 14 warnings in 21.34s
+```
+
+The existing skips require the live producer checkout (two) and actionlint
+(one). Black **26.10.1** formatted the changed files. After serial checks of
+all Python files populated a writable cache, the required whole-tree gate
+exited **0**, reporting **527 files would be left unchanged**:
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue-2012-round6-black-cache black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+Ruff on the three changed Python files and `git diff --check` passed.
+The workspace `.git` directory is read-only; source and evidence commits are
+created in the isolated checkout, with matching files in the workspace and an
+export at `/tmp/issue-2012-round6-commits.patch`.
+
+PR #2013 readback was **open**, **draft=false**. GitHub rejected both the
+`needs-human` label and blocker comment with
+`MCP tool call requires approval, but approval policy is never`; neither remote
+write was applied.
+
+- [x] Run the unrestricted Makefile:test equivalent on an isolated checkout containing merged #2005 and #2011 with a supported interpreter.
+- [x] Verify explicit runtime failure and record the tested commit, command, exit status, terminal result, and failure classification.
+- [ ] Obtain unrestricted local `python -m pytest` exit 0 on supported Python.
+
+Full-suite acceptance remains **unverified**. The required next step is to run
+the current source in an environment permitting local socket operations and
+record an actual unrestricted exit **0**. All earlier producer, deliberate-break,
+regenerated-gate, and controller evidence remains above.

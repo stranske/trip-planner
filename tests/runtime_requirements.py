@@ -1,0 +1,24 @@
+"""Report local runtime restrictions before entering TestClient's blocking portal."""
+
+import socket
+
+import pytest
+
+
+def require_testclient_socket_io() -> None:
+    """Abort with a failure when asyncio's local wakeup transport is unavailable."""
+    try:
+        sender, receiver = socket.socketpair()
+        with sender, receiver:
+            sender.settimeout(1)
+            receiver.settimeout(1)
+            sender.sendall(b"x")
+            if receiver.recv(1) != b"x":
+                raise OSError("socketpair did not deliver the wakeup byte")
+    except OSError as exc:
+        pytest.exit(
+            "TestClient runtime unavailable: local socketpair I/O failed "
+            f"({exc}). Run the unchanged suite in an environment permitting local "
+            "socket operations. This is an environment failure, not a passing test run.",
+            returncode=pytest.ExitCode.TESTS_FAILED,
+        )
