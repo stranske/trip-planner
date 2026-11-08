@@ -25,6 +25,7 @@ from zipfile import ZipFile
 
 import pytest
 import yaml
+from packaging.markers import Marker
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
@@ -193,15 +194,17 @@ def test_workflow_tpp_pin_resolves_with_planner_dev_pins(
     test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
 
 
-@pytest.mark.parametrize("restore_old_tpp_pins", [True, False], ids=["old-tpp", "paired-update"])
+@pytest.mark.parametrize("restored_tool", ["all", "ruff", "mypy", "pytest", None])
 def test_pip_resolves_paired_dev_tool_pins_offline(
-    tmp_path: Path, restore_old_tpp_pins: bool
+    tmp_path: Path, restored_tool: str | None
 ) -> None:
     """Exercise pip's resolver for the failing tool pins without network or installs.
 
     Metadata-only wheels isolate the three tools reported in #1973. The passing
     case reads the real planner requirements and the snapshot selected by the
-    workflow; the failing case restores the producer's original tool versions.
+    workflow; failing cases restore all or one of the producer's original pins.
+    Both projects declare the tools in their dev extras, matching the joint
+    installation in the workflow rather than supplying tools as root requirements.
     This verifies resolution only, not a complete cross-repo installation.
     """
     workflow = yaml.safe_load(
@@ -213,14 +216,34 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
         "planner": _requirements(REPO_ROOT / "pyproject.toml"),
         "tpp": _requirements(snapshot / "pyproject.toml"),
     }
-    requirement_files = []
+
+    def write_wheel(name: str, version: str, dependency_metadata: str = "") -> None:
+        dist_info = f"{name}-{version}.dist-info"
+        with ZipFile(tmp_path / f"{name}-{version}-py3-none-any.whl", "w") as wheel:
+            wheel.writestr(
+                f"{dist_info}/METADATA",
+                f"Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n" + dependency_metadata,
+            )
+            wheel.writestr(
+                f"{dist_info}/WHEEL",
+                "Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+            )
+            wheel.writestr(f"{dist_info}/RECORD", "")
+
+    project_names = {"planner": "trip_planner", "tpp": "travel_plan_permission"}
     for name, requirements in projects.items():
-        selected = [str(req) for tool in old_versions for req in requirements[tool]]
-        if name == "tpp" and restore_old_tpp_pins:
-            selected = [f"{tool}=={version}" for tool, version in old_versions.items()]
-        requirement_file = tmp_path / f"{name}.txt"
-        requirement_file.write_text("\n".join(selected) + "\n", encoding="utf-8")
-        requirement_files.extend(["-r", str(requirement_file)])
+        dependency_metadata = "Provides-Extra: dev\n"
+        for tool, old_version in old_versions.items():
+            selected = requirements[tool]
+            if name == "tpp" and restored_tool in ("all", tool):
+                selected = [Requirement(f"{tool}=={old_version}")]
+            for original in selected:
+                req = Requirement(str(original))
+                req.marker = Marker(
+                    f'({req.marker}) and extra == "dev"' if req.marker else 'extra == "dev"'
+                )
+                dependency_metadata += f"Requires-Dist: {req}\n"
+        write_wheel(project_names[name], "0.1.0", dependency_metadata)
 
     # Supply both old and current candidates so a failure proves conflicting
     # requirements, rather than a missing wheel in the offline index.
@@ -228,17 +251,7 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
         current_version = _exact_pin(projects["planner"][tool][0])
         assert current_version is not None
         for version in {old_version, current_version}:
-            dist_info = f"{tool}-{version}.dist-info"
-            with ZipFile(tmp_path / f"{tool}-{version}-py3-none-any.whl", "w") as wheel:
-                wheel.writestr(
-                    f"{dist_info}/METADATA",
-                    f"Metadata-Version: 2.1\nName: {tool}\nVersion: {version}\n",
-                )
-                wheel.writestr(
-                    f"{dist_info}/WHEEL",
-                    "Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
-                )
-                wheel.writestr(f"{dist_info}/RECORD", "")
+            write_wheel(tool, version)
 
     report = tmp_path / "resolution.json"
     result = subprocess.run(
@@ -257,7 +270,7 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
             str(tmp_path),
             "--report",
             str(report),
-            *requirement_files,
+            *(f"{name}[dev]==0.1.0" for name in project_names.values()),
         ],
         capture_output=True,
         text=True,
@@ -265,16 +278,23 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
         check=False,
     )
     diagnostics = result.stdout + result.stderr
-    if restore_old_tpp_pins:
+    if restored_tool is not None:
         assert result.returncode != 0, diagnostics
         assert "ResolutionImpossible" in diagnostics
-        assert f"ruff=={old_versions['ruff']}" in diagnostics
-        assert str(projects["planner"]["ruff"][0]) in diagnostics
+        tool = "ruff" if restored_tool == "all" else restored_tool
+        assert f"{tool}=={old_versions[tool]}" in diagnostics
+        assert str(projects["planner"][tool][0]) in diagnostics
+        assert "trip-planner[dev]" in diagnostics
+        assert "travel-plan-permission[dev]" in diagnostics
     else:
         assert result.returncode == 0, diagnostics
         resolved = json.loads(report.read_text(encoding="utf-8"))["install"]
-        assert {entry["metadata"]["name"]: entry["metadata"]["version"] for entry in resolved} == {
-            tool: _exact_pin(projects["planner"][tool][0]) for tool in old_versions
+        assert {
+            canonicalize_name(entry["metadata"]["name"]): entry["metadata"]["version"]
+            for entry in resolved
+        } == {
+            **{tool: _exact_pin(projects["planner"][tool][0]) for tool in old_versions},
+            **{canonicalize_name(name): "0.1.0" for name in project_names.values()},
         }
 
 
