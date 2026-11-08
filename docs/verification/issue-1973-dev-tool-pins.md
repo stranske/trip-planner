@@ -117,3 +117,33 @@ The latest source Cross-Repo Smoke run is `42473616922` on `a8253804`.
 Neither it nor the earlier source runs supplies regenerated-delivery acceptance.
 The current #2005 head must complete its checks and review floor before the
 next guarded integration attempt. No merge or producer regeneration is claimed.
+
+## Terminal bounded-run status — 2026-11-08
+
+Reconciliation commit `ac1e3e0a511dd27f182c27e37f052149f2e7e123` was pushed
+on the existing branch. At that exact head, Cross-Repo Smoke run `42473955970`
+printed successful `cross-repo-full-product` (job `128710986701`, 1m29s), CI
+run `42473956311` concluded success with both Python 3.13 and 3.14 successful,
+and Gate run `42473956263` concluded success. All four review threads were
+resolved and GitHub reported `CLEAN`. The marker follow-up above remains deferred.
+
+The final command was:
+
+```sh
+/Users/teacher/.codex/bin/sync-dependency-merge-guard.sh 'stranske/trip-planner#2005' --expected-head ac1e3e0a511dd27f182c27e37f052149f2e7e123 --remote-only --confirm-merge --json
+```
+
+It printed `blocked: true`, `merge_executed: false` and:
+`exact-head review floor has 258s remaining (reset by pr_updated_at at 2026-11-08T11:07:59Z)`.
+This was the second refusal for the review-floor condition, so the declared
+attempt stop rule tripped. No merge, regeneration or new controller classification
+was performed. The earlier remaining acceptance checklist stays unchecked.
+The first unfinished lifecycle step is guarded integration of #2005; producer
+regeneration and exact-head delivery evidence remain downstream of that step.
+
+This terminal status supersedes earlier prospective integration wording above.
+The current pushed revision includes this documentation-only terminal addendum;
+the exact successful CI evidence above applies to its parent, not this addendum.
+The local checkout cannot materialize main's `.agents/issue-2007-ledger.yml`
+because the sandbox denies that path; it appears as an unstaged missing file.
+It is present in the committed tree and was not staged or deleted by this run.
