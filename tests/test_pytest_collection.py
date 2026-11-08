@@ -1,4 +1,4 @@
-"""Keep renderer and all script regressions in the repository's default test run."""
+"""Keep every test module in the repository's default test run."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 
-def test_default_collection_includes_html_and_script_regressions() -> None:
+def test_default_collection_includes_all_regressions() -> None:
     root = Path(__file__).resolve().parents[1]
     result = subprocess.run(
         [sys.executable, "-m", "pytest", "--collect-only", "-q"],
@@ -33,11 +33,13 @@ def test_default_collection_includes_html_and_script_regressions() -> None:
     assert expected <= collected, f"Default collection omits required tests: {expected - collected}"
 
     # Explicit file selection bypasses directory-level collection filters. Compare
-    # real nodes so an allowlist cannot silently remove entire script modules.
-    script_files = sorted((root / "tests" / "scripts").glob("test_*.py"))
-    assert script_files, "No script regression files found"
-    scripts = subprocess.run(
-        [sys.executable, "-m", "pytest", "--collect-only", "-q", *map(str, script_files)],
+    # real nodes so an allowlist cannot silently remove modules in any test directory.
+    test_files = sorted(
+        set((root / "tests").rglob("test_*.py")) | set((root / "tests").rglob("*_test.py"))
+    )
+    assert test_files, "No regression files found"
+    explicit = subprocess.run(
+        [sys.executable, "-m", "pytest", "--collect-only", "-q", *map(str, test_files)],
         cwd=root,
         env={**os.environ, "PYTEST_ADDOPTS": ""},
         capture_output=True,
@@ -45,8 +47,8 @@ def test_default_collection_includes_html_and_script_regressions() -> None:
         timeout=60,
         check=False,
     )
-    assert scripts.returncode == 0, scripts.stdout + scripts.stderr
-    script_nodes = {line for line in scripts.stdout.splitlines() if "::" in line}
-    assert script_nodes, scripts.stdout
-    missing = script_nodes - collected
-    assert not missing, f"Default collection omits script regressions: {sorted(missing)}"
+    assert explicit.returncode == 0, explicit.stdout + explicit.stderr
+    explicit_nodes = {line for line in explicit.stdout.splitlines() if "::" in line}
+    assert explicit_nodes, explicit.stdout
+    missing = explicit_nodes - collected
+    assert not missing, f"Default collection omits regressions: {sorted(missing)}"
