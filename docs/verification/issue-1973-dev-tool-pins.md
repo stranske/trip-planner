@@ -2006,3 +2006,47 @@ changes are committed in the writable isolated clone for controller handoff.
 PR #2020 is open and ready (`draft=false`). Both blocker-comment and
 `needs-human` label requests were rejected: `MCP tool call requires approval,
 but approval policy is never`; neither remote update was applied.
+
+## Issue #2019 declared-source baseline installation — 2026-11-09
+
+Provisioning source **ae5654e060a1fb030dfbf537fc1ef29a86715717** was cloned to
+`/tmp/trip-planner-2020-source`; both required ancestor checks exit **0**.
+Selected CPython **3.14.10** matches `.python-version` and `requires-python`.
+The fresh `/tmp/trip-planner-2020-locked-venv` cannot install the lock and
+`.[dev]`: isolated build dependency retrieval fails because PyPI DNS is blocked.
+Recovering cached wheels permits installing setuptools **84.2.1**, but the
+offline locked install still fails at **annotated-doc==0.0.4** (only **0.0.5**
+is cached). Exact commands, exits, and logs are retained in
+[setup.json](issue-2019-20261109-provisioning-round6/setup.json).
+
+The GitHub connector provides access to the declared Workflows source despite
+shell GitHub DNS failure. Retrieved the baseline package from Workflows `main`
+at **d17b088aa5c97e6b024101c39252480c622e8395**, verified all nine source blob
+hashes, and installed it in the separate `/tmp/trip-planner-2020-venv` using
+cached wheels. The package was built from repository source, rather than copied
+from global site-packages. See
+[source provenance](issue-2019-20261109-provisioning-round6/baseline-source.json)
+and [installation output](issue-2019-20261109-provisioning-round6/baseline-install.log).
+All **54 baseline tests pass** in that environment after installing the declared
+numpy/pandas versions. This is partial diagnostic provisioning: some transitive
+versions differ from the lock, as recorded in
+[partial-freeze.txt](issue-2019-20261109-provisioning-round6/partial-freeze.txt).
+
+Added real-venv regression tests for fresh creation and conversion of an existing
+environment that previously exposed system packages. Both require a local pip,
+the intended environment prefix, and exclusion of base site-packages. Test
+commit **996f2aadad02d3d69c70959701d82db271f18cb8** is retained in the writable
+isolated clone because the workspace `.git` is read-only. The partial venv runs
+the bootstrap and baseline tests together: **64 passed in 11.71s**; see
+[targeted test output](issue-2019-20261109-provisioning-round6/targeted-tests.log).
+The preinstalled interpreter separately passes the collection guard (**1 passed**).
+Ruff and targeted mypy pass. The required whole-tree Black check passes
+(**532 files unchanged**) after individual-file checks populate its cache,
+avoiding blocked worker sockets.
+
+No acceptance boxes are marked complete. Locked development provisioning remains
+incomplete, so the unrestricted verifier was not rerun and no new full-suite
+`result.json` or `pytest.log` is claimed. Previous evidence remains intact.
+GitHub rejected both the blocker comment and `needs-human` label because approval
+is required and this run's approval policy is `never`. Resume on a runner with
+PyPI/GitHub access, or a complete trusted wheelhouse plus the declared source.

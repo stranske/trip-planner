@@ -1,0 +1,12 @@
+WARNING: The directory '/home/runner/.cache/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+Looking in links: /tmp/trip-planner-2020-wheels
+Obtaining file:///tmp/trip-planner-2020-source
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Ignoring colorama: markers 'sys_platform == "win32"' don't match your environment
+Ignoring tzdata: markers 'sys_platform == "emscripten" or sys_platform == "win32"' don't match your environment
+Processing /tmp/trip-planner-2020-wheels/alembic-1.18.5-py3-none-any.whl (from -r requirements.lock (line 3))
+ERROR: Could not find a version that satisfies the requirement annotated-doc==0.0.4 (from versions: 0.0.5)
+ERROR: No matching distribution found for annotated-doc==0.0.4

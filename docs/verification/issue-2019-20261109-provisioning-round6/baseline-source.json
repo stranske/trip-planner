@@ -1,0 +1,45 @@
+{
+  "repository": "https://github.com/stranske/Workflows",
+  "ref": "main",
+  "commit": "d17b088aa5c97e6b024101c39252480c622e8395",
+  "subdirectory": "packages/app-baseline-kit",
+  "retrieval": "GitHub connector fetch_file at exact commit; fetch_commit(main) confirmed this revision",
+  "files": [
+    {
+      "path": "pyproject.toml",
+      "blob_sha": "468a74fe2a2350a5869603754f549c248881624e"
+    },
+    {
+      "path": "baseline_kit/__init__.py",
+      "blob_sha": "8c9c95747c205f56afe28a8a4e71ef6e3d94b962"
+    },
+    {
+      "path": "baseline_kit/catalog.py",
+      "blob_sha": "1771f3195508a8d816ab514d72148fb4a71e42b6"
+    },
+    {
+      "path": "baseline_kit/directional.py",
+      "blob_sha": "72fa0cb2ee99b39a3c277f6df666f4dfb7726d9f"
+    },
+    {
+      "path": "baseline_kit/golden.py",
+      "blob_sha": "90e5019a1f8cc85c084b6213542265c37c4e3a6f"
+    },
+    {
+      "path": "baseline_kit/invariants.py",
+      "blob_sha": "7c29956e234c13a588cc9382f1e18cb98cf92a2d"
+    },
+    {
+      "path": "baseline_kit/manifest.py",
+      "blob_sha": "fa5e4e620837f631e1e6bfee048c561777f4c8c0"
+    },
+    {
+      "path": "baseline_kit/snapshot.py",
+      "blob_sha": "a7be391c417f94d4ef0878c636872e0ed0ef663b"
+    },
+    {
+      "path": "baseline_kit/py.typed",
+      "blob_sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    }
+  ]
+}

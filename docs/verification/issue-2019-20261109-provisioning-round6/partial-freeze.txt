@@ -1,0 +1,14 @@
+app-baseline-kit @ file:///tmp/trip-planner-2020-baseline
+iniconfig==2.3.1
+numpy==2.5.1
+packaging==26.3
+pandas==3.0.5
+pluggy==1.7.0
+Pygments==2.21.0
+pytest==9.2.0
+pytest-datadir==1.9.0
+pytest-regressions==2.11.0
+python-dateutil==4.0.0
+PyYAML==6.0.3
+setuptools==84.2.1
+tzdata==2026.6

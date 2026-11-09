@@ -1,0 +1,58 @@
+WARNING: The directory '/home/runner/.cache/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+Looking in links: /tmp/trip-planner-2020-wheels
+Processing /tmp/trip-planner-2020-baseline
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Processing /tmp/trip-planner-2020-wheels/pyyaml-6.0.3-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl (from app-baseline-kit==0.2.0)
+Processing /tmp/trip-planner-2020-wheels/pytest-9.2.0-py3-none-any.whl (from app-baseline-kit==0.2.0)
+Processing /tmp/trip-planner-2020-wheels/pytest_regressions-2.11.0-py3-none-any.whl (from app-baseline-kit==0.2.0)
+Processing /tmp/trip-planner-2020-wheels/iniconfig-2.3.1-py3-none-any.whl (from pytest>=7.0->app-baseline-kit==0.2.0)
+Processing /tmp/trip-planner-2020-wheels/packaging-26.3-py3-none-any.whl (from pytest>=7.0->app-baseline-kit==0.2.0)
+Processing /tmp/trip-planner-2020-wheels/pluggy-1.7.0-py3-none-any.whl (from pytest>=7.0->app-baseline-kit==0.2.0)
+Processing /tmp/trip-planner-2020-wheels/pygments-2.21.0-py3-none-any.whl (from pytest>=7.0->app-baseline-kit==0.2.0)
+Processing /tmp/trip-planner-2020-wheels/pytest_datadir-1.9.0-py3-none-any.whl (from pytest-regressions>=2.8->app-baseline-kit==0.2.0)
+Building wheels for collected packages: app-baseline-kit
+  Building wheel for app-baseline-kit (pyproject.toml): started
+  Building wheel for app-baseline-kit (pyproject.toml): finished with status 'done'
+  Created wheel for app-baseline-kit: filename=app_baseline_kit-0.2.0-py3-none-any.whl size=9496 sha256=616603ba5dde18c7d80c01f2f3c6eb27a0fba9be9912bcaafb221fa2852b7f50
+  Stored in directory: /tmp/pip-ephem-wheel-cache-0jjth8zk/wheels/2c/bc/13/dbc261613c378d8beb0d145f945e2692ff13d2680f71db80bf
+Successfully built app-baseline-kit
+Installing collected packages: PyYAML, pygments, pluggy, packaging, iniconfig, pytest, pytest-datadir, pytest-regressions, app-baseline-kit
+  Attempting uninstall: PyYAML
+    Found existing installation: PyYAML 6.0.3
+    Uninstalling PyYAML-6.0.3:
+      Successfully uninstalled PyYAML-6.0.3
+  Attempting uninstall: pygments
+    Found existing installation: Pygments 2.21.0
+    Uninstalling Pygments-2.21.0:
+      Successfully uninstalled Pygments-2.21.0
+  Attempting uninstall: pluggy
+    Found existing installation: pluggy 1.7.0
+    Uninstalling pluggy-1.7.0:
+      Successfully uninstalled pluggy-1.7.0
+  Attempting uninstall: packaging
+    Found existing installation: packaging 26.3
+    Uninstalling packaging-26.3:
+      Successfully uninstalled packaging-26.3
+  Attempting uninstall: iniconfig
+    Found existing installation: iniconfig 2.3.1
+    Uninstalling iniconfig-2.3.1:
+      Successfully uninstalled iniconfig-2.3.1
+  Attempting uninstall: pytest
+    Found existing installation: pytest 9.2.0
+    Uninstalling pytest-9.2.0:
+      Successfully uninstalled pytest-9.2.0
+  Attempting uninstall: pytest-datadir
+    Found existing installation: pytest-datadir 1.9.0
+    Uninstalling pytest-datadir-1.9.0:
+      Successfully uninstalled pytest-datadir-1.9.0
+  Attempting uninstall: pytest-regressions
+    Found existing installation: pytest-regressions 2.11.0
+    Uninstalling pytest-regressions-2.11.0:
+      Successfully uninstalled pytest-regressions-2.11.0
+  Attempting uninstall: app-baseline-kit
+    Found existing installation: app-baseline-kit 0.2.0
+    Uninstalling app-baseline-kit-0.2.0:
+      Successfully uninstalled app-baseline-kit-0.2.0
+
+Successfully installed PyYAML-6.0.3 app-baseline-kit-0.2.0 iniconfig-2.3.1 packaging-26.3 pluggy-1.7.0 pygments-2.21.0 pytest-9.2.0 pytest-datadir-1.9.0 pytest-regressions-2.11.0

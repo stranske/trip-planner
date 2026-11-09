@@ -1,0 +1,42 @@
+{
+  "provisioning_source_commit": "ae5654e060a1fb030dfbf537fc1ef29a86715717",
+  "validated_test_commit": "996f2aadad02d3d69c70959701d82db271f18cb8",
+  "isolated_checkout": "/tmp/trip-planner-2020-source",
+  "verified_ancestors": [
+    "29c6aa01064f9eb3cbf15debd32cac3327ec43b8",
+    "4c6ff3e81b412db4039f7d1a48fa95d0aecff753"
+  ],
+  "runtime": "CPython 3.14.10",
+  "locked_environment": "/tmp/trip-planner-2020-locked-venv",
+  "partial_environment": "/tmp/trip-planner-2020-venv",
+  "acceptance_complete": false,
+  "commands": [
+    {
+      "command": "PIP_RETRIES=0 PIP_TIMEOUT=5 /tmp/trip-planner-2020-locked-venv/bin/python -m pip install -r requirements.lock -e '.[dev]'",
+      "exit_status": 1,
+      "log": "locked-install.log"
+    },
+    {
+      "command": "/tmp/trip-planner-2020-venv/bin/python -m pip install --no-index --find-links /tmp/trip-planner-2020-wheels --no-build-isolation -r requirements.lock -e '.[dev]'",
+      "exit_status": 1,
+      "log": "offline-install.log"
+    },
+    {
+      "command": "/tmp/trip-planner-2020-venv/bin/python -m pip install --no-index --find-links /tmp/trip-planner-2020-wheels --no-build-isolation --force-reinstall /tmp/trip-planner-2020-baseline",
+      "exit_status": 0,
+      "log": "baseline-install.log"
+    },
+    {
+      "command": "/tmp/trip-planner-2020-venv/bin/python -m pytest tests/scripts/test_create_dev_venv.py tests/test_make_install.py tests/baseline -m 'not slow' -q",
+      "exit_status": 0,
+      "summary": "64 passed in 11.71s",
+      "log": "targeted-tests.log"
+    }
+  ],
+  "limitations": [
+    "Partial diagnostic provisioning only: transitive versions differ from requirements.lock; see partial-freeze.txt.",
+    "Project .[dev] installation remains incomplete. The unrestricted verifier has not been rerun.",
+    "Workspace .git is read-only. The test commit exists in the writable isolated clone.",
+    "PR blocker-comment and needs-human label requests both failed: MCP tool call requires approval, but approval policy is never."
+  ]
+}

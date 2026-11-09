@@ -1,0 +1,16 @@
+WARNING: The directory '/home/runner/.cache/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+Obtaining file:///tmp/trip-planner-2020-source
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'error'
+  error: subprocess-exited-with-error
+  
+  × installing build dependencies did not run successfully.
+  │ exit code: 1
+  ╰─> [3 lines of output]
+      WARNING: The directory '/home/runner/.cache/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+      ERROR: Could not find a version that satisfies the requirement setuptools>=82.0.1 (from versions: none)
+      ERROR: No matching distribution found for setuptools>=82.0.1
+      [end of output]
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+ERROR: Failed to build 'file:///tmp/trip-planner-2020-source' when installing build dependencies
