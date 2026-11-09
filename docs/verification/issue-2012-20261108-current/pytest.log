@@ -1,0 +1,355 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.13.13, pytest-9.1.1, pluggy-1.6.0
+rootdir: /private/tmp/issue-2012-current-20261108T230425Z/checkout
+configfile: pyproject.toml
+testpaths: tests
+plugins: platformdirs-4.14.5, langsmith-0.14.17, cov-7.1.0, anyio-4.16.0
+collected 1455 items / 25 errors / 1 skipped
+
+==================================== ERRORS ====================================
+__________________________ ERROR collecting tests/app __________________________
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1395: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+/opt/homebrew/lib/python3.13/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+tests/app/conftest.py:19: in <module>
+    from trip_planner.app.main import create_app
+trip_planner/app/main.py:14: in <module>
+    from trip_planner.app.routes.auth import router as auth_router
+trip_planner/app/routes/auth.py:7: in <module>
+    from sqlalchemy.orm import Session
+E   ModuleNotFoundError: No module named 'sqlalchemy'
+__________ ERROR collecting tests/baseline/test_coverage_manifest.py ___________
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/baseline/test_coverage_manifest.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/baseline/test_coverage_manifest.py:13: in <module>
+    from baseline_kit import CoverageManifest, load_catalog
+E   ModuleNotFoundError: No module named 'baseline_kit'
+_____________ ERROR collecting tests/baseline/test_directional.py ______________
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/baseline/test_directional.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/baseline/test_directional.py:6: in <module>
+    from baseline_kit import evaluate_direction, load_catalog
+E   ModuleNotFoundError: No module named 'baseline_kit'
+________________ ERROR collecting tests/baseline/test_golden.py ________________
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/baseline/test_golden.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/baseline/test_golden.py:11: in <module>
+    from baseline_kit import check_metrics, load_catalog
+E   ModuleNotFoundError: No module named 'baseline_kit'
+______________ ERROR collecting tests/baseline/test_invariants.py ______________
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/baseline/test_invariants.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/baseline/test_invariants.py:6: in <module>
+    from baseline_kit import assert_invariants, load_catalog
+E   ModuleNotFoundError: No module named 'baseline_kit'
+_______ ERROR collecting tests/baseline/test_planner_routing_baseline.py _______
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/baseline/test_planner_routing_baseline.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/baseline/test_planner_routing_baseline.py:17: in <module>
+    from baseline_kit import InvariantResult, assert_invariants, evaluate_direction
+E   ModuleNotFoundError: No module named 'baseline_kit'
+____ ERROR collecting tests/baseline/test_preference_resolution_baseline.py ____
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/baseline/test_preference_resolution_baseline.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/baseline/test_preference_resolution_baseline.py:18: in <module>
+    from baseline_kit import InvariantResult, assert_invariants, evaluate_direction
+E   ModuleNotFoundError: No module named 'baseline_kit'
+________ ERROR collecting tests/contracts/test_constraint_evaluation.py ________
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/contracts/test_constraint_evaluation.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/contracts/test_constraint_evaluation.py:10: in <module>
+    from trip_planner.app.services.inventory import (
+trip_planner/app/services/inventory.py:13: in <module>
+    from sqlalchemy import select
+E   ModuleNotFoundError: No module named 'sqlalchemy'
+_______ ERROR collecting tests/docs/test_product_contract_probe_drift.py _______
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/docs/test_product_contract_probe_drift.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/docs/test_product_contract_probe_drift.py:12: in <module>
+    from scripts import check_full_product_verification as verifier
+scripts/check_full_product_verification.py:33: in <module>
+    from trip_planner.app.main import create_app  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trip_planner/app/main.py:14: in <module>
+    from trip_planner.app.routes.auth import router as auth_router
+trip_planner/app/routes/auth.py:7: in <module>
+    from sqlalchemy.orm import Session
+E   ModuleNotFoundError: No module named 'sqlalchemy'
+______________________ ERROR collecting tests/integration ______________________
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1395: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+/opt/homebrew/lib/python3.13/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+tests/integration/conftest.py:13: in <module>
+    from sqlalchemy.orm import Session
+E   ModuleNotFoundError: No module named 'sqlalchemy'
+_______ ERROR collecting tests/integrations/test_canonical_state_seam.py _______
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/integrations/test_canonical_state_seam.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/integrations/test_canonical_state_seam.py:33: in <module>
+    from sqlalchemy import delete, select
+E   ModuleNotFoundError: No module named 'sqlalchemy'
+___________ ERROR collecting tests/integrations/test_policy_sync.py ____________
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/integrations/test_policy_sync.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/integrations/test_policy_sync.py:7: in <module>
+    from trip_planner.app.services.policy import (
+trip_planner/app/services/policy.py:8: in <module>
+    from sqlalchemy import select
+E   ModuleNotFoundError: No module named 'sqlalchemy'
+__________ ERROR collecting tests/integrations/test_tpp_contracts.py ___________
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/integrations/test_tpp_contracts.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/integrations/test_tpp_contracts.py:14: in <module>
+    from pytest_httpserver import HTTPServer
+E   ModuleNotFoundError: No module named 'pytest_httpserver'
+_______ ERROR collecting tests/integrations/test_tpp_cross_repo_smoke.py _______
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/integrations/test_tpp_cross_repo_smoke.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/integrations/test_tpp_cross_repo_smoke.py:60: in <module>
+    from trip_planner.app.main import create_app
+trip_planner/app/main.py:14: in <module>
+    from trip_planner.app.routes.auth import router as auth_router
+trip_planner/app/routes/auth.py:7: in <module>
+    from sqlalchemy.orm import Session
+E   ModuleNotFoundError: No module named 'sqlalchemy'
+________ ERROR collecting tests/integrations/test_tpp_policy_import.py _________
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/integrations/test_tpp_policy_import.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/integrations/test_tpp_policy_import.py:12: in <module>
+    from trip_planner.app.main import create_app
+trip_planner/app/main.py:14: in <module>
+    from trip_planner.app.routes.auth import router as auth_router
+trip_planner/app/routes/auth.py:7: in <module>
+    from sqlalchemy.orm import Session
+E   ModuleNotFoundError: No module named 'sqlalchemy'
+_____ ERROR collecting tests/integrations/test_tpp_transport_httpserver.py _____
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/integrations/test_tpp_transport_httpserver.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/integrations/test_tpp_transport_httpserver.py:7: in <module>
+    from pytest_httpserver import HTTPServer
+E   ModuleNotFoundError: No module named 'pytest_httpserver'
+_____________ ERROR collecting tests/persistence/test_db_config.py _____________
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/persistence/test_db_config.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/persistence/test_db_config.py:3: in <module>
+    from trip_planner.persistence.db import get_database_url, normalize_database_url
+trip_planner/persistence/db.py:10: in <module>
+    from alembic import command
+E   ModuleNotFoundError: No module named 'alembic'
+_________ ERROR collecting tests/persistence/test_migration_compat.py __________
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/persistence/test_migration_compat.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/persistence/test_migration_compat.py:3: in <module>
+    from sqlalchemy import create_engine, inspect, text
+E   ModuleNotFoundError: No module named 'sqlalchemy'
+_________ ERROR collecting tests/planner/test_inventory_provenance.py __________
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/planner/test_inventory_provenance.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/planner/test_inventory_provenance.py:24: in <module>
+    from trip_planner.app.services.inventory import (
+trip_planner/app/services/inventory.py:13: in <module>
+    from sqlalchemy import select
+E   ModuleNotFoundError: No module named 'sqlalchemy'
+_________ ERROR collecting tests/planner/test_planner_adapter_path.py __________
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/planner/test_planner_adapter_path.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/planner/test_planner_adapter_path.py:21: in <module>
+    from trip_planner.app.main import create_app
+trip_planner/app/main.py:14: in <module>
+    from trip_planner.app.routes.auth import router as auth_router
+trip_planner/app/routes/auth.py:7: in <module>
+    from sqlalchemy.orm import Session
+E   ModuleNotFoundError: No module named 'sqlalchemy'
+________ ERROR collecting tests/planner/test_planner_turn_acceptance.py ________
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/planner/test_planner_turn_acceptance.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/planner/test_planner_turn_acceptance.py:35: in <module>
+    from trip_planner.app.main import create_app
+trip_planner/app/main.py:14: in <module>
+    from trip_planner.app.routes.auth import router as auth_router
+trip_planner/app/routes/auth.py:7: in <module>
+    from sqlalchemy.orm import Session
+E   ModuleNotFoundError: No module named 'sqlalchemy'
+________ ERROR collecting tests/pricing/test_prices_require_a_source.py ________
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/pricing/test_prices_require_a_source.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/pricing/test_prices_require_a_source.py:15: in <module>
+    from trip_planner.app.services.inventory import (
+trip_planner/app/services/inventory.py:13: in <module>
+    from sqlalchemy import select
+E   ModuleNotFoundError: No module named 'sqlalchemy'
+____________ ERROR collecting tests/ranking/test_adapter_ranking.py ____________
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/ranking/test_adapter_ranking.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/ranking/test_adapter_ranking.py:12: in <module>
+    from trip_planner.app.services.inventory import assemble_inventory_bundles_for_trip
+trip_planner/app/services/inventory.py:13: in <module>
+    from sqlalchemy import select
+E   ModuleNotFoundError: No module named 'sqlalchemy'
+____ ERROR collecting tests/scripts/test_check_full_product_verification.py ____
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/scripts/test_check_full_product_verification.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/scripts/test_check_full_product_verification.py:8: in <module>
+    from scripts import check_full_product_verification as verifier
+scripts/check_full_product_verification.py:33: in <module>
+    from trip_planner.app.main import create_app  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trip_planner/app/main.py:14: in <module>
+    from trip_planner.app.routes.auth import router as auth_router
+trip_planner/app/routes/auth.py:7: in <module>
+    from sqlalchemy.orm import Session
+E   ModuleNotFoundError: No module named 'sqlalchemy'
+____________ ERROR collecting tests/sources/test_source_quality.py _____________
+ImportError while importing test module '/private/tmp/issue-2012-current-20261108T230425Z/checkout/tests/sources/test_source_quality.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.13/3.13.13_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/sources/test_source_quality.py:9: in <module>
+    from trip_planner.app.services.inventory import (
+trip_planner/app/services/inventory.py:13: in <module>
+    from sqlalchemy import select
+E   ModuleNotFoundError: No module named 'sqlalchemy'
+=============================== warnings summary ===============================
+../../../../opt/homebrew/lib/python3.13/site-packages/starlette/testclient.py:53
+  /opt/homebrew/lib/python3.13/site-packages/starlette/testclient.py:53: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR tests/app - ModuleNotFoundError: No module named 'sqlalchemy'
+ERROR tests/baseline/test_coverage_manifest.py
+ERROR tests/baseline/test_directional.py
+ERROR tests/baseline/test_golden.py
+ERROR tests/baseline/test_invariants.py
+ERROR tests/baseline/test_planner_routing_baseline.py
+ERROR tests/baseline/test_preference_resolution_baseline.py
+ERROR tests/contracts/test_constraint_evaluation.py
+ERROR tests/docs/test_product_contract_probe_drift.py
+ERROR tests/integration - ModuleNotFoundError: No module named 'sqlalchemy'
+ERROR tests/integrations/test_canonical_state_seam.py
+ERROR tests/integrations/test_policy_sync.py
+ERROR tests/integrations/test_tpp_contracts.py
+ERROR tests/integrations/test_tpp_cross_repo_smoke.py
+ERROR tests/integrations/test_tpp_policy_import.py
+ERROR tests/integrations/test_tpp_transport_httpserver.py
+ERROR tests/persistence/test_db_config.py
+ERROR tests/persistence/test_migration_compat.py
+ERROR tests/planner/test_inventory_provenance.py
+ERROR tests/planner/test_planner_adapter_path.py
+ERROR tests/planner/test_planner_turn_acceptance.py
+ERROR tests/pricing/test_prices_require_a_source.py
+ERROR tests/ranking/test_adapter_ranking.py
+ERROR tests/scripts/test_check_full_product_verification.py
+ERROR tests/sources/test_source_quality.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 25 errors during collection !!!!!!!!!!!!!!!!!!!
+=================== 1 skipped, 1 warning, 25 errors in 1.89s ===================
