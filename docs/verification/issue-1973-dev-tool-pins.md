@@ -1741,3 +1741,77 @@ The GitHub tool rejected adding `needs-human` to PR #2020 with
 `MCP tool call requires approval, but approval policy is never`; no remote label
 was applied. The verified task checkbox above is local documentation. Remote
 task-list and blocker-comment updates remain for an authorized controller.
+
+## Issue #2019 provisioning retry and bootstrap regressions — 2026-11-09
+
+Retried provisioning from a fresh isolated checkout at
+**dffd001032468d5751bb8d4c1babcdf377a17a7b**, in
+`/tmp/trip-planner-issue-2019-round2-source`. Both required ancestor checks pass
+for `29c6aa01064f9eb3cbf15debd32cac3327ec43b8` and
+`4c6ff3e81b412db4039f7d1a48fa95d0aecff753`. A fresh dedicated venv created with
+CPython **3.14.10** has interpreter
+`/tmp/trip-planner-issue-2019-round2-venv/bin/python`, optimization **0**, matching
+`.python-version` **3.14** and `requires-python = ">=3.13,<3.15"`.
+
+From that checkout, the documented installation command was:
+
+```sh
+/tmp/trip-planner-issue-2019-round2-venv/bin/python -m pip install -r requirements.lock -e ".[dev]"
+```
+
+Exit **1**: isolated build-dependency installation cannot obtain
+`setuptools>=82.0.1`. A separate PyPI DNS probe exits **1** with a name-resolution
+error. Resolving the declared `baseline_kit` source with
+`git ls-remote https://github.com/stranske/Workflows.git HEAD` exits **128** with
+`Could not resolve host: github.com`. The dedicated interpreter's socketpair
+probe exits **1** at `sendall` with `PermissionError: [Errno 1] Operation not
+permitted`. This repeats the execution-environment blockers above; dependencies
+remain unprovisioned.
+
+Fresh durable evidence: [setup.json](issue-2019-20261109-provisioning-round2/setup.json)
+and [provisioning.log](issue-2019-20261109-provisioning-round2/provisioning.log).
+The metadata records the exact source, selected interpreter, commands, pip
+environment settings, and actual exits. All predecessor evidence is preserved.
+Whitespace-only pip output lines have their trailing spaces removed for version control.
+The provisioned unrestricted verifier was not run, and these setup artifacts
+do not establish full-suite acceptance.
+
+Added `tests/test_make_install.py` to exercise the actual Makefile with isolated
+installer doubles. It checks that the dedicated venv installs the lock and
+editable development extras together, so packages intentionally omitted from
+the lock, including `baseline_kit`, are requested. It also checks that a pip
+failure stops frontend installation and returns failure from `make install`.
+Removing either the lock argument or the development-extra argument in a
+temporary checkout makes both new cases fail, as expected.
+
+Validation using the preinstalled CPython **3.14.10**, rather than the incomplete
+dedicated venv:
+
+```sh
+python -m pytest tests/test_make_install.py tests/test_repo_hygiene.py tests/baseline -m 'not slow' -q
+python -m pytest tests/test_pytest_collection.py
+```
+
+Both exit **0**: **72 passed, 1 skipped, 14 warnings** and **1 passed, 14 warnings**,
+respectively. The skip requires PR diff context, as in the predecessor run.
+The standalone collection check retains explicitly discoverable regressions;
+it does not establish the selected-venv acceptance criterion.
+
+Black formatted the new test. After checking all 530 Python files individually
+to populate a writable cache (the sandbox blocks Black's worker sockets), the
+required whole-tree gate exits **0**, reporting **530 files would be left unchanged**:
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue-2019-round2-black-cache black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+`ruff check tests/test_make_install.py` and `git diff --check` also pass.
+
+The workspace Git database remains read-only (`git add` cannot create
+`.git/index.lock`), so delivery uses the writable clone at
+`/tmp/trip-planner-issue-2019-round2-delivery`. GitHub rejected both the
+`needs-human` label and blocker-comment requests because the tools require
+approval and the approval policy is `never`; neither remote update was applied.
+PR #2020 was observed open and ready for review (`draft=false`). Provisioning
+and full-suite acceptance tasks remain unchecked pending an execution
+environment with PyPI/GitHub access and local socket I/O.

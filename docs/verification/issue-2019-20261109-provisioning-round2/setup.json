@@ -1,0 +1,69 @@
+{
+  "started_at": "2026-11-09T03:58:39.296590+00:00",
+  "source_commit": "dffd001032468d5751bb8d4c1babcdf377a17a7b",
+  "source_checkout": "/tmp/trip-planner-issue-2019-round2-source",
+  "verified_ancestors": [
+    "29c6aa01064f9eb3cbf15debd32cac3327ec43b8",
+    "4c6ff3e81b412db4039f7d1a48fa95d0aecff753"
+  ],
+  "provisioning_complete": false,
+  "full_suite_run": false,
+  "commands": [
+    {
+      "command": [
+        "/tmp/trip-planner-issue-2019-round2-venv/bin/python",
+        "-m",
+        "pip",
+        "install",
+        "-r",
+        "requirements.lock",
+        "-e",
+        ".[dev]"
+      ],
+      "cwd": "/tmp/trip-planner-issue-2019-round2-source",
+      "exit_status": 1
+    },
+    {
+      "command": [
+        "git",
+        "ls-remote",
+        "https://github.com/stranske/Workflows.git",
+        "HEAD"
+      ],
+      "cwd": "/tmp/trip-planner-issue-2019-round2-source",
+      "exit_status": 128
+    },
+    {
+      "command": [
+        "/tmp/trip-planner-issue-2019-round2-venv/bin/python",
+        "-c",
+        "import socket; a,b=socket.socketpair(); a.sendall(b\"probe\"); print(b.recv(5)); a.close(); b.close()"
+      ],
+      "cwd": "/tmp/trip-planner-issue-2019-round2-source",
+      "exit_status": 1
+    },
+    {
+      "command": [
+        "/tmp/trip-planner-issue-2019-round2-venv/bin/python",
+        "-c",
+        "import socket; print(socket.getaddrinfo(\"pypi.org\", 443))"
+      ],
+      "cwd": "/tmp/trip-planner-issue-2019-round2-source",
+      "exit_status": 1
+    }
+  ],
+  "pip_environment": {
+    "PIP_RETRIES": "0",
+    "PIP_TIMEOUT": "5",
+    "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+    "PIP_CACHE_DIR": "/tmp/issue-2019-round2-pip-cache"
+  },
+  "runtime": {
+    "version": "3.14.10",
+    "executable": "/tmp/trip-planner-issue-2019-round2-venv/bin/python",
+    "optimization": 0
+  },
+  "preferred_python": "3.14",
+  "requires_python": ">=3.13,<3.15",
+  "finished_at": "2026-11-09T04:00:11.329031+00:00"
+}
