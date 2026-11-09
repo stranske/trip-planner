@@ -371,13 +371,16 @@ def test_offline_workflow_guard_rejects_original_producer_pins(
         )
 
 
-@pytest.mark.parametrize("restored_tool", ["all", "ruff", "mypy", "pytest", None])
+@pytest.mark.parametrize(
+    "restored_tool",
+    ["all", "ruff", "mypy", "pytest", None, pytest.param("ruff-2017", id="issue-2017-producer")],
+)
 def test_pip_resolves_paired_dev_tool_pins_offline(
     tmp_path: Path, restored_tool: str | None
 ) -> None:
     """Exercise pip's resolver for the failing tool pins without network or installs.
 
-    Metadata-only wheels isolate the three tools reported in #1973. The passing
+    Metadata-only wheels isolate the tools reported in #1973 and #2017. The passing
     case reads the real planner requirements and the snapshot selected by the
     workflow; failing cases restore all or one of the producer's original pins.
     Both projects declare the tools in their dev extras, matching the joint
@@ -388,6 +391,16 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
         (REPO_ROOT / ".github" / "workflows" / "cross-repo-smoke.yml").read_text()
     )
     snapshot = REPO_ROOT / "tests" / "fixtures" / "tpp_dev_pins" / workflow["env"]["TPP_PINNED_REF"]
+    if restored_tool == "ruff-2017":
+        # This is the actual producer from failed run 42542025018, whose mypy
+        # and pytest pins already matched planner. Only Ruff was incompatible.
+        snapshot = (
+            REPO_ROOT
+            / "tests"
+            / "fixtures"
+            / "tpp_dev_pins"
+            / "b56d92b389736c70370aa9134f379ac8cd1f3ad1"
+        )
     old_versions = {"ruff": "0.17.2", "mypy": "2.4.0", "pytest": "9.1.1"}
     projects = {
         "planner": _requirements(REPO_ROOT / "pyproject.toml"),
@@ -422,12 +435,14 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
                 dependency_metadata += f"Requires-Dist: {req}\n"
         write_wheel(project_names[name], "0.1.0", dependency_metadata)
 
-    # Supply both old and current candidates so a failure proves conflicting
-    # requirements, rather than a missing wheel in the offline index.
+    # Supply original, planner and producer candidates so a failure proves
+    # conflicting requirements, rather than a missing wheel in the offline index.
     for tool, old_version in old_versions.items():
         current_version = _exact_pin(projects["planner"][tool][0])
         assert current_version is not None
-        for version in {old_version, current_version}:
+        producer_version = _exact_pin(projects["tpp"][tool][0])
+        assert producer_version is not None
+        for version in {old_version, current_version, producer_version}:
             write_wheel(tool, version)
 
     report = tmp_path / "resolution.json"
@@ -458,8 +473,13 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
     if restored_tool is not None:
         assert result.returncode != 0, diagnostics
         assert "ResolutionImpossible" in diagnostics
-        tool = "ruff" if restored_tool == "all" else restored_tool
-        assert f"{tool}=={old_versions[tool]}" in diagnostics
+        tool = "ruff" if restored_tool in ("all", "ruff-2017") else restored_tool
+        producer_requirement = (
+            str(projects["tpp"][tool][0])
+            if restored_tool == "ruff-2017"
+            else f"{tool}=={old_versions[tool]}"
+        )
+        assert producer_requirement in diagnostics
         assert str(projects["planner"][tool][0]) in diagnostics
         assert "trip-planner[dev]" in diagnostics
         assert "travel-plan-permission[dev]" in diagnostics
@@ -477,28 +497,48 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
 
 
 @pytest.mark.parametrize(
-    ("tpp_versions", "conflicting_tools"),
+    ("tpp_versions", "planner_versions", "conflicting_tools"),
     [
-        pytest.param(("0.17.2", "2.4.0", "9.1.1"), ("mypy", "pytest", "ruff"), id="old-tpp"),
-        pytest.param(("0.17.2", "2.4.1", "9.2.0"), ("ruff",), id="ruff-only"),
-        pytest.param(("0.17.3", "2.4.0", "9.2.0"), ("mypy",), id="mypy-only"),
-        pytest.param(("0.17.3", "2.4.1", "9.1.1"), ("pytest",), id="pytest-only"),
-        pytest.param(("0.17.3", "2.4.1", "9.2.0"), (), id="paired-update"),
+        pytest.param(
+            ("0.17.2", "2.4.0", "9.1.1"),
+            ("0.17.3", "2.4.1", "9.2.0"),
+            ("mypy", "pytest", "ruff"),
+            id="old-tpp",
+        ),
+        pytest.param(
+            ("0.17.2", "2.4.1", "9.2.0"), ("0.17.3", "2.4.1", "9.2.0"), ("ruff",), id="ruff-only"
+        ),
+        pytest.param(
+            ("0.17.3", "2.4.0", "9.2.0"), ("0.17.3", "2.4.1", "9.2.0"), ("mypy",), id="mypy-only"
+        ),
+        pytest.param(
+            ("0.17.3", "2.4.1", "9.1.1"),
+            ("0.17.3", "2.4.1", "9.2.0"),
+            ("pytest",),
+            id="pytest-only",
+        ),
+        pytest.param(
+            ("0.17.3", "2.4.1", "9.2.0"), ("0.17.3", "2.4.1", "9.2.0"), (), id="paired-update"
+        ),
+        pytest.param(
+            ("0.17.3", "2.4.1", "9.2.0"), ("0.17.4", "2.4.1", "9.2.0"), ("ruff",), id="ruff-2017"
+        ),
     ],
 )
 def test_pinned_checkout_guard_reproduces_dev_tool_sync_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     tpp_versions: tuple[str, str, str],
+    planner_versions: tuple[str, str, str],
     conflicting_tools: tuple[str, ...],
 ) -> None:
     """Exercise the workflow entry point without needing a sibling checkout.
 
     Issue #1973's evidence run 41956043710 installed planner's updated pins
     with TPP acc4aed's old pins. TPP b56d92b carries the matching versions.
+    Issue #2017 reproduces the ruff 0.17.3 -> 0.17.4 sync conflict.
     Keep the historical versions fixed so later tool updates retain this regression.
     """
-    planner_versions = ("0.17.3", "2.4.1", "9.2.0")
     tools = ("ruff", "mypy", "pytest")
     for directory, versions in ((tmp_path, planner_versions), (tmp_path / "tpp", tpp_versions)):
         directory.mkdir(exist_ok=True)
