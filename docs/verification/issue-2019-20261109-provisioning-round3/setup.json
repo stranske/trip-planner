@@ -1,0 +1,73 @@
+{
+  "commit": "05540eb462aa3c0d47266e1ecf686430a6f14f57",
+  "source": "/tmp/trip-planner-issue-2019-round3-source",
+  "interpreter": "/tmp/trip-planner-issue-2019-round3-venv/bin/python",
+  "started_at": "2026-11-09T04:33:29.537821+00:00",
+  "commands": [
+    {
+      "command": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "29c6aa01064f9eb3cbf15debd32cac3327ec43b8",
+        "HEAD"
+      ],
+      "exit_status": 0
+    },
+    {
+      "command": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "4c6ff3e81b412db4039f7d1a48fa95d0aecff753",
+        "HEAD"
+      ],
+      "exit_status": 0
+    },
+    {
+      "command": [
+        "/tmp/trip-planner-issue-2019-round3-venv/bin/python",
+        "-c",
+        "import json, platform, sys; print(json.dumps({\"version\": platform.python_version(), \"executable\": sys.executable, \"optimization\": sys.flags.optimize}))"
+      ],
+      "exit_status": 0
+    },
+    {
+      "command": [
+        "/tmp/trip-planner-issue-2019-round3-venv/bin/python",
+        "-m",
+        "pip",
+        "install",
+        "--disable-pip-version-check",
+        "--retries",
+        "0",
+        "--timeout",
+        "10",
+        "-r",
+        "requirements.lock",
+        "-e",
+        ".[dev]"
+      ],
+      "exit_status": 1
+    },
+    {
+      "command": [
+        "git",
+        "ls-remote",
+        "https://github.com/stranske/Workflows.git",
+        "HEAD"
+      ],
+      "exit_status": 128
+    }
+  ],
+  "finished_at": "2026-11-09T04:33:37.784397+00:00",
+  "provisioning_complete": false,
+  "full_suite_run": false,
+  "preferred_python": "3.14",
+  "requires_python": ">=3.13,<3.15",
+  "runtime": {
+    "version": "3.14.10",
+    "executable": "/tmp/trip-planner-issue-2019-round3-venv/bin/python",
+    "optimization": 0
+  }
+}

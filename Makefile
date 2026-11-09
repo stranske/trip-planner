@@ -1,7 +1,7 @@
 .PHONY: test install runtime-backend runtime-frontend runtime-dev runtime-check runtime-smoke runtime-production-check runtime-preview-smoke runtime-full-product-check full-product-check
 
 test:
-	python -m pytest
+	.venv/bin/python -m pytest
 
 install:
 	python -m venv .venv

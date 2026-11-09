@@ -1815,3 +1815,66 @@ approval and the approval policy is `never`; neither remote update was applied.
 PR #2020 was observed open and ready for review (`draft=false`). Provisioning
 and full-suite acceptance tasks remain unchecked pending an execution
 environment with PyPI/GitHub access and local socket I/O.
+
+
+## Issue #2019 selected-environment test entry point — 2026-11-09
+
+A fresh isolated checkout at **05540eb462aa3c0d47266e1ecf686430a6f14f57**
+(`/tmp/trip-planner-issue-2019-round3-source`) contains both required ancestors;
+both ancestry checks exit **0**. A new dedicated CPython **3.14.10** environment
+at `/tmp/trip-planner-issue-2019-round3-venv` matches `.python-version` and
+`requires-python`, with optimization **0**. Its installation command was:
+
+```sh
+/tmp/trip-planner-issue-2019-round3-venv/bin/python -m pip install --disable-pip-version-check --retries 0 --timeout 10 -r requirements.lock -e ".[dev]"
+```
+
+Exit **1**: the isolated build cannot obtain `setuptools>=82.0.1` because
+`pypi.org` DNS resolution fails. The declared `baseline_kit` source remains
+`stranske/Workflows`, `packages/app-baseline-kit`; `git ls-remote` of that source
+exits **128**, also because DNS resolution fails. No pins were changed or global
+packages substituted. Durable [setup.json](issue-2019-20261109-provisioning-round3/setup.json)
+and [provisioning.log](issue-2019-20261109-provisioning-round3/provisioning.log)
+retain commands and actual exits. The dedicated environment is incomplete;
+no provisioned unrestricted verifier run or successful suite evidence is claimed.
+
+Fixed the documented local test entry point: `make test` now invokes
+`.venv/bin/python -m pytest`, using the environment created by `make install`
+without requiring activation. Previously it selected whichever `python` appeared
+on `PATH`, potentially testing a different dependency set. Added two behavioral
+regressions with a failing system interpreter, a distinct venv interpreter, and
+both successful and failing pytest exits. Both new cases fail against the old
+Makefile and pass after the fix; they require the exact unrestricted pytest
+arguments and preserve a nonzero test outcome.
+
+Validation with the preinstalled CPython **3.14.10**, not the incomplete venv:
+
+```sh
+python -m pytest tests/test_make_install.py tests/test_repo_hygiene.py tests/baseline -m 'not slow' -q
+python -m pytest tests/test_pytest_collection.py
+```
+
+Exit **0** for both: **74 passed, 1 skipped, 14 warnings** and
+**1 passed, 14 warnings**. The existing skip needs PR diff context. These focused
+checks do not establish full-suite acceptance. Dependency provisioning and the
+unrestricted-suite acceptance boxes remain unchecked. The next execution needs
+PyPI/GitHub access to complete the locked install before running the unchanged
+verifier with both required ancestors.
+
+GitHub readback confirms PR #2020 is open and ready (`draft=false`). Attempts to
+apply `needs-human` and post the dependency blocker were rejected with
+`MCP tool call requires approval, but approval policy is never`; neither remote
+update was applied. All predecessor evidence is retained.
+
+Black formatted the changed test, and the required whole-tree gate exits **0**
+with **530 files would be left unchanged** after individual checks populated a
+writable cache (worker process sockets are blocked in this sandbox):
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue-2019-round3-black-cache black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+`ruff check tests/test_make_install.py` and `git diff --check` also exit **0**.
+The workspace Git database is read-only; the same source/test changes are
+committed in the writable checkout at
+`/tmp/trip-planner-issue-2019-round3-source` for controller handoff.

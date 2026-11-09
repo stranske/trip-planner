@@ -251,13 +251,13 @@ Required deployment configuration:
 
 ## Python Unit Tests
 
-After installing the backend dev extras (`python -m pip install -e ".[dev]"`), run the unit test suite from the repo root:
+After provisioning `.venv` with `make install` or the manual setup above, run the unit test suite from the repo root:
 
 ```bash
 make test
 ```
 
-That runs `pytest` against the `tests/` directory. `testpaths` is set in `pyproject.toml`, so `pytest` alone is equivalent. The full CI test suite also adds type checking and coverage reporting; see `.github/workflows/ci.yml` for those details.
+That runs `.venv/bin/python -m pytest` without requiring venv activation. `testpaths` is set in `pyproject.toml`, so the command collects the `tests/` directory without exclusions. The full CI test suite also adds type checking and coverage reporting; see `.github/workflows/ci.yml` for those details.
 
 ## Optional Live Integration Env Vars
 
