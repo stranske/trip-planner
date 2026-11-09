@@ -54,7 +54,8 @@ CI must provide supported Python 3.13/3.14 and selected tool-version evidence.
 ## Remaining evidence
 
 T1-T6 are verified as the source compatibility repair and focused lint/typecheck
-above. T7 elides two unnamed subtasks and cannot be certified from its text.
+above. T7 elides two unnamed subtasks; round 6 below recovers their source and
+verifies the omitted work.
 T8 and A2 are verified by the focused regression run and actual break/revert.
 
 Do not infer A1 or A3 from their checked boxes. Current #2015 is CLOSED, still at
@@ -65,3 +66,48 @@ unverified / retain the source fix and let the owning delivery/controller lane
 supply regenerated-delivery and classification evidence. No gate or lease is
 created here. Post-push exact-head CI and the seven-minute review floor remain
 for the owning keepalive lane; this round does not merge the PR.
+
+## Round 6: recover and verify T7
+
+Check date: 2026-11-08 (America/Chicago), 2026-11-09 UTC.
+Outcome: the actual workflow-pinned producer and planner pass the focused
+cross-repo dev-pin suite, including the live checkout/snapshot checks.
+Command:
+`TPP_REPO_PATH=/tmp/issue2017-tpp /opt/anaconda3/bin/python3 -m pytest tests/scripts/test_cross_repo_dev_pins.py -q`.
+Stop rule: one evidence pass, at most 15 minutes; no implementation repairs.
+
+The literal T7 text is a formatter elision, not an additional implementation
+requirement. Its source is the issue optimizer's
+[task-splitting suggestion](https://github.com/stranske/trip-planner/issues/2017#issuecomment-6730036223).
+That comment supplies the complete proposed tasks before the issue body split
+sentences at commas and truncated the resulting list:
+
+1. Identify the exact mypy, pytest and Ruff version mismatches.
+2. Update the source so planner and the pinned TPP revision resolve to compatible
+   versions.
+3. Run `tests/scripts/test_cross_repo_dev_pins.py` locally and confirm the
+   compatibility assertion no longer fires.
+
+The visible T2-T6 cover diagnosis and the start of the compatibility sentence.
+Accordingly, T7's omitted remainder is verified as compatibility of the paired
+requirements plus the focused local run, rather than inventing two new tasks.
+The original issue block also requests only the source fix and regression test;
+it supplies no further implementation scope.
+
+Round 6 results on parent head `4323a4a878c1dc247d5d71d2f5e6c594adf3c197`:
+
+- Producer checkout is clean at `5c9ec6e15ac959023b9fc9cdd1099d70a6073396`.
+  The live snapshot test verifies this equals the workflow ref and that runtime
+  and dev dependency metadata match the reviewed snapshot.
+- Focused suite: **39 passed in 2.36s**, zero skips. This exercises the real
+  paired requirements and retains the synthetic incompatible-pin regressions.
+- No implementation, dependency pin, workflow or regression fixture changed;
+  this commit records verification of existing implementation for T7.
+
+T7 is complete under the recovered source-task mapping above. A1 is still not
+established: fresh `gh run view 42542025018 --repo stranske/trip-planner --json
+conclusion,headSha,status,url` reports `failure`, and #2015 remains closed,
+unmerged, at the original head. This round supplies no new A3 evidence.
+Blocking/drainable pair: downstream delivery/classification evidence missing /
+the owning sync/controller lane can reconcile delivery with the existing source
+fix. These gaps do not require another dev-tool pin edit or expansion of T7.
