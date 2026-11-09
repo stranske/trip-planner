@@ -1,0 +1,25 @@
+{
+  "commit": "5af4a103d1799589e12b04b57f24911611630c36",
+  "verified_ancestors": [
+    "29c6aa01064f9eb3cbf15debd32cac3327ec43b8",
+    "4c6ff3e81b412db4039f7d1a48fa95d0aecff753"
+  ],
+  "runtime": {
+    "version": "3.13.13",
+    "executable": "/opt/homebrew/opt/python@3.13/bin/python3.13",
+    "implementation": "CPython",
+    "optimization": 0
+  },
+  "requires_python": ">=3.13,<3.15",
+  "preferred_python": "3.14",
+  "command": [
+    "/opt/homebrew/opt/python@3.13/bin/python3.13",
+    "-m",
+    "pytest"
+  ],
+  "cwd": "/private/tmp/issue-2012-current-20261108T230425Z/checkout",
+  "log": "/private/tmp/issue-2012-current-20261108T230425Z/pytest.log",
+  "started_at": "2026-11-08T23:04:38.223899+00:00",
+  "exit_status": 2,
+  "finished_at": "2026-11-08T23:04:41.130312+00:00"
+}
