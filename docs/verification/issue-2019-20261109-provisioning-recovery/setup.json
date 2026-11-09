@@ -1,0 +1,86 @@
+{
+  "provisioning_source_commit": "c7a25b84dffae64ff6ade601793c0a1257e33377",
+  "source_checkout": "/tmp/trip-planner-round9-source",
+  "verified_ancestors": [
+    "29c6aa01064f9eb3cbf15debd32cac3327ec43b8",
+    "4c6ff3e81b412db4039f7d1a48fa95d0aecff753"
+  ],
+  "venv_interpreter": "/tmp/trip-planner-round9-venv/bin/python",
+  "runtime": {
+    "version": "3.14.10 (main, Oct 26 2026, 14:17:03) [GCC 15.2.0]",
+    "prefix": "/tmp/trip-planner-round9-venv",
+    "base_prefix": "/opt/hostedtoolcache/Python/3.14.10/x64",
+    "baseline_kit_available": false
+  },
+  "creation_command": [
+    "python",
+    "scripts/create_dev_venv.py",
+    "/tmp/trip-planner-round9-venv"
+  ],
+  "creation_exit_status": 0,
+  "install_command": [
+    "/tmp/trip-planner-round9-venv/bin/python",
+    "-m",
+    "pip",
+    "install",
+    "-r",
+    "requirements.lock",
+    "-e",
+    ".[dev]"
+  ],
+  "install_environment": {
+    "PIP_RETRIES": "0",
+    "PIP_TIMEOUT": "5",
+    "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+    "PIP_CACHE_DIR": "/tmp/trip-planner-round9-cache"
+  },
+  "install_exit_status": 1,
+  "baseline_declared_source": "git+https://github.com/stranske/Workflows.git#subdirectory=packages/app-baseline-kit",
+  "baseline_source_metadata_sha": "468a74fe2a2350a5869603754f549c248881624e",
+  "baseline_installed_in_dedicated_venv": false,
+  "environment_probes": {
+    "pypi.org": "gaierror: [Errno -3] Temporary failure in name resolution",
+    "github.com": "gaierror: [Errno -3] Temporary failure in name resolution",
+    "local_socket_io": "PermissionError: [Errno 1] Operation not permitted"
+  },
+  "unrestricted_verifier_run": false,
+  "acceptance": "incomplete",
+  "regression_source_commit": "aa3679768dd5a4e0bc6a092e0e381c07fbd47782",
+  "regression_interpreter": "/opt/hostedtoolcache/Python/3.14.10/x64/bin/python",
+  "regression_command": [
+    "/opt/hostedtoolcache/Python/3.14.10/x64/bin/python",
+    "-m",
+    "pytest",
+    "tests/scripts/test_create_dev_venv.py",
+    "tests/test_make_install.py",
+    "tests/baseline",
+    "-m",
+    "not slow",
+    "-q"
+  ],
+  "regression_environment": {
+    "PATH_prefix": "/opt/hostedtoolcache/Python/3.13.18/x64/bin"
+  },
+  "regression_exit_status": 0,
+  "regression_terminal_summary": "68 passed, 14 warnings in 26.91s",
+  "collection_command": [
+    "/opt/hostedtoolcache/Python/3.14.10/x64/bin/python",
+    "-m",
+    "pytest",
+    "tests/test_pytest_collection.py"
+  ],
+  "collection_exit_status": 0,
+  "collection_terminal_summary": "1 passed, 14 warnings in 16.37s",
+  "timeout_mutation": {
+    "change": "clear=False instead of clear=True in the probe exception handler, temporary checkout only",
+    "exit_status": 1,
+    "failure": "The timed-out environment must be rebuilt"
+  },
+  "black_exit_status": 0,
+  "black_terminal_summary": "532 files would be left unchanged.",
+  "remote_blocker_updates": {
+    "comment_applied": false,
+    "needs_human_label_applied": false,
+    "error": "MCP tool call requires approval, but approval policy is never"
+  }
+}

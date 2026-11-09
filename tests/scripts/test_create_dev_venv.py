@@ -10,8 +10,51 @@ import sys
 import sysconfig
 import venv
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
+
+from scripts import create_dev_venv as bootstrap
+
+
+def test_create_dev_venv_recovers_from_probe_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stalled launcher must be replaced before dependencies can be installed."""
+    destination = tmp_path / "stalled environment"
+    venv.EnvBuilder(with_pip=False, symlinks=os.name != "nt").create(destination)
+    marker = destination / "old-installed-package"
+    marker.write_text("remove when rebuilding", encoding="utf-8")
+    python = destination / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    probe = Mock(side_effect=subprocess.TimeoutExpired(cmd=[python], timeout=10))
+    # Substitute only the bootstrap probe; venv/ensurepip still run real processes.
+    monkeypatch.setattr(
+        bootstrap,
+        "subprocess",
+        SimpleNamespace(run=probe, TimeoutExpired=subprocess.TimeoutExpired),
+    )
+
+    bootstrap.create_dev_venv(destination)
+
+    probe.assert_called_once()
+    assert not marker.exists(), "The timed-out environment must be rebuilt"
+    recovered = subprocess.run(
+        [
+            python,
+            "-I",
+            "-c",
+            "import json, pip, sys; print(json.dumps([sys.prefix, pip.__file__]))",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert recovered.returncode == 0, recovered.stdout + recovered.stderr
+    prefix, pip_path = json.loads(recovered.stdout)
+    assert Path(prefix).resolve() == destination.resolve()
+    assert Path(pip_path).resolve().is_relative_to(destination.resolve())
 
 
 def test_create_dev_venv_switches_supported_python_version(tmp_path: Path) -> None:
@@ -127,6 +170,10 @@ def test_create_dev_venv_isolates_dependencies(tmp_path: Path, reuse_system_pack
     imported_paths = {Path(path).resolve() for path in runtime["path"]}
     for key in ("purelib", "platlib"):
         assert Path(base_paths[key]).resolve() not in imported_paths
+    assert (
+        "include-system-site-packages = false"
+        in (destination / "pyvenv.cfg").read_text(encoding="utf-8").splitlines()
+    )
 
 
 @pytest.mark.parametrize("changed_interpreter", [False, True])

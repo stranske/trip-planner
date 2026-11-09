@@ -1,0 +1,23 @@
+============================= test session starts ==============================
+platform linux -- Python 3.14.10, pytest-9.2.0, pluggy-1.7.0
+rootdir: /home/runner/work/trip-planner/trip-planner
+configfile: pyproject.toml
+plugins: cov-7.1.0, regressions-2.11.0, platformdirs-4.14.5, datadir-1.9.0, langsmith-0.14.17, pytest_httpserver-1.1.5, anyio-4.14.2
+collected 1 item
+
+tests/test_pytest_collection.py .                                        [100%]
+
+=============================== warnings summary ===============================
+../../../../../opt/hostedtoolcache/Python/3.14.10/x64/lib/python3.14/site-packages/langsmith/_internal/_beta_decorator.py:92: 13 warnings
+  /opt/hostedtoolcache/Python/3.14.10/x64/lib/python3.14/site-packages/langsmith/_internal/_beta_decorator.py:92: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    if asyncio.iscoroutinefunction(func):
+
+../../../../../opt/hostedtoolcache/Python/3.14.10/x64/lib/python3.14/site-packages/anyio/pytest_plugin.py:14
+  /opt/hostedtoolcache/Python/3.14.10/x64/lib/python3.14/site-packages/anyio/pytest_plugin.py:14: PytestRemovedIn10Warning: _pytest.python.CallSpec2 has been renamed to CallSpec.
+  The CallSpec2 alias will be removed in pytest 10.
+  Update imports to use CallSpec instead.
+  See https://docs.pytest.org/en/stable/deprecations.html#callspec2-renamed
+    from _pytest.python import CallSpec2
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================= 1 passed, 14 warnings in 16.37s ========================

@@ -2141,3 +2141,47 @@ or `pytest.log` is claimed. Predecessor evidence remains intact.
 The blocker comment and `needs-human` label requests were also rejected with
 `MCP tool call requires approval, but approval policy is never`; neither was applied.
 Acceptance requires a runner with package/source access and working local sockets.
+
+## Issue #2019 provisioning timeout and isolation regressions — 2026-11-09
+
+Fresh isolated checkout `/tmp/trip-planner-round9-source` at PR source
+**c7a25b84dffae64ff6ade601793c0a1257e33377** contains both required ancestors.
+Created dedicated CPython **3.14.10** environment `/tmp/trip-planner-round9-venv`,
+matching `.python-version` and `requires-python`. Its documented locked install
+(`python -m pip install -r requirements.lock -e '.[dev]'`) exits **1** retrieving
+`setuptools>=82.0.1`. DNS resolution still fails for PyPI and GitHub; local
+socketpair send still raises `PermissionError`. Inspected baseline imports and
+the declared Workflows package metadata through the connector. `baseline_kit`
+remains absent from the dedicated environment; provisioning is incomplete.
+See [setup.json](issue-2019-20261109-provisioning-recovery/setup.json) and
+[install log](issue-2019-20261109-provisioning-recovery/locked-install.log).
+
+Test commit **aa3679768dd5a4e0bc6a092e0e381c07fbd47782** adds a timeout-recovery
+regression using real venv creation and ensurepip, with only the stalled probe
+substituted. It verifies removal of the old environment and recovery of local
+pip. A temporary mutation disabling recovery fails at the removal assertion.
+The isolation regression now also checks `include-system-site-packages = false`
+in `pyvenv.cfg`, covering systems whose exposed package paths differ from
+`sysconfig` paths.
+
+Validation uses the **preinstalled** Python 3.14.10, separately from the
+unprovisioned dedicated venv. With Python 3.13.18 available on PATH:
+
+```sh
+python -m pytest tests/scripts/test_create_dev_venv.py tests/test_make_install.py tests/baseline -m 'not slow' -q
+python -m pytest tests/test_pytest_collection.py
+```
+
+Both exit **0**: [68 passed, 14 warnings in 26.91s](issue-2019-20261109-provisioning-recovery/targeted-tests.log)
+and [1 passed, 14 warnings in 16.37s](issue-2019-20261109-provisioning-recovery/collection.log).
+Ruff and `git diff --check` pass. After sequential checks populate Black's cache
+to avoid blocked worker sockets, the required whole-tree Black command exits
+**0**, reporting **532 files would be left unchanged**.
+
+No acceptance tasks are newly complete. The unrestricted verifier was not run;
+no new successful `result.json` or `pytest.log` is claimed. Predecessor evidence
+remains intact. The workspace Git database is read-only; the test commit is in
+the writable isolated clone, and matching edits remain in the workspace for
+handoff. PR #2020 is open and ready (`draft=false`). The blocker comment and
+`needs-human` label were both rejected with `MCP tool call requires approval,
+but approval policy is never`; neither remote update was applied.
