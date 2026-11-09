@@ -111,3 +111,45 @@ unmerged, at the original head. This round supplies no new A3 evidence.
 Blocking/drainable pair: downstream delivery/classification evidence missing /
 the owning sync/controller lane can reconcile delivery with the existing source
 fix. These gaps do not require another dev-tool pin edit or expansion of T7.
+
+## Keepalive regression follow-up: original producer resolution
+
+Check date: 2026-11-09 UTC. Python 3.14.10, Black 26.10.1, Ruff 0.17.4,
+and mypy 2.4.1 match the repository's supported runtime and selected tool pins.
+
+Extended `test_pip_resolves_paired_dev_tool_pins_offline` with the actual
+`b56d92b389736c70370aa9134f379ac8cd1f3ad1` producer snapshot from failed run
+42542025018. The local wheel index now includes the producer's exact tool
+versions as well as planner's and the original regression versions. The new
+case requires `ResolutionImpossible` and both Ruff requirements, proving a
+version conflict rather than a missing offline wheel. The current paired
+producer remains covered by the successful resolution case.
+
+- [x] Verify the original producer conflict and current paired resolution:
+  `pytest tests/scripts/test_cross_repo_dev_pins.py tests/scripts/test_cross_repo_smoke_workflow.py -q -m "not slow"`
+  reports **79 passed, 2 skipped**. The skips are the two live-checkout checks;
+  no `TPP_REPO_PATH` is configured in this sandbox.
+- [x] Verify regression sensitivity: temporarily using planner's requirements
+  for the historical producer makes the new case fail because pip succeeds.
+  Restoring the test returns the new case to **1 passed**.
+- [x] Focused Ruff and mypy checks pass.
+- [x] The required repository-wide Black check passes: **529 files would be
+  left unchanged**. Files were checked individually first using
+  `BLACK_CACHE_DIR=/tmp/issue2017-black-cache`, then the specified check was
+  rerun against `.` with that cache and `BLACK_NUM_WORKERS=1` to avoid the
+  sandbox's process/socket restrictions.
+
+`pytest -q -m "not slow"` exits unsuccessfully during collection because the
+sandbox denies local socketpair I/O required by TestClient. This is not a
+full-suite pass. `gh run view 42542025018 --repo stranske/trip-planner --json
+conclusion,headSha,status,url` cannot connect to api.github.com here. Connected
+GitHub job-log readback confirms the original Ruff conflict; PR readback still
+shows #2015 closed, unmerged, at its original head. #2018 is open and ready for
+review. A1 and A3 remain unverified; no additional task or acceptance checkbox
+is inferred from the elided placeholder.
+
+Commit handoff is blocked: `.git` is mounted read-only, so `git add` fails to
+create `.git/index.lock`. The complete changes are saved in
+`/tmp/issue-2017-pin-regression.patch`; commit them from a writable checkout.
+The requested `needs-human` label could not be applied to #2018 because the
+GitHub tool requires approval and this run's approval policy is `never`.
