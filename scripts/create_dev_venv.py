@@ -28,7 +28,8 @@ def create_dev_venv(destination: Path) -> None:
             clear = (
                 probe.returncode != 0
                 or not executable
-                or Path(executable).resolve() != Path(sys._base_executable).resolve()
+                or Path(executable).resolve()
+                != Path(getattr(sys, "_base_executable", sys.executable)).resolve()
             )
         except (OSError, subprocess.TimeoutExpired):
             clear = True

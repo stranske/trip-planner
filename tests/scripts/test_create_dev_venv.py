@@ -50,5 +50,8 @@ def test_create_dev_venv_replaces_stale_interpreter_only(
         check=False,
     )
     assert probe.returncode == 0, probe.stdout + probe.stderr
-    assert Path(json.loads(probe.stdout)).resolve() == Path(sys._base_executable).resolve()
+    assert (
+        Path(json.loads(probe.stdout)).resolve()
+        == Path(getattr(sys, "_base_executable", sys.executable)).resolve()
+    )
     assert marker.exists() is not changed_interpreter
