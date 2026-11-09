@@ -12,10 +12,11 @@ from pathlib import Path
 def create_dev_venv(destination: Path) -> None:
     """Rebuild an existing venv only when its base interpreter has changed."""
     clear = False
-    if (destination / "pyvenv.cfg").is_file():
-        python = destination / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    python = destination / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if (destination / "pyvenv.cfg").is_file() or python.exists() or python.is_symlink():
         # Reusing a venv with `python -m venv` can leave bin/python linked to
         # the previous interpreter, so inspect its runtime rather than its cfg.
+        # A partial environment may have lost its cfg while retaining that launcher.
         try:
             probe = subprocess.run(
                 [python, "-c", "import sys; print(sys._base_executable)"],

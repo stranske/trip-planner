@@ -2050,3 +2050,51 @@ incomplete, so the unrestricted verifier was not rerun and no new full-suite
 GitHub rejected both the blocker comment and `needs-human` label because approval
 is required and this run's approval policy is `never`. Resume on a runner with
 PyPI/GitHub access, or a complete trusted wheelhouse plus the declared source.
+
+## Issue #2019 missing-metadata recovery — 2026-11-09
+
+Retried provisioning from isolated source **b0da68ec3ea7c0f86b6aa49b79e472643dcd3162**
+at `/tmp/trip-planner-2020-round7-source`. Both required ancestor checks exit **0**.
+The dedicated `/tmp/trip-planner-2020-round7-venv/bin/python` uses supported
+CPython **3.14.10**, matching `.python-version` and `requires-python`.
+
+```sh
+PIP_RETRIES=0 PIP_TIMEOUT=5 PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_CACHE_DIR=/tmp/trip-planner-2020-round7-pip-cache /tmp/trip-planner-2020-round7-venv/bin/python -m pip install -r requirements.lock -e '.[dev]'
+```
+
+Exit **1** during isolated build setup:
+
+```text
+ERROR: Could not find a version that satisfies the requirement setuptools>=82.0.1 (from versions: none)
+ERROR: No matching distribution found for setuptools>=82.0.1
+```
+
+Shell access to the declared Workflows source still fails with `Could not resolve
+host: github.com`. Its package metadata remains accessible through the connector
+and declares `baseline_kit` with pytest, PyYAML, and pytest-regressions dependencies.
+The wheel cache still lacks exact locked versions, including annotated-doc **0.0.4**.
+A standalone socketpair write also raises `PermissionError`. No pins were relaxed;
+the dedicated environment remains unprovisioned, so no unrestricted verifier run
+or successful full-suite evidence is claimed.
+
+Reproduced and fixed one bootstrap recovery defect: without `pyvenv.cfg`, setup
+previously reused a stale launcher and ensurepip failed with exit **99**. Setup now
+probes an existing launcher even when metadata is missing, rebuilds a broken one,
+and retains a matching interpreter. The regression fails before the fix and passes
+afterward. Source/test commit **f0dbc0e05b898683dfa4522dac93b2f30a126367** is retained
+in the writable isolated checkout because the workspace Git database is read-only.
+
+Validation uses the preinstalled **3.14.10**, separately from the incomplete venv:
+
+```sh
+python -m pytest tests/scripts/test_create_dev_venv.py tests/test_make_install.py tests/baseline -m 'not slow' -q
+python -m pytest tests/test_pytest_collection.py
+```
+
+Exits **0**: **66 passed, 14 warnings** and **1 passed, 14 warnings**. Ruff and
+`git diff --check` pass. The required whole-tree Black check passes with **532 files
+unchanged**, after sequential individual checks populate a writable cache to avoid
+blocked worker sockets. No additional acceptance tasks are complete. PR #2020
+remains open and ready (`draft=false`). Reconciliation of the duplicate task lists,
+the blocker comment, and the `needs-human` label were each rejected with
+`MCP tool call requires approval, but approval policy is never`; none was applied.

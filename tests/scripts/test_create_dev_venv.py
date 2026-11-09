@@ -56,25 +56,28 @@ def test_create_dev_venv_isolates_dependencies(tmp_path: Path, reuse_system_pack
 
 
 @pytest.mark.parametrize("changed_interpreter", [False, True])
+@pytest.mark.parametrize("missing_metadata", [False, True], ids=["metadata", "missing-metadata"])
 def test_create_dev_venv_replaces_stale_interpreter_only(
-    tmp_path: Path, changed_interpreter: bool
+    tmp_path: Path, changed_interpreter: bool, missing_metadata: bool
 ) -> None:
     destination = tmp_path / "development environment"
     venv.EnvBuilder(with_pip=False, symlinks=os.name != "nt").create(destination)
+    if missing_metadata:
+        (destination / "pyvenv.cfg").unlink()
     marker = destination / "installed-package-marker"
     marker.write_text("keep for the same interpreter", encoding="utf-8")
     python = destination / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     if changed_interpreter:
         if os.name != "nt":
-            # A second `python -m venv` updates pyvenv.cfg but can leave the
-            # old launcher. Its metadata already names the selected Python.
+            # A reused launcher can remain stale even if metadata names the
+            # selected Python or was lost during interrupted setup.
             previous = tmp_path / "previous-python"
             previous.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
             previous.chmod(0o755)
             python.unlink()
             python.symlink_to(previous)
         else:
-            python.unlink()
+            python.write_bytes(b"broken Python launcher")
 
     script = Path(__file__).resolve().parents[2] / "scripts/create_dev_venv.py"
     setup = subprocess.run(
