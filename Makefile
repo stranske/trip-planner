@@ -1,10 +1,12 @@
 .PHONY: test install runtime-backend runtime-frontend runtime-dev runtime-check runtime-smoke runtime-production-check runtime-preview-smoke runtime-full-product-check full-product-check
 
+PYTHON ?= python
+
 test:
 	.venv/bin/python -m pytest
 
 install:
-	python -m venv .venv
+	"$(PYTHON)" -m venv .venv
 	.venv/bin/python -m pip install -r requirements.lock -e ".[dev]"
 	npm --prefix frontend ci
 

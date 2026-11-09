@@ -13,8 +13,9 @@ import pytest
 
 
 @pytest.mark.parametrize("pip_status", [0, 23])
+@pytest.mark.parametrize("selected_python", [False, True], ids=["path-python", "selected-python"])
 def test_install_provisions_dev_environment_before_frontend(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pip_status: int
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pip_status: int, selected_python: bool
 ) -> None:
     """Keep omitted-from-lock dev packages installed, and propagate pip failures."""
     root = Path(__file__).resolve().parents[1]
@@ -46,6 +47,18 @@ elif sys.argv[1:4] == ["-m", "pip", "install"]:
         path = bin_dir / name
         path.write_text(installer, encoding="utf-8")
         path.chmod(0o755)
+    make_args = ["make", "install"]
+    if selected_python:
+        # A supported interpreter can be outside PATH (including a path with
+        # spaces). The generic python must not create the dedicated environment.
+        selected = tmp_path / "selected runtime" / "python3.14"
+        selected.parent.mkdir()
+        selected.write_text(installer, encoding="utf-8")
+        selected.chmod(0o755)
+        (bin_dir / "python").write_text(
+            f"#!{sys.executable}\nraise SystemExit(99)\n", encoding="utf-8"
+        )
+        make_args.append(f"PYTHON={selected}")
     monkeypatch.setenv("PATH", str(bin_dir) + os.pathsep + os.environ["PATH"])
     monkeypatch.setenv("BOOTSTRAP_TEST_COMMANDS", str(commands))
     monkeypatch.setenv("BOOTSTRAP_TEST_PIP_STATUS", str(pip_status))
@@ -54,9 +67,10 @@ elif sys.argv[1:4] == ["-m", "pip", "install"]:
         monkeypatch.delenv(name, raising=False)
 
     result = subprocess.run(
-        ["make", "install"], cwd=tmp_path, capture_output=True, text=True, check=False, timeout=20
+        make_args, cwd=tmp_path, capture_output=True, text=True, check=False, timeout=20
     )
 
+    assert commands.exists(), result.stdout + result.stderr
     calls = [json.loads(line) for line in commands.read_text(encoding="utf-8").splitlines()]
     assert calls[0][1:] == ["-m", "venv", ".venv"]
     assert len(calls) >= 2, result.stdout + result.stderr

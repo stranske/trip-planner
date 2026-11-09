@@ -1878,3 +1878,82 @@ BLACK_CACHE_DIR=/tmp/issue-2019-round3-black-cache black --check --line-length 1
 The workspace Git database is read-only; the same source/test changes are
 committed in the writable checkout at
 `/tmp/trip-planner-issue-2019-round3-source` for controller handoff.
+
+## Issue #2019 explicit bootstrap interpreter — 2026-11-09
+
+A fresh isolated checkout of **9cf54c3d38644fac7b87cd415bd0f412bffa2334** at
+`/tmp/trip-planner-issue-2019-round4-source` contains both required ancestors;
+both `git merge-base --is-ancestor` commands exit **0**. A new dedicated venv
+uses CPython **3.14.10**, optimization **0**, at
+`/tmp/trip-planner-issue-2019-round4-venv/bin/python`. This matches
+`.python-version` **3.14** and `requires-python = ">=3.13,<3.15"`.
+
+The documented installation command, run from that checkout, was:
+
+```sh
+/tmp/trip-planner-issue-2019-round4-venv/bin/python -m pip install -r requirements.lock -e ".[dev]"
+```
+
+Exit **1**: isolated build-dependency installation cannot obtain
+`setuptools>=82.0.1`. The initial attempt reports PyPI name-resolution failures.
+The retained retry sets `PIP_RETRIES=0`, `PIP_TIMEOUT=10`,
+`PIP_DISABLE_PIP_VERSION_CHECK=1`, and a writable `PIP_CACHE_DIR`; it reports no
+available setuptools versions. Resolving the declared baseline source with
+`git ls-remote https://github.com/stranske/Workflows.git HEAD` exits **128**
+(`Could not resolve host: github.com`). The dedicated interpreter's local
+socketpair probe exits **1** at `sendall` with `PermissionError`.
+
+Fresh [setup.json](issue-2019-20261109-provisioning-round4/setup.json) and
+[provisioning.log](issue-2019-20261109-provisioning-round4/provisioning.log)
+retain the setup commands, runtime, actual exits, and source commit. Only trailing
+whitespace in terminal output was removed. All predecessor evidence is preserved.
+`tests/baseline` imports `InvariantResult`, `assert_invariants`, and
+`evaluate_direction` from `baseline_kit`; the development extra resolves this
+package from `stranske/Workflows`, `packages/app-baseline-kit`, rather than the
+lock. The global installation was not substituted into the dedicated environment.
+The dedicated environment remains incomplete, so the provisioned unrestricted
+verifier was not run and no new successful `result.json` or `pytest.log` is claimed.
+
+Fixed a provisioning entry-point limitation: `make install` now accepts
+`PYTHON=/path/to/python3.14` and quotes the selected executable when creating
+`.venv`. Its default remains `python` from `PATH`. Previously the recipe ignored
+that selection and always used `python`. Regression cases use a failing generic
+interpreter and an explicit executable outside `PATH`, including spaces in its
+path. Both new cases fail against the old recipe and pass after the change;
+the same cases verify locked development-extra installation and stop frontend
+setup on pip failure. README documents the selection option.
+
+Validation of the source changes uses preinstalled CPython **3.14.10**, separately
+from the incomplete dedicated venv:
+
+```sh
+python -m pytest tests/test_make_install.py tests/test_repo_hygiene.py tests/baseline -m 'not slow' -q
+python -m pytest tests/test_pytest_collection.py
+```
+
+Both exit **0**: **76 passed, 1 skipped, 14 warnings** and
+**1 passed, 14 warnings**, respectively. The existing skip requires PR diff
+context. These focused results do not establish full-suite acceptance; provisioning
+and unrestricted-suite acceptance tasks remain unchecked. No verifier or workflow
+files were changed.
+
+GitHub readback shows PR #2020 open and ready (`draft=false`). Both the
+`needs-human` label and blocker-comment requests were rejected with
+`MCP tool call requires approval, but approval policy is never`; neither update
+was applied. The next run requires PyPI/GitHub access and local socket I/O to
+complete provisioning and execute the unchanged unrestricted verifier with both
+required ancestors.
+
+Black formatted the changed test; individual file checks populated a writable
+cache because worker-process sockets are blocked. The required whole-tree gate
+then exits **0**, reporting **530 files would be left unchanged**:
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue-2019-round4-black-cache black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+`ruff check tests/test_make_install.py` and `git diff --check` also exit **0**.
+The workspace Git database is read-only (`git add` cannot create
+`.git/index.lock`); delivery uses the writable clone at
+`/tmp/trip-planner-issue-2019-round4-source`, with identical source/test changes
+retained in this workspace for controller handoff.

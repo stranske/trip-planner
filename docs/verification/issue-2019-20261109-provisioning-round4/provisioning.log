@@ -1,0 +1,52 @@
+$ ["/tmp/trip-planner-issue-2019-round4-venv/bin/python", "-c", "import json, platform, sys; print(json.dumps({'version': platform.python_version(), 'executable': sys.executable, 'optimization': sys.flags.optimize}))"]
+{"version": "3.14.10", "executable": "/tmp/trip-planner-issue-2019-round4-venv/bin/python", "optimization": 0}
+Exit: 0
+
+$ ["git", "merge-base", "--is-ancestor", "29c6aa01064f9eb3cbf15debd32cac3327ec43b8", "HEAD"]
+
+Exit: 0
+
+$ ["git", "merge-base", "--is-ancestor", "4c6ff3e81b412db4039f7d1a48fa95d0aecff753", "HEAD"]
+
+Exit: 0
+
+$ ["/tmp/trip-planner-issue-2019-round4-venv/bin/python", "-m", "pip", "install", "-r", "requirements.lock", "-e", ".[dev]"]
+Obtaining file:///tmp/trip-planner-issue-2019-round4-source
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'error'
+  error: subprocess-exited-with-error
+
+  × installing build dependencies did not run successfully.
+  │ exit code: 1
+  ╰─> [2 lines of output]
+      ERROR: Could not find a version that satisfies the requirement setuptools>=82.0.1 (from versions: none)
+      ERROR: No matching distribution found for setuptools>=82.0.1
+      [end of output]
+
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+ERROR: Failed to build 'file:///tmp/trip-planner-issue-2019-round4-source' when installing build dependencies
+Exit: 1
+
+$ ["git", "ls-remote", "https://github.com/stranske/Workflows.git", "HEAD"]
+fatal: unable to access 'https://github.com/stranske/Workflows.git/': Could not resolve host: github.com
+Exit: 128
+
+$ ["/tmp/trip-planner-issue-2019-round4-venv/bin/python", "-c", "import socket; a,b=socket.socketpair(); a.sendall(b'x'); print(b.recv(1))"]
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import socket; a,b=socket.socketpair(); a.sendall(b'x'); print(b.recv(1))
+                                            ~~~~~~~~~^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+Exit: 1
+
+$ ["/tmp/trip-planner-issue-2019-round4-venv/bin/python", "-c", "import socket; print(socket.getaddrinfo('pypi.org', 443))"]
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import socket; print(socket.getaddrinfo('pypi.org', 443))
+                         ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.14.10/x64/lib/python3.14/socket.py", line 989, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno -3] Temporary failure in name resolution
+Exit: 1
+

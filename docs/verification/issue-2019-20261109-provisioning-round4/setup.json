@@ -1,0 +1,86 @@
+{
+  "commit": "9cf54c3d38644fac7b87cd415bd0f412bffa2334",
+  "source": "/tmp/trip-planner-issue-2019-round4-source",
+  "started_at": "2026-11-09T05:47:31.075736+00:00",
+  "interpreter": "/tmp/trip-planner-issue-2019-round4-venv/bin/python",
+  "preferred_python": "3.14",
+  "requires_python": ">=3.13,<3.15",
+  "baseline_source": "https://github.com/stranske/Workflows.git#subdirectory=packages/app-baseline-kit",
+  "pip_environment": {
+    "PIP_RETRIES": "0",
+    "PIP_TIMEOUT": "10",
+    "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+    "PIP_CACHE_DIR": "/tmp/issue-2019-round4-pip-cache"
+  },
+  "commands": [
+    {
+      "command": [
+        "/tmp/trip-planner-issue-2019-round4-venv/bin/python",
+        "-c",
+        "import json, platform, sys; print(json.dumps({'version': platform.python_version(), 'executable': sys.executable, 'optimization': sys.flags.optimize}))"
+      ],
+      "exit_status": 0
+    },
+    {
+      "command": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "29c6aa01064f9eb3cbf15debd32cac3327ec43b8",
+        "HEAD"
+      ],
+      "exit_status": 0
+    },
+    {
+      "command": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "4c6ff3e81b412db4039f7d1a48fa95d0aecff753",
+        "HEAD"
+      ],
+      "exit_status": 0
+    },
+    {
+      "command": [
+        "/tmp/trip-planner-issue-2019-round4-venv/bin/python",
+        "-m",
+        "pip",
+        "install",
+        "-r",
+        "requirements.lock",
+        "-e",
+        ".[dev]"
+      ],
+      "exit_status": 1
+    },
+    {
+      "command": [
+        "git",
+        "ls-remote",
+        "https://github.com/stranske/Workflows.git",
+        "HEAD"
+      ],
+      "exit_status": 128
+    },
+    {
+      "command": [
+        "/tmp/trip-planner-issue-2019-round4-venv/bin/python",
+        "-c",
+        "import socket; a,b=socket.socketpair(); a.sendall(b'x'); print(b.recv(1))"
+      ],
+      "exit_status": 1
+    },
+    {
+      "command": [
+        "/tmp/trip-planner-issue-2019-round4-venv/bin/python",
+        "-c",
+        "import socket; print(socket.getaddrinfo('pypi.org', 443))"
+      ],
+      "exit_status": 1
+    }
+  ],
+  "provisioned": false,
+  "full_suite_run": false,
+  "finished_at": "2026-11-09T05:49:57.135518+00:00"
+}
