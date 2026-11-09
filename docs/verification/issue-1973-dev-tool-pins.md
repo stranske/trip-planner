@@ -555,21 +555,12 @@ approval policy is never`. Neither remote change was applied.
 - [x] Record the supported runtime, exact source commit, unrestricted command, nonzero result, first blocked node, traceback, and failure classification.
 - [ ] Complete unrestricted local `python -m pytest` with exit 0 on current source on a supported interpreter.
 
-Historical full-suite success **reported for source `1a6a436e0c3d216a75aadf265c595b7c2d03c122` only**.
-This does not verify subsequent branch source; see the current-source result at the end.
-
-### Final verification evidence — 2026-11-08
-
-Check date: 2026-11-08. Stop rule: single attempt, finite runtime (completed in ~5 minutes).
-
-- **Durable source commit**: `1a6a436e0c3d216a75aadf265c595b7c2d03c122`
-- **Verified ancestors**: `29c6aa01064f9eb3cbf15debd32cac3327ec43b8`, `4c6ff3e81b412db4039f7d1a48fa95d0aecff753`
-- **Runtime**: CPython 3.13.13 (macOS, arm64)
-- **Command**: `/private/tmp/venv313/bin/python -m pytest`
-- **Exit status**: 0
-- **Terminal summary**: `2891 passed, 6 skipped, 791 warnings in 286.40s (0:04:46)`
-
-Full evidence archive: `/tmp/verification_output/issue-2012-run/`
+Unverified claim: commit `5af4a103` reported an unrestricted exit **0** run
+(`2891 passed, 6 skipped`) for source `1a6a436e0c3d216a75aadf265c595b7c2d03c122`
+using `/private/tmp/venv313/bin/python`. Neither that interpreter nor the cited
+archive `/tmp/verification_output/issue-2012-run/` was retained, so the claim has
+no durable evidence and is not acceptance. The durable current-source result is
+the failed run at the end of this file.
 
 ## Issue #2012 current-source collection repair — 2026-11-08
 
@@ -713,22 +704,12 @@ change was applied.
 - [x] Record the current tested source, supported runtime, exact unrestricted command, terminal result, and diagnostic traceback.
 - [ ] Obtain an unrestricted local `python -m pytest` exit 0 on current source on a supported interpreter.
 
-Historical full-suite success **reported for source `1a6a436e0c3d216a75aadf265c595b7c2d03c122` only**.
-This duplicates the historical record above, rather than establishing a second run
-or acceptance of subsequent source. Predecessor evidence is retained below.
-
-### Final verification evidence — 2026-11-08
-
-Check date: 2026-11-08. Stop rule: single attempt, finite runtime (completed in ~5 minutes).
-
-- **Durable source commit**: `1a6a436e0c3d216a75aadf265c595b7c2d03c122`
-- **Verified ancestors**: `29c6aa01064f9eb3cbf15debd32cac3327ec43b8`, `4c6ff3e81b412db4039f7d1a48fa95d0aecff753`
-- **Runtime**: CPython 3.13.13 (macOS, arm64)
-- **Command**: `/private/tmp/venv313/bin/python -m pytest`
-- **Exit status**: 0
-- **Terminal summary**: `2891 passed, 6 skipped, 791 warnings in 286.40s (0:04:46)`
-
-Full evidence archive: `/tmp/verification_output/issue-2012-run/`
+Unverified claim: commit `5af4a103` reported an unrestricted exit **0** run
+(`2891 passed, 6 skipped`) for source `1a6a436e0c3d216a75aadf265c595b7c2d03c122`
+using `/private/tmp/venv313/bin/python`. Neither that interpreter nor the cited
+archive `/tmp/verification_output/issue-2012-run/` was retained, so the claim has
+no durable evidence and is not acceptance. The durable current-source result is
+the failed run at the end of this file.
 
 ## Issue #2012 whole-suite collection guard — 2026-11-08
 
@@ -1642,8 +1623,8 @@ made. All subsequent test behavior remains unknown.
 Durable artifacts: [result.json](issue-2012-20261108-current/result.json) and
 [pytest.log](issue-2012-20261108-current/pytest.log), copied byte-for-byte from
 the new output directory. Paths inside the JSON describe the original run.
-The duplicated historical success blocks above concern their recorded source
-only; they do not establish current-source exit-0 acceptance.
+The unverified exit-0 claims above have no retained evidence and do not
+establish exit-0 acceptance.
 
 Parent-workflow dispositions (proposed, not remotely resolved):
 
@@ -1662,3 +1643,26 @@ Parent-workflow dispositions (proposed, not remotely resolved):
 Blocking/drainable pair: exit-0 acceptance blocks merge; evidence publication
 and parent-workflow handoff remain drainable. Preserve review, post-push floor,
 exact-head CI, guarded merge, and verification gates. No merge was attempted.
+
+## Issue #2012 reduced PR scope — 2026-11-08
+
+PR #2013 is reduced to its finished deliverables and refers to, rather than
+closes, #2012: both default-collection exclusions removed with collection
+regression and audit tests; temporary-directory renderer tests with the Jinja2
+development dependency and lockfile entry; `scripts/verify_local_suite.py` with
+its committed-tree, runtime, ancestry, failure-retention, and interpreter-path
+regressions; the explicit nonzero socket-runtime diagnostic; and the failed
+current-source artifacts above. It does not claim #2012 acceptance.
+
+Moved to a follow-up: provisioning a dedicated environment from
+`requirements.lock` and the development extras (including `baseline_kit` from its
+declared source), running `scripts/verify_local_suite.py` with both
+`--require-ancestor` arguments into a fresh output directory, and recording a
+durable exit-0 `result.json` and `pytest.log` here.
+
+Acceptance-thread dispositions against this reduced scope:
+
+- `PRRT_kwDOOzvyds61B5L2` (stale-source evidence): addressed — current committed
+  source was executed with both ancestors verified, and its artifacts are retained.
+- `PRRT_kwDOOzvyds61CY6K` (exit-0 acceptance): out of scope for this PR — moved
+  to the follow-up; the unchecked exit-0 boxes above stay unchecked.
