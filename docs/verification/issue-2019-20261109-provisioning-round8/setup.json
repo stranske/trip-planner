@@ -1,0 +1,49 @@
+{
+  "source_commit": "8a6ab08676c22ef04c27fbb89ba173b55a0fe036",
+  "source_checkout": "/tmp/trip-planner-round8-source",
+  "verified_ancestors": [
+    "29c6aa01064f9eb3cbf15debd32cac3327ec43b8",
+    "4c6ff3e81b412db4039f7d1a48fa95d0aecff753"
+  ],
+  "runtime": "CPython 3.14.10",
+  "venv_interpreter": "/tmp/trip-planner-round8-venv/bin/python",
+  "creation_command": [
+    "python",
+    "scripts/create_dev_venv.py",
+    "/tmp/trip-planner-round8-venv"
+  ],
+  "creation_exit_status": 0,
+  "install_environment": {
+    "PIP_RETRIES": "0",
+    "PIP_TIMEOUT": "5",
+    "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+    "PIP_CACHE_DIR": "/tmp/trip-planner-round8-cache"
+  },
+  "install_command": [
+    "/tmp/trip-planner-round8-venv/bin/python",
+    "-m",
+    "pip",
+    "install",
+    "-r",
+    "requirements.lock",
+    "-e",
+    ".[dev]"
+  ],
+  "install_exit_status": 1,
+  "install_failure": "Cannot fetch setuptools>=82.0.1; pypi.org and github.com DNS resolution fails.",
+  "diagnostic_interpreter": "/opt/hostedtoolcache/Python/3.14.10/x64/bin/python",
+  "diagnostic_command": [
+    "python",
+    "-m",
+    "pytest",
+    "tests/",
+    "-m",
+    "not slow",
+    "-x",
+    "-q"
+  ],
+  "diagnostic_exit_status": 1,
+  "diagnostic_failure": "Local socketpair send wakeup byte raises PermissionError.",
+  "unrestricted_verifier_run": false,
+  "acceptance": "incomplete"
+}

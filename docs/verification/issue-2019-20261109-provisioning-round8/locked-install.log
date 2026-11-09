@@ -1,0 +1,14 @@
+Obtaining file:///tmp/trip-planner-round8-source
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'error'
+  error: subprocess-exited-with-error
+  
+  × installing build dependencies did not run successfully.
+  │ exit code: 1
+  ╰─> [2 lines of output]
+      ERROR: Could not find a version that satisfies the requirement setuptools>=82.0.1 (from versions: none)
+      ERROR: No matching distribution found for setuptools>=82.0.1
+      [end of output]
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+ERROR: Failed to build 'file:///tmp/trip-planner-round8-source' when installing build dependencies

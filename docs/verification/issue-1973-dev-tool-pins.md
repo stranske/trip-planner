@@ -2098,3 +2098,46 @@ blocked worker sockets. No additional acceptance tasks are complete. PR #2020
 remains open and ready (`draft=false`). Reconciliation of the duplicate task lists,
 the blocker comment, and the `needs-human` label were each rejected with
 `MCP tool call requires approval, but approval policy is never`; none was applied.
+
+
+## Issue #2019 supported-runtime migration regression — 2026-11-09
+
+Reviewed the recent provisioning commits before continuing. The three previously
+verified task completions remain valid, but the duplicate PR task list still needs
+reconciliation; the connector rejected the attempted body update because approval
+is required and this run's approval policy is `never`. No additional acceptance
+checkbox is complete.
+
+Created isolated source **8a6ab08676c22ef04c27fbb89ba173b55a0fe036** at
+`/tmp/trip-planner-round8-source`; both required ancestor checks exit **0**.
+Created `/tmp/trip-planner-round8-venv` with supported CPython **3.14.10**.
+The documented `python -m pip install -r requirements.lock -e '.[dev]'` exits
+**1** retrieving `setuptools>=82.0.1`. DNS resolution fails for both PyPI and
+GitHub. The dedicated environment therefore remains unprovisioned. Inspected the
+baseline imports and declared Workflows source; no baseline tests or pins were
+removed. See [setup.json](issue-2019-20261109-provisioning-round8/setup.json) and
+[install log](issue-2019-20261109-provisioning-round8/locked-install.log).
+
+Added a real-interpreter provisioning regression that creates an environment with
+Python **3.13.18**, then rebuilds it with selected Python **3.14.10**. It verifies
+the selected runtime and local pip, removal of an old installed package, and the
+environment prefix. Earlier migration cases used a broken launcher as their
+stand-in for the previous interpreter. With the 3.13 binary directory prepended
+to PATH, validation uses the preinstalled 3.14.10 interpreter:
+
+```sh
+python -m pytest tests/scripts/test_create_dev_venv.py tests/test_make_install.py tests/test_pytest_collection.py tests/baseline -m 'not slow' -q
+```
+
+Exit **0**, **68 passed, 14 warnings in 28.78s**; see
+[targeted test log](issue-2019-20261109-provisioning-round8/targeted-tests.log).
+These tests do not establish locked development provisioning. A separate
+preinstalled-environment diagnostic exits **1** during collection because
+socketpair send operations raise `PermissionError`; see
+[diagnostic log](issue-2019-20261109-provisioning-round8/diagnostic.log).
+The unrestricted verifier was not run, and no successful full-suite `result.json`
+or `pytest.log` is claimed. Predecessor evidence remains intact.
+
+The blocker comment and `needs-human` label requests were also rejected with
+`MCP tool call requires approval, but approval policy is never`; neither was applied.
+Acceptance requires a runner with package/source access and working local sockets.
