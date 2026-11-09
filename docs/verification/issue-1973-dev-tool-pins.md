@@ -1957,3 +1957,52 @@ The workspace Git database is read-only (`git add` cannot create
 `.git/index.lock`); delivery uses the writable clone at
 `/tmp/trip-planner-issue-2019-round4-source`, with identical source/test changes
 retained in this workspace for controller handoff.
+
+
+## Issue #2019 interpreter reuse repair — 2026-11-09
+
+Provisioning was retried from isolated source **4268c85eae04670ed687041eb6beaac16162beba**
+at `/tmp/trip-planner-issue-2019-round5-source`, containing both required
+ancestors (both checks exit **0**). Dedicated interpreter
+`/tmp/trip-planner-issue-2019-round5-venv/bin/python` is CPython **3.14.10**,
+matching `.python-version` and `requires-python`. The documented lock-plus-dev
+installation exits **1** while fetching `setuptools>=82.0.1` because PyPI DNS
+fails. Declared-source `git ls-remote` exits **128** because GitHub DNS fails;
+socketpair I/O exits **1** with `PermissionError`. Exact commands and output:
+[setup.json](issue-2019-20261109-provisioning-round5/setup.json),
+[provisioning.log](issue-2019-20261109-provisioning-round5/provisioning.log).
+Inspected baseline imports and the declared Workflows package metadata; they
+still require `app-baseline-kit` from `packages/app-baseline-kit`. No pins were
+relaxed or baseline tests excluded. Prior evidence is preserved.
+
+Independently reproduced a provisioning defect: creating a venv with supported
+CPython **3.14.4**, then invoking CPython **3.14.10** with `-m venv` on the same
+directory leaves `bin/python` running **3.14.4**, despite updated metadata.
+`make install` now calls `scripts/create_dev_venv.py` with the selected interpreter.
+It probes the existing launcher's actual base interpreter and rebuilds mismatched
+or broken environments, retaining dependencies when the interpreter matches.
+The same real venv now runs **3.14.10** after setup. Regression tests also check
+recovery when metadata already names the selected interpreter but the launcher
+is stale; that case failed before switching from metadata to a runtime probe.
+
+Validation with the preinstalled **3.14.10**, separate from the unprovisioned venv:
+
+```sh
+python -m pytest tests/scripts/test_create_dev_venv.py tests/test_make_install.py tests/test_repo_hygiene.py tests/baseline -m 'not slow' -q
+python -m pytest tests/test_pytest_collection.py
+```
+
+Exits **0**: **78 passed, 1 skipped, 14 warnings**, and **1 passed, 14 warnings**.
+The skip requires PR diff context. These checks do not establish unrestricted
+acceptance. The dedicated venv remains unprovisioned; the unrestricted verifier
+was not run and no new successful `result.json` or `pytest.log` is claimed.
+Provisioning and full-suite task boxes remain unchecked.
+
+Black formats the changed Python files; the required whole-tree check exits
+**0** with **532 files would be left unchanged**, using a writable cache populated
+by individual file checks because worker sockets are blocked. Ruff and
+`git diff --check` pass. The workspace Git database is read-only; the source
+changes are committed in the writable isolated clone for controller handoff.
+PR #2020 is open and ready (`draft=false`). Both blocker-comment and
+`needs-human` label requests were rejected: `MCP tool call requires approval,
+but approval policy is never`; neither remote update was applied.

@@ -113,6 +113,8 @@ This creates `.venv`, installs the locked Python dependencies and project dev ex
 The bootstrap uses `python` from `PATH` by default. To select a supported interpreter
 explicitly, use `make install PYTHON=/path/to/python3.14` (`.python-version` prefers
 3.14; `pyproject.toml` supports 3.13 and 3.14).
+If `.venv` uses a different interpreter, `make install` rebuilds it and reinstalls
+its dependencies. Environments already using the selected interpreter are retained.
 
 If you prefer to manage the virtualenv yourself:
 

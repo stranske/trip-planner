@@ -35,8 +35,8 @@ from pathlib import Path
 
 with Path(os.environ["BOOTSTRAP_TEST_COMMANDS"]).open("a") as stream:
     stream.write(json.dumps(sys.argv) + "\\n")
-if sys.argv[1:3] == ["-m", "venv"]:
-    target = Path(sys.argv[3]) / "bin" / "python"
+if sys.argv[1:2] == ["scripts/create_dev_venv.py"]:
+    target = Path(sys.argv[2]) / "bin" / "python"
     target.parent.mkdir(parents=True)
     shutil.copyfile(__file__, target)
     target.chmod(0o755)
@@ -72,7 +72,7 @@ elif sys.argv[1:4] == ["-m", "pip", "install"]:
 
     assert commands.exists(), result.stdout + result.stderr
     calls = [json.loads(line) for line in commands.read_text(encoding="utf-8").splitlines()]
-    assert calls[0][1:] == ["-m", "venv", ".venv"]
+    assert calls[0][1:] == ["scripts/create_dev_venv.py", ".venv"]
     assert len(calls) >= 2, result.stdout + result.stderr
     assert (tmp_path / calls[1][0]).resolve() == tmp_path / ".venv/bin/python"
     # baseline_kit is intentionally absent from the lock: extras must be resolved

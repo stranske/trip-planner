@@ -6,7 +6,7 @@ test:
 	.venv/bin/python -m pytest
 
 install:
-	"$(PYTHON)" -m venv .venv
+	"$(PYTHON)" scripts/create_dev_venv.py .venv
 	.venv/bin/python -m pip install -r requirements.lock -e ".[dev]"
 	npm --prefix frontend ci
 
