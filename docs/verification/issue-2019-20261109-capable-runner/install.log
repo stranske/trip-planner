@@ -1,0 +1,359 @@
+"/opt/homebrew/bin/python3.13" scripts/create_dev_venv.py .venv
+.venv/bin/python -m pip install -r requirements.lock -e ".[dev]"
+WARNING: The directory '/Users/teacher/Library/Caches/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+Obtaining file:///Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Ignoring colorama: markers 'sys_platform == "win32"' don't match your environment
+Ignoring greenlet: markers 'platform_machine == "AMD64" or platform_machine == "WIN32" or platform_machine == "aarch64" or platform_machine == "amd64" or platform_machine == "ppc64le" or platform_machine == "win32" or platform_machine == "x86_64"' don't match your environment
+Ignoring tzdata: markers 'sys_platform == "emscripten" or sys_platform == "win32"' don't match your environment
+Collecting alembic==1.18.5 (from -r requirements.lock (line 3))
+  Downloading alembic-1.18.5-py3-none-any.whl.metadata (7.2 kB)
+Collecting annotated-doc==0.0.4 (from -r requirements.lock (line 5))
+  Downloading annotated_doc-0.0.4-py3-none-any.whl.metadata (6.6 kB)
+Collecting annotated-types==0.8.0 (from -r requirements.lock (line 7))
+  Downloading annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+Collecting anyio==4.14.2 (from -r requirements.lock (line 9))
+  Downloading anyio-4.14.2-py3-none-any.whl.metadata (4.6 kB)
+Collecting ast-serialize==0.12.1 (from -r requirements.lock (line 16))
+  Downloading ast_serialize-0.12.1-cp39-abi3-macosx_11_0_arm64.whl.metadata (1.4 kB)
+Collecting attrs==26.1.0 (from -r requirements.lock (line 18))
+  Downloading attrs-26.1.0-py3-none-any.whl.metadata (8.8 kB)
+Collecting black==26.10.1 (from -r requirements.lock (line 22))
+  Downloading black-26.10.1-cp313-cp313-macosx_11_0_arm64.whl.metadata (108 kB)
+Collecting certifi==2026.7.22 (from -r requirements.lock (line 24))
+  Downloading certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+Collecting charset-normalizer==3.4.9 (from -r requirements.lock (line 29))
+  Downloading charset_normalizer-3.4.9-cp313-cp313-macosx_10_13_universal2.whl.metadata (41 kB)
+Collecting click==8.4.2 (from -r requirements.lock (line 31))
+  Downloading click-8.4.2-py3-none-any.whl.metadata (2.6 kB)
+Collecting coverage==7.17.2 (from -r requirements.lock (line 40))
+  Downloading coverage-7.17.2-cp313-cp313-macosx_11_0_arm64.whl.metadata (8.1 kB)
+Collecting distro==1.9.0 (from -r requirements.lock (line 42))
+  Downloading distro-1.9.0-py3-none-any.whl.metadata (6.8 kB)
+Collecting fastapi==0.141.1 (from -r requirements.lock (line 46))
+  Downloading fastapi-0.141.1-py3-none-any.whl.metadata (27 kB)
+Collecting geonamescache==3.0.2 (from -r requirements.lock (line 48))
+  Downloading geonamescache-3.0.2-py3-none-any.whl.metadata (3.3 kB)
+Collecting h11==0.16.0 (from -r requirements.lock (line 52))
+  Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+Collecting httpcore==1.0.9 (from -r requirements.lock (line 56))
+  Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+Collecting httpx==0.28.1 (from -r requirements.lock (line 58))
+  Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+Collecting idna==3.18 (from -r requirements.lock (line 63))
+  Downloading idna-3.18-py3-none-any.whl.metadata (6.1 kB)
+Collecting iniconfig==2.3.0 (from -r requirements.lock (line 68))
+  Downloading iniconfig-2.3.0-py3-none-any.whl.metadata (2.5 kB)
+Collecting jinja2==3.1.6 (from -r requirements.lock (line 70))
+  Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+Collecting jiter==0.16.0 (from -r requirements.lock (line 72))
+  Downloading jiter-0.16.0-cp313-cp313-macosx_11_0_arm64.whl.metadata (5.2 kB)
+Collecting jsonpatch==1.33 (from -r requirements.lock (line 74))
+  Downloading jsonpatch-1.33-py2.py3-none-any.whl.metadata (3.0 kB)
+Collecting jsonpointer==3.1.1 (from -r requirements.lock (line 76))
+  Downloading jsonpointer-3.1.1-py3-none-any.whl.metadata (2.4 kB)
+Collecting jsonschema==4.26.0 (from -r requirements.lock (line 78))
+  Downloading jsonschema-4.26.0-py3-none-any.whl.metadata (7.6 kB)
+Collecting jsonschema-specifications==2025.9.1 (from -r requirements.lock (line 80))
+  Downloading jsonschema_specifications-2025.9.1-py3-none-any.whl.metadata (2.9 kB)
+Collecting langchain-core==1.5.3 (from -r requirements.lock (line 82))
+  Downloading langchain_core-1.5.3-py3-none-any.whl.metadata (4.7 kB)
+Collecting langchain-openai==1.4.1 (from -r requirements.lock (line 86))
+  Downloading langchain_openai-1.4.1-py3-none-any.whl.metadata (3.4 kB)
+Collecting langchain-protocol==0.0.18 (from -r requirements.lock (line 88))
+  Downloading langchain_protocol-0.0.18-py3-none-any.whl.metadata (2.4 kB)
+Collecting langsmith==0.10.10 (from -r requirements.lock (line 90))
+  Downloading langsmith-0.10.10-py3-none-any.whl.metadata (22 kB)
+Collecting librt==0.16.0 (from -r requirements.lock (line 92))
+  Downloading librt-0.16.0-cp313-cp313-macosx_11_0_arm64.whl.metadata (1.3 kB)
+Collecting mako==1.3.12 (from -r requirements.lock (line 94))
+  Downloading mako-1.3.12-py3-none-any.whl.metadata (2.9 kB)
+Collecting markupsafe==3.0.3 (from -r requirements.lock (line 96))
+  Downloading markupsafe-3.0.3-cp313-cp313-macosx_11_0_arm64.whl.metadata (2.7 kB)
+Collecting mypy==2.4.1 (from -r requirements.lock (line 101))
+  Downloading mypy-2.4.1-cp313-cp313-macosx_11_0_arm64.whl.metadata (2.4 kB)
+Collecting mypy-extensions==1.1.0 (from -r requirements.lock (line 103))
+  Downloading mypy_extensions-1.1.0-py3-none-any.whl.metadata (1.1 kB)
+Collecting numpy==2.5.1 (from -r requirements.lock (line 107))
+  Downloading numpy-2.5.1-cp313-cp313-macosx_14_0_arm64.whl.metadata (6.6 kB)
+Collecting openai==2.48.0 (from -r requirements.lock (line 111))
+  Downloading openai-2.48.0-py3-none-any.whl.metadata (36 kB)
+Collecting orjson==3.11.9 (from -r requirements.lock (line 113))
+  Downloading orjson-3.11.9-cp313-cp313-macosx_15_0_arm64.whl.metadata (41 kB)
+Collecting packaging==26.2 (from -r requirements.lock (line 115))
+  Downloading packaging-26.2-py3-none-any.whl.metadata (3.5 kB)
+Collecting pandas==3.0.5 (from -r requirements.lock (line 122))
+  Downloading pandas-3.0.5-cp313-cp313-macosx_11_0_arm64.whl.metadata (79 kB)
+Collecting pathspec==1.1.1 (from -r requirements.lock (line 124))
+  Downloading pathspec-1.1.1-py3-none-any.whl.metadata (14 kB)
+Collecting platformdirs==4.11.0 (from -r requirements.lock (line 128))
+  Downloading platformdirs-4.11.0-py3-none-any.whl.metadata (5.5 kB)
+Collecting pluggy==1.6.0 (from -r requirements.lock (line 130))
+  Downloading pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+Collecting psycopg==3.3.4 (from -r requirements.lock (line 134))
+  Downloading psycopg-3.3.4-py3-none-any.whl.metadata (4.3 kB)
+Collecting psycopg-binary==3.3.4 (from -r requirements.lock (line 136))
+  Downloading psycopg_binary-3.3.4-cp313-cp313-macosx_11_0_arm64.whl.metadata (2.7 kB)
+Collecting pydantic==2.13.4 (from -r requirements.lock (line 138))
+  Downloading pydantic-2.13.4-py3-none-any.whl.metadata (109 kB)
+Collecting pydantic-core==2.46.4 (from -r requirements.lock (line 145))
+  Downloading pydantic_core-2.46.4-cp313-cp313-macosx_11_0_arm64.whl.metadata (6.6 kB)
+Collecting pygments==2.20.0 (from -r requirements.lock (line 147))
+  Downloading pygments-2.20.0-py3-none-any.whl.metadata (2.5 kB)
+Collecting pytest==9.2.0 (from -r requirements.lock (line 149))
+  Downloading pytest-9.2.0-py3-none-any.whl.metadata (7.9 kB)
+Collecting pytest-cov==7.1.0 (from -r requirements.lock (line 156))
+  Downloading pytest_cov-7.1.0-py3-none-any.whl.metadata (32 kB)
+Collecting pytest-datadir==1.8.0 (from -r requirements.lock (line 158))
+  Downloading pytest_datadir-1.8.0-py3-none-any.whl.metadata (4.0 kB)
+Collecting pytest-httpserver==1.1.5 (from -r requirements.lock (line 160))
+  Downloading pytest_httpserver-1.1.5-py3-none-any.whl.metadata (6.2 kB)
+Collecting pytest-regressions==2.11.0 (from -r requirements.lock (line 162))
+  Downloading pytest_regressions-2.11.0-py3-none-any.whl.metadata (4.9 kB)
+Collecting python-dateutil==2.9.0.post0 (from -r requirements.lock (line 164))
+  Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+Collecting pytokens==0.4.1 (from -r requirements.lock (line 166))
+  Downloading pytokens-0.4.1-cp313-cp313-macosx_11_0_arm64.whl.metadata (3.8 kB)
+Collecting pyyaml==6.0.3 (from -r requirements.lock (line 168))
+  Downloading pyyaml-6.0.3-cp313-cp313-macosx_11_0_arm64.whl.metadata (2.4 kB)
+Collecting referencing==0.37.0 (from -r requirements.lock (line 174))
+  Downloading referencing-0.37.0-py3-none-any.whl.metadata (2.8 kB)
+Collecting regex==2026.7.19 (from -r requirements.lock (line 178))
+  Downloading regex-2026.7.19-cp313-cp313-macosx_11_0_arm64.whl.metadata (40 kB)
+Collecting requests==2.34.2 (from -r requirements.lock (line 180))
+  Downloading requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+Collecting requests-toolbelt==1.0.0 (from -r requirements.lock (line 185))
+  Downloading requests_toolbelt-1.0.0-py2.py3-none-any.whl.metadata (14 kB)
+Collecting rpds-py==2026.6.3 (from -r requirements.lock (line 187))
+  Downloading rpds_py-2026.6.3-cp313-cp313-macosx_11_0_arm64.whl.metadata (4.1 kB)
+Collecting ruff==0.17.4 (from -r requirements.lock (line 191))
+  Downloading ruff-0.17.4-py3-none-macosx_11_0_arm64.whl.metadata (20 kB)
+Collecting six==1.17.0 (from -r requirements.lock (line 193))
+  Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+Collecting sniffio==1.3.1 (from -r requirements.lock (line 195))
+  Downloading sniffio-1.3.1-py3-none-any.whl.metadata (3.9 kB)
+Collecting sqlalchemy==2.0.51 (from -r requirements.lock (line 199))
+  Downloading sqlalchemy-2.0.51-cp313-cp313-macosx_11_0_arm64.whl.metadata (9.5 kB)
+Collecting starlette==1.3.1 (from -r requirements.lock (line 203))
+  Downloading starlette-1.3.1-py3-none-any.whl.metadata (6.4 kB)
+Collecting tenacity==9.1.4 (from -r requirements.lock (line 207))
+  Downloading tenacity-9.1.4-py3-none-any.whl.metadata (1.2 kB)
+Collecting tiktoken==0.13.0 (from -r requirements.lock (line 209))
+  Downloading tiktoken-0.13.0-cp313-cp313-macosx_11_0_arm64.whl.metadata (6.7 kB)
+Collecting tqdm==4.69.1 (from -r requirements.lock (line 211))
+  Downloading tqdm-4.69.1-py3-none-any.whl.metadata (57 kB)
+Collecting types-pyyaml==6.0.12.20260724 (from -r requirements.lock (line 213))
+  Downloading types_pyyaml-6.0.12.20260724-py3-none-any.whl.metadata (1.7 kB)
+Collecting typing-extensions==4.16.0 (from -r requirements.lock (line 215))
+  Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting typing-inspection==0.4.2 (from -r requirements.lock (line 229))
+  Downloading typing_inspection-0.4.2-py3-none-any.whl.metadata (2.6 kB)
+Collecting urllib3==2.7.0 (from -r requirements.lock (line 237))
+  Downloading urllib3-2.7.0-py3-none-any.whl.metadata (6.9 kB)
+Collecting uuid-utils==0.17.0 (from -r requirements.lock (line 239))
+  Downloading uuid_utils-0.17.0-cp313-cp313-macosx_10_12_x86_64.macosx_11_0_arm64.macosx_10_12_universal2.whl.metadata (6.4 kB)
+Collecting uvicorn==0.52.0 (from -r requirements.lock (line 243))
+  Downloading uvicorn-0.52.0-py3-none-any.whl.metadata (6.6 kB)
+Collecting websockets==16.1.1 (from -r requirements.lock (line 245))
+  Downloading websockets-16.1.1-cp313-cp313-macosx_11_0_arm64.whl.metadata (6.8 kB)
+Collecting werkzeug==3.1.8 (from -r requirements.lock (line 247))
+  Downloading werkzeug-3.1.8-py3-none-any.whl.metadata (4.0 kB)
+Collecting xxhash==3.8.1 (from -r requirements.lock (line 249))
+  Downloading xxhash-3.8.1-cp313-cp313-macosx_11_0_arm64.whl.metadata (15 kB)
+Collecting zstandard==0.25.0 (from -r requirements.lock (line 251))
+  Downloading zstandard-0.25.0-cp313-cp313-macosx_11_0_arm64.whl.metadata (3.3 kB)
+Collecting app-baseline-kit @ git+https://github.com/stranske/Workflows.git#subdirectory=packages/app-baseline-kit (from trip-planner==0.1.0)
+  Cloning https://github.com/stranske/Workflows.git to /Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pip-install-tqlg594j/app-baseline-kit_9c97f7ad5fc44978942823cc8769e1be
+  Running command git clone --filter=blob:none --quiet https://github.com/stranske/Workflows.git /Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pip-install-tqlg594j/app-baseline-kit_9c97f7ad5fc44978942823cc8769e1be
+  Resolved https://github.com/stranske/Workflows.git to commit f0e91ce791f3947e5411458f9b1872dd2bf2f205
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Downloading jsonschema-4.26.0-py3-none-any.whl (90 kB)
+Downloading alembic-1.18.5-py3-none-any.whl (264 kB)
+Downloading annotated_doc-0.0.4-py3-none-any.whl (5.3 kB)
+Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+Downloading anyio-4.14.2-py3-none-any.whl (125 kB)
+Downloading ast_serialize-0.12.1-cp39-abi3-macosx_11_0_arm64.whl (1.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 26.5 MB/s  0:00:00
+Downloading attrs-26.1.0-py3-none-any.whl (67 kB)
+Downloading black-26.10.1-cp313-cp313-macosx_11_0_arm64.whl (2.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.0/2.0 MB 56.1 MB/s  0:00:00
+Downloading pytokens-0.4.1-cp313-cp313-macosx_11_0_arm64.whl (160 kB)
+Downloading certifi-2026.7.22-py3-none-any.whl (136 kB)
+Downloading charset_normalizer-3.4.9-cp313-cp313-macosx_10_13_universal2.whl (317 kB)
+Downloading click-8.4.2-py3-none-any.whl (119 kB)
+Downloading coverage-7.17.2-cp313-cp313-macosx_11_0_arm64.whl (227 kB)
+Downloading distro-1.9.0-py3-none-any.whl (20 kB)
+Downloading fastapi-0.141.1-py3-none-any.whl (131 kB)
+Downloading geonamescache-3.0.2-py3-none-any.whl (35.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 35.0/35.0 MB 33.0 MB/s  0:00:01
+Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+Downloading httpcore-1.0.9-py3-none-any.whl (78 kB)
+Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
+Downloading idna-3.18-py3-none-any.whl (65 kB)
+Downloading iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
+Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+Downloading jiter-0.16.0-cp313-cp313-macosx_11_0_arm64.whl (306 kB)
+Downloading jsonpatch-1.33-py2.py3-none-any.whl (12 kB)
+Downloading jsonpointer-3.1.1-py3-none-any.whl (7.7 kB)
+Downloading jsonschema_specifications-2025.9.1-py3-none-any.whl (18 kB)
+Downloading langchain_core-1.5.3-py3-none-any.whl (561 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 561.7/561.7 kB 103.0 MB/s  0:00:00
+Downloading langsmith-0.10.10-py3-none-any.whl (675 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 675.2/675.2 kB 54.8 MB/s  0:00:00
+Downloading pydantic-2.13.4-py3-none-any.whl (472 kB)
+Downloading pyyaml-6.0.3-cp313-cp313-macosx_11_0_arm64.whl (173 kB)
+Downloading tenacity-9.1.4-py3-none-any.whl (28 kB)
+Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Downloading uuid_utils-0.17.0-cp313-cp313-macosx_10_12_x86_64.macosx_11_0_arm64.macosx_10_12_universal2.whl (557 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 557.3/557.3 kB 103.0 MB/s  0:00:00
+Downloading langchain_openai-1.4.1-py3-none-any.whl (122 kB)
+Downloading openai-2.48.0-py3-none-any.whl (1.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.6/1.6 MB 34.2 MB/s  0:00:00
+Downloading tiktoken-0.13.0-cp313-cp313-macosx_11_0_arm64.whl (982 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 983.0/983.0 kB 75.0 MB/s  0:00:00
+Downloading langchain_protocol-0.0.18-py3-none-any.whl (7.2 kB)
+Downloading librt-0.16.0-cp313-cp313-macosx_11_0_arm64.whl (155 kB)
+Downloading mako-1.3.12-py3-none-any.whl (78 kB)
+Downloading markupsafe-3.0.3-cp313-cp313-macosx_11_0_arm64.whl (12 kB)
+Downloading mypy-2.4.1-cp313-cp313-macosx_11_0_arm64.whl (14.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 14.2/14.2 MB 39.2 MB/s  0:00:00
+Downloading mypy_extensions-1.1.0-py3-none-any.whl (5.0 kB)
+Downloading numpy-2.5.1-cp313-cp313-macosx_14_0_arm64.whl (5.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.3/5.3 MB 45.4 MB/s  0:00:00
+Downloading orjson-3.11.9-cp313-cp313-macosx_15_0_arm64.whl (128 kB)
+Downloading packaging-26.2-py3-none-any.whl (100 kB)
+Downloading pandas-3.0.5-cp313-cp313-macosx_11_0_arm64.whl (9.9 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 9.9/9.9 MB 34.8 MB/s  0:00:00
+Downloading pathspec-1.1.1-py3-none-any.whl (57 kB)
+Downloading platformdirs-4.11.0-py3-none-any.whl (23 kB)
+Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
+Downloading psycopg-3.3.4-py3-none-any.whl (213 kB)
+Downloading psycopg_binary-3.3.4-cp313-cp313-macosx_11_0_arm64.whl (4.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.7/4.7 MB 45.6 MB/s  0:00:00
+Downloading pydantic_core-2.46.4-cp313-cp313-macosx_11_0_arm64.whl (2.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.0/2.0 MB 44.0 MB/s  0:00:00
+Downloading pygments-2.20.0-py3-none-any.whl (1.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 28.4 MB/s  0:00:00
+Downloading pytest-9.2.0-py3-none-any.whl (411 kB)
+Downloading pytest_cov-7.1.0-py3-none-any.whl (22 kB)
+Downloading pytest_datadir-1.8.0-py3-none-any.whl (6.5 kB)
+Downloading pytest_httpserver-1.1.5-py3-none-any.whl (23 kB)
+Downloading pytest_regressions-2.11.0-py3-none-any.whl (25 kB)
+Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+Downloading referencing-0.37.0-py3-none-any.whl (26 kB)
+Downloading regex-2026.7.19-cp313-cp313-macosx_11_0_arm64.whl (291 kB)
+Downloading requests-2.34.2-py3-none-any.whl (73 kB)
+Downloading urllib3-2.7.0-py3-none-any.whl (131 kB)
+Downloading requests_toolbelt-1.0.0-py2.py3-none-any.whl (54 kB)
+Downloading rpds_py-2026.6.3-cp313-cp313-macosx_11_0_arm64.whl (338 kB)
+Downloading ruff-0.17.4-py3-none-macosx_11_0_arm64.whl (9.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 9.4/9.4 MB 46.1 MB/s  0:00:00
+Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+Downloading sniffio-1.3.1-py3-none-any.whl (10 kB)
+Downloading sqlalchemy-2.0.51-cp313-cp313-macosx_11_0_arm64.whl (2.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.2/2.2 MB 77.8 MB/s  0:00:00
+Downloading starlette-1.3.1-py3-none-any.whl (73 kB)
+Downloading tqdm-4.69.1-py3-none-any.whl (675 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 675.5/675.5 kB 54.8 MB/s  0:00:00
+Downloading types_pyyaml-6.0.12.20260724-py3-none-any.whl (20 kB)
+Downloading typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+Downloading uvicorn-0.52.0-py3-none-any.whl (79 kB)
+Downloading websockets-16.1.1-cp313-cp313-macosx_11_0_arm64.whl (177 kB)
+Downloading werkzeug-3.1.8-py3-none-any.whl (226 kB)
+Downloading xxhash-3.8.1-cp313-cp313-macosx_11_0_arm64.whl (32 kB)
+Downloading zstandard-0.25.0-cp313-cp313-macosx_11_0_arm64.whl (640 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 640.4/640.4 kB 410.1 MB/s  0:00:00
+Building wheels for collected packages: trip-planner, app-baseline-kit
+  Building editable for trip-planner (pyproject.toml): started
+  Building editable for trip-planner (pyproject.toml): finished with status 'done'
+  Created wheel for trip-planner: filename=trip_planner-0.1.0-0.editable-py3-none-any.whl size=3378 sha256=1f26456759f793fcfbb32eb5f7234624af82100b78c395af208cdea1e3a02df9
+  Stored in directory: /Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pip-ephem-wheel-cache-tmsnz9n5/wheels/29/ad/75/efb0bf8a3387fb42d22f61df9f65afc21edf29cf447e75bf5b
+  Building wheel for app-baseline-kit (pyproject.toml): started
+  Building wheel for app-baseline-kit (pyproject.toml): finished with status 'done'
+  Created wheel for app-baseline-kit: filename=app_baseline_kit-0.2.0-py3-none-any.whl size=9496 sha256=c822cdba40b2789e5bb5c8a3065bd54085f410ba27e2e88f60804ebe0db52a46
+  Stored in directory: /Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pip-ephem-wheel-cache-tmsnz9n5/wheels/57/45/ee/25ff5fc7963800aaa917dc09837a64cb2f4733d7b911c3ade9
+Successfully built trip-planner app-baseline-kit
+Installing collected packages: zstandard, xxhash, websockets, uuid-utils, urllib3, typing-extensions, types-pyyaml, tqdm, tenacity, sniffio, six, ruff, rpds-py, regex, pyyaml, pytokens, pygments, psycopg-binary, psycopg, pluggy, platformdirs, pathspec, packaging, orjson, numpy, mypy-extensions, markupsafe, librt, jsonpointer, jiter, iniconfig, idna, h11, distro, coverage, click, charset-normalizer, certifi, attrs, ast-serialize, annotated-types, annotated-doc, werkzeug, uvicorn, typing-inspection, sqlalchemy, requests, referencing, python-dateutil, pytest, pydantic-core, mypy, mako, langchain-protocol, jsonpatch, jinja2, httpcore, geonamescache, black, anyio, tiktoken, starlette, requests-toolbelt, pytest-httpserver, pytest-datadir, pytest-cov, pydantic, pandas, jsonschema-specifications, httpx, alembic, pytest-regressions, openai, langsmith, jsonschema, fastapi, langchain-core, app-baseline-kit, langchain-openai, trip-planner
+
+Successfully installed alembic-1.18.5 annotated-doc-0.0.4 annotated-types-0.8.0 anyio-4.14.2 app-baseline-kit-0.2.0 ast-serialize-0.12.1 attrs-26.1.0 black-26.10.1 certifi-2026.7.22 charset-normalizer-3.4.9 click-8.4.2 coverage-7.17.2 distro-1.9.0 fastapi-0.141.1 geonamescache-3.0.2 h11-0.16.0 httpcore-1.0.9 httpx-0.28.1 idna-3.18 iniconfig-2.3.0 jinja2-3.1.6 jiter-0.16.0 jsonpatch-1.33 jsonpointer-3.1.1 jsonschema-4.26.0 jsonschema-specifications-2025.9.1 langchain-core-1.5.3 langchain-openai-1.4.1 langchain-protocol-0.0.18 langsmith-0.10.10 librt-0.16.0 mako-1.3.12 markupsafe-3.0.3 mypy-2.4.1 mypy-extensions-1.1.0 numpy-2.5.1 openai-2.48.0 orjson-3.11.9 packaging-26.2 pandas-3.0.5 pathspec-1.1.1 platformdirs-4.11.0 pluggy-1.6.0 psycopg-3.3.4 psycopg-binary-3.3.4 pydantic-2.13.4 pydantic-core-2.46.4 pygments-2.20.0 pytest-9.2.0 pytest-cov-7.1.0 pytest-datadir-1.8.0 pytest-httpserver-1.1.5 pytest-regressions-2.11.0 python-dateutil-2.9.0.post0 pytokens-0.4.1 pyyaml-6.0.3 referencing-0.37.0 regex-2026.7.19 requests-2.34.2 requests-toolbelt-1.0.0 rpds-py-2026.6.3 ruff-0.17.4 six-1.17.0 sniffio-1.3.1 sqlalchemy-2.0.51 starlette-1.3.1 tenacity-9.1.4 tiktoken-0.13.0 tqdm-4.69.1 trip-planner-0.1.0 types-pyyaml-6.0.12.20260724 typing-extensions-4.16.0 typing-inspection-0.4.2 urllib3-2.7.0 uuid-utils-0.17.0 uvicorn-0.52.0 websockets-16.1.1 werkzeug-3.1.8 xxhash-3.8.1 zstandard-0.25.0
+
+[notice] A new release of pip is available: 26.1 -> 26.3
+[notice] To update, run: /Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/.venv/bin/python -m pip install --upgrade pip
+npm --prefix frontend ci
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'jsdom@30.0.1',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.3.0', npm: '11.14.0' }
+npm warn EBADENGINE }
+npm warn tar TAR_ENTRY_ERROR ENOENT: no such file or directory, open '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@asamuzakjp/dom-selector/src/js/event.js'
+npm warn tar TAR_ENTRY_ERROR ENOENT: no such file or directory, lstat '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@asamuzakjp/css-color/dist/esm'
+npm warn tar TAR_ENTRY_ERROR ENOENT: no such file or directory, lstat '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@asamuzakjp/dom-selector/src'
+npm warn tar TAR_ENTRY_ERROR ENOENT: no such file or directory, lstat '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@asamuzakjp/css-color/dist/esm'
+npm warn tar TAR_ENTRY_ERROR ENOENT: no such file or directory, lstat '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@asamuzakjp/dom-selector/src'
+npm warn tar TAR_ENTRY_ERROR ENOENT: no such file or directory, lstat '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@asamuzakjp/css-color/dist'
+npm warn tar TAR_ENTRY_ERROR ENOENT: no such file or directory, lstat '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@asamuzakjp/dom-selector/src'
+npm warn tar TAR_ENTRY_ERROR ENOENT: no such file or directory, lstat '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@asamuzakjp/css-color/dist'
+npm warn tar TAR_ENTRY_ERROR ENOENT: no such file or directory, lstat '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@asamuzakjp/dom-selector/src'
+npm warn tar TAR_ENTRY_ERROR ENOENT: no such file or directory, lstat '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@asamuzakjp/css-color/dist'
+npm warn tar TAR_ENTRY_ERROR ENOENT: no such file or directory, lstat '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@asamuzakjp/dom-selector/src'
+npm warn tar TAR_ENTRY_ERROR ENOENT: no such file or directory, lstat '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@asamuzakjp/css-color/dist'
+npm warn tar TAR_ENTRY_ERROR ENOENT: no such file or directory, lstat '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@asamuzakjp/dom-selector/src'
+npm warn cleanup Failed to remove some directories [
+npm warn cleanup   [
+npm warn cleanup     '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@testing-library/jest-dom',
+npm warn cleanup     [Error: ENOTEMPTY: directory not empty, rmdir '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@testing-library/jest-dom/node_modules/dom-accessibility-api/dist'] {
+npm warn cleanup       errno: -66,
+npm warn cleanup       code: 'ENOTEMPTY',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@testing-library/jest-dom/node_modules/dom-accessibility-api/dist'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@testing-library',
+npm warn cleanup     [Error: ENOTEMPTY: directory not empty, rmdir '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@testing-library/jest-dom/node_modules/dom-accessibility-api/dist'] {
+npm warn cleanup       errno: -66,
+npm warn cleanup       code: 'ENOTEMPTY',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@testing-library/jest-dom/node_modules/dom-accessibility-api/dist'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules',
+npm warn cleanup     [Error: ENOTEMPTY: directory not empty, rmdir '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@testing-library/jest-dom/node_modules/dom-accessibility-api/dist'] {
+npm warn cleanup       errno: -66,
+npm warn cleanup       code: 'ENOTEMPTY',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@testing-library/jest-dom/node_modules/dom-accessibility-api/dist'
+npm warn cleanup     }
+npm warn cleanup   ]
+npm warn cleanup ]
+npm warn tar TAR_ENTRY_ERROR ENOENT: no such file or directory, lstat '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@asamuzakjp/css-color/dist'
+npm warn tar TAR_ENTRY_ERROR ENOENT: no such file or directory, lstat '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@asamuzakjp/dom-selector/src'
+npm warn tar TAR_ENTRY_ERROR ENOENT: no such file or directory, lstat '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@asamuzakjp/css-color/dist'
+npm warn tar TAR_ENTRY_ERROR ENOENT: no such file or directory, lstat '/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/frontend/node_modules/@asamuzakjp/dom-selector/src'
+npm error code EPERM
+npm error syscall open
+npm error path /Users/teacher/.npm/_cacache/tmp/***
+npm error errno -1
+npm error
+npm error Your cache folder contains root-owned files, due to a bug in previous versions of npm which has since been addressed.
+npm error
+npm error To permanently fix this problem, please run:
+npm error   sudo chown -R 502:20 "/Users/teacher/.npm"
+npm error Log files were not written due to an error writing to the directory: /Users/teacher/.npm/_logs
+npm error You can rerun the command with `--loglevel=verbose` to see the logs in your terminal
+make: *** [install] Error 255
+
+make install exit status: 2

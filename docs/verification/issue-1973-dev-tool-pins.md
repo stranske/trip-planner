@@ -2185,3 +2185,77 @@ the writable isolated clone, and matching edits remain in the workspace for
 handoff. PR #2020 is open and ready (`draft=false`). The blocker comment and
 `needs-human` label were both rejected with `MCP tool call requires approval,
 but approval policy is never`; neither remote update was applied.
+
+## Issue #2019 capable-runner acceptance — 2026-11-09
+
+The unrestricted verifier now exits **0** against committed PR source
+**b53982af26527c5f292c4d8a3a66d39d5f482ab5**, retaining both required ancestors:
+`29c6aa01064f9eb3cbf15debd32cac3327ec43b8` and
+`4c6ff3e81b412db4039f7d1a48fa95d0aecff753`. This validates the retained PR
+implementation, rather than the predecessor base. The subsequent evidence commit
+changes documentation/artifacts only. All predecessor evidence remains intact.
+
+Before execution, [the acceptance plan](issue-2019-20261109-capable-runner/acceptance-plan.md)
+recorded the real-input outcome, commands, check date, and stop rule (two
+provisioning attempts or 30 minutes). The checkout was clean; worktree inventory
+and preserved refs revealed no other holder for `codex/issue-2019`.
+
+### Supported dedicated runtime and actual installation
+
+Bootstrap Python is **CPython 3.13.13**, `/opt/homebrew/bin/python3.13`.
+The dedicated interpreter used by every acceptance command is
+`/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/.venv/bin/python`.
+It satisfies `requires-python = ">=3.13,<3.15"`; `.python-version` prefers 3.14.
+
+```sh
+make install PYTHON=/opt/homebrew/bin/python3.13
+npm_config_cache=/private/tmp/trip-planner-2020-npm-cache make install PYTHON=/opt/homebrew/bin/python3.13
+```
+
+The [first installation](issue-2019-20261109-capable-runner/install.log) installed
+Python dependencies but exited **2** at npm because its default cache was not
+writable. The [second installation](issue-2019-20261109-capable-runner/install-retry.log)
+used a writable task-local npm cache and exited **0**. Both logs retain the
+Makefile's `.venv/bin/python -m pip install -r requirements.lock -e ".[dev]"`
+command. Installation built `trip-planner` and `app-baseline-kit`; the latter
+came from its declared
+`git+https://github.com/stranske/Workflows.git#subdirectory=packages/app-baseline-kit`
+source, resolved to **f0e91ce791f3947e5411458f9b1872dd2bf2f205**, version **0.2.0**.
+No pins, lockfiles, baseline imports or implementation were changed.
+
+npm completed with **132 packages added**, reporting Node engine warnings
+(current Node **24.3.0**) and **6 vulnerabilities (2 moderate, 4 high)**.
+These remain follow-up observations; no dependency remediation was attempted.
+
+### Committed-source unrestricted verification
+
+```sh
+.venv/bin/python scripts/verify_local_suite.py --source . --output /private/tmp/trip-planner-2020-20261109-acceptance --python /Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/.venv/bin/python --require-ancestor 29c6aa01064f9eb3cbf15debd32cac3327ec43b8 --require-ancestor 4c6ff3e81b412db4039f7d1a48fa95d0aecff753
+.venv/bin/python -m pytest tests/test_pytest_collection.py
+.venv/bin/python -m pytest tests/scripts/test_create_dev_venv.py
+```
+
+All three commands exited **0**. The verifier printed `Full suite exited 0`.
+Its retained [result.json](issue-2019-20261109-capable-runner/result.json) identifies
+exactly the source, ancestors and runtime above, with the child command
+`[<absolute dedicated interpreter>, "-m", "pytest"]`, without exclusions or
+marker filters. It ran from an isolated checkout of the committed tree.
+The retained files are byte-for-byte copies from the fresh output directory;
+JSON paths intentionally retain their actual execution locations.
+
+Matching terminal summaries:
+
+- [pytest.log](issue-2019-20261109-capable-runner/pytest.log): **2904 passed, 7 skipped, 792 warnings in 235.72s (0:03:55)**.
+- [collection.log](issue-2019-20261109-capable-runner/collection.log): **1 passed, 1 warning in 10.23s**.
+- [venv-regressions.log](issue-2019-20261109-capable-runner/venv-regressions.log): **7 passed, 1 skipped, 1 warning in 11.88s**.
+
+The focused tests cover timeout recovery and explicit system-package isolation.
+The real two-version migration case skips because a second supported Python
+interpreter is unavailable here; earlier recorded migration evidence remains
+separate. The unrestricted run retains pytest's own skips and warnings; none
+were introduced through command filters. Runtime warnings and npm findings
+remain visible rather than being represented as warning-free acceptance.
+
+Blocking/drainable pair: local acceptance blocking **0**; review/CI/merge remain
+subject to current exact-head checks and active-thread reconciliation. Local
+success does not establish remote CI success or a completed merge.

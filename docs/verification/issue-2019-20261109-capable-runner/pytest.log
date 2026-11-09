@@ -1,0 +1,281 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.13.13, pytest-9.2.0, pluggy-1.6.0
+rootdir: /private/tmp/trip-planner-2020-20261109-acceptance/checkout
+configfile: pyproject.toml
+testpaths: tests
+plugins: cov-7.1.0, anyio-4.14.2, pytest_httpserver-1.1.5, datadir-1.8.0, langsmith-0.10.10, regressions-2.11.0
+collected 2909 items / 2 skipped
+
+tests/app/test_auth.py .....                                             [  0%]
+tests/app/test_budget_routes.py ..........                               [  0%]
+tests/app/test_compare_truthfulness.py ....                              [  0%]
+tests/app/test_cors_config.py ....                                       [  0%]
+tests/app/test_demo_seed.py .......                                      [  1%]
+tests/app/test_flight_search_sandbox.py .....................            [  1%]
+tests/app/test_full_product_verification.py ......................       [  2%]
+tests/app/test_health.py ........                                        [  2%]
+tests/app/test_inventory.py .........                                    [  3%]
+tests/app/test_inventory_destination_coverage.py ......                  [  3%]
+tests/app/test_journey_varies_with_trip.py ....................          [  3%]
+tests/app/test_plain_language.py ...                                     [  4%]
+tests/app/test_planner_booking_radar_tool.py .                           [  4%]
+tests/app/test_planner_build_daily_menu_tool.py ...                      [  4%]
+tests/app/test_planner_chat_truth.py ..                                  [  4%]
+tests/app/test_planner_fallback.py .......                               [  4%]
+tests/app/test_planner_intent.py ....                                    [  4%]
+tests/app/test_planner_prompt_contract.py .......                        [  4%]
+tests/app/test_planner_routes.py ....................................... [  6%]
+                                                                         [  6%]
+tests/app/test_planner_routing.py ...................................... [  7%]
+                                                                         [  7%]
+tests/app/test_planner_turn_e2e.py .                                     [  7%]
+tests/app/test_policy.py ...................                             [  8%]
+tests/app/test_policy_code_parity.py .                                   [  8%]
+tests/app/test_policy_sync_route.py .............s                       [  8%]
+tests/app/test_portal_handoff_flow.py .................................. [  9%]
+........................................................................ [ 12%]
+............................                                             [ 13%]
+tests/app/test_portal_handoff_request.py ..............                  [ 13%]
+tests/app/test_proposal.py ............................................. [ 15%]
+......................................................                   [ 17%]
+tests/app/test_proposal_handoff_schema.py ...........                    [ 17%]
+tests/app/test_proposal_payload_truth.py ...........                     [ 18%]
+tests/app/test_public_proposal_verdict.py ...                            [ 18%]
+tests/app/test_rail_timetable_wiring.py ................................ [ 19%]
+..........................                                               [ 20%]
+tests/app/test_scenario_history.py .                                     [ 20%]
+tests/app/test_scenario_policy_preview.py .............................. [ 21%]
+....................................                                     [ 22%]
+tests/app/test_submission_outcome.py ......                              [ 22%]
+tests/app/test_trip_origin_normalization.py .                            [ 22%]
+tests/app/test_trip_prices.py ........................                   [ 23%]
+tests/app/test_trip_routes.py ..............                             [ 23%]
+tests/app/test_trips_api.py ......                                       [ 24%]
+tests/app/test_workspace.py ............................................ [ 25%]
+.........................................                                [ 27%]
+tests/app/test_workspace_readiness.py .............                      [ 27%]
+tests/app/test_workspace_scenario_fallback.py ....                       [ 27%]
+tests/baseline/test_coverage_manifest.py ...                             [ 27%]
+tests/baseline/test_directional.py ..............                        [ 28%]
+tests/baseline/test_golden.py ...........                                [ 28%]
+tests/baseline/test_invariants.py ...........                            [ 29%]
+tests/baseline/test_planner_routing_baseline.py ......                   [ 29%]
+tests/baseline/test_preference_resolution_baseline.py .........          [ 29%]
+tests/business/test_approval_ready.py .......                            [ 29%]
+tests/business/test_business_objective_derivation.py ................    [ 30%]
+tests/business/test_business_objectives.py ....                          [ 30%]
+tests/business/test_policy_contracts.py ................                 [ 31%]
+tests/business/test_profile.py ......                                    [ 31%]
+tests/business/test_simulator.py .....                                   [ 31%]
+tests/candidates/test_generation.py ......                               [ 31%]
+tests/contracts/test_constraint_evaluation.py .......................... [ 32%]
+................................                                         [ 33%]
+tests/contracts/test_destination_contracts.py ....                       [ 33%]
+tests/contracts/test_objectives.py ...                                   [ 33%]
+tests/contracts/test_options.py .....                                    [ 33%]
+tests/contracts/test_route_context_map_target.py ........                [ 34%]
+tests/contracts/test_trip.py ............                                [ 34%]
+tests/docs/test_product_contract_probe_drift.py ........................ [ 35%]
+.....                                                                    [ 35%]
+tests/eval/test_ranking_fixture.py .                                     [ 35%]
+tests/ingestion/test_activity_pipeline.py ....                           [ 35%]
+tests/ingestion/test_common_dedupe.py .                                  [ 35%]
+tests/ingestion/test_common_helpers.py ...........                       [ 36%]
+tests/ingestion/test_destination_pipeline.py .....                       [ 36%]
+tests/ingestion/test_lodging_pipeline.py ....                            [ 36%]
+tests/ingestion/test_transport_pipeline.py ....                          [ 36%]
+tests/integration/test_portal_contract_checkout.py ..................... [ 37%]
+.......                                                                  [ 37%]
+tests/integration/test_portal_contract_imports.py .......                [ 37%]
+tests/integration/test_portal_handoff_identity.py ..........             [ 38%]
+tests/integration/test_saved_portal_handoff.py ......................... [ 39%]
+................................................................         [ 41%]
+tests/integration/test_workspace_portal_preparation.py ................. [ 41%]
+...............................................                          [ 43%]
+tests/integration/test_workspace_portal_receipt.py ..................... [ 44%]
+...............................                                          [ 45%]
+tests/integrations/test_canonical_state_seam.py ...                      [ 45%]
+tests/integrations/test_policy_sync.py ................................. [ 46%]
+..........                                                               [ 46%]
+tests/integrations/test_reoptimization.py ......                         [ 47%]
+tests/integrations/test_results.py .................                     [ 47%]
+tests/integrations/test_submission.py ...........                        [ 48%]
+tests/integrations/test_tpp_client_interface.py ......                   [ 48%]
+tests/integrations/test_tpp_contracts.py ............................... [ 49%]
+............................                                             [ 50%]
+tests/integrations/test_tpp_cross_repo_smoke.py .                        [ 50%]
+tests/integrations/test_tpp_policy_import.py .                           [ 50%]
+tests/integrations/test_tpp_portal_handoff.py .......................... [ 51%]
+........................................................................ [ 53%]
+........................................................................ [ 56%]
+........................................................................ [ 58%]
+.........................................                                [ 60%]
+tests/integrations/test_tpp_portal_identity.py .....                     [ 60%]
+tests/integrations/test_tpp_portal_receipt.py .......................... [ 61%]
+.......................................................................  [ 63%]
+tests/integrations/test_tpp_portal_receipt_client.py ................... [ 64%]
+............................                                             [ 65%]
+tests/integrations/test_tpp_transport_httpserver.py ...........          [ 65%]
+tests/integrations/test_tpp_transport_restricted_env.py ........         [ 65%]
+tests/integrations/test_tpp_validation.py ......                         [ 66%]
+tests/itinerary/test_daily_menu.py .......                               [ 66%]
+tests/itinerary/test_feasibility.py ..........                           [ 66%]
+tests/itinerary/test_objective_derivation.py ................            [ 67%]
+tests/itinerary/test_scenarios.py ..........                             [ 67%]
+tests/itinerary/test_search.py ....                                      [ 67%]
+tests/itinerary/test_source_mix_calibration.py .                         [ 67%]
+tests/logistics/test_booking_radar.py ....                               [ 67%]
+tests/observability/test_langsmith_fleet.py ....                         [ 67%]
+tests/options/test_activities.py ......                                  [ 68%]
+tests/options/test_bundles.py ........                                   [ 68%]
+tests/options/test_destinations.py ..............                        [ 68%]
+tests/options/test_lodging.py ........                                   [ 69%]
+tests/options/test_transport.py .......                                  [ 69%]
+tests/orchestration/test_business_flow.py ........                       [ 69%]
+tests/orchestration/test_feedback.py .......                             [ 69%]
+tests/orchestration/test_in_trip.py ........                             [ 70%]
+tests/orchestration/test_leisure_flow.py ........                        [ 70%]
+tests/orchestration/test_orchestration_models.py .........               [ 70%]
+tests/persistence/test_db_config.py .....                                [ 71%]
+tests/persistence/test_migration_compat.py .                             [ 71%]
+tests/persistence/test_namespace.py ..                                   [ 71%]
+tests/planner/test_inventory_provenance.py .....................         [ 71%]
+tests/planner/test_planner_adapter_path.py .......                       [ 72%]
+tests/planner/test_planner_turn_acceptance.py .                          [ 72%]
+tests/planner/test_tpp_models.py .                                       [ 72%]
+tests/planner/test_tpp_polling_service.py ...................            [ 72%]
+tests/planner/test_tpp_proposal_submission_service.py ..                 [ 72%]
+tests/planner/test_tpp_result_service.py .....                           [ 73%]
+tests/planner/test_workspace_state.py ........                           [ 73%]
+tests/preferences/test_autonomy.py ....                                  [ 73%]
+tests/preferences/test_evidence.py .............                         [ 73%]
+tests/preferences/test_evidence_catalog.py .....                         [ 74%]
+tests/preferences/test_evidence_fixtures.py ......                       [ 74%]
+tests/preferences/test_explanations.py .....                             [ 74%]
+tests/preferences/test_fixture_corpus.py .........                       [ 74%]
+tests/preferences/test_interactions.py .....                             [ 74%]
+tests/preferences/test_legacy_request_adapter.py ........                [ 75%]
+tests/preferences/test_models.py ............                            [ 75%]
+tests/preferences/test_normalization.py ................................ [ 76%]
+.....                                                                    [ 76%]
+tests/preferences/test_product_fixture_corpus.py ...............         [ 77%]
+tests/preferences/test_questionnaire.py ................................ [ 78%]
+.......                                                                  [ 78%]
+tests/preferences/test_resolution.py .............                       [ 79%]
+tests/preferences/test_resolution_directional_seed_cleanup.py .          [ 79%]
+tests/preferences/test_revealed_preference.py ....                       [ 79%]
+tests/preferences/test_taxonomy.py ..................                    [ 79%]
+tests/preferences/test_traveler_personas.py .........                    [ 80%]
+tests/pricing/test_prices_require_a_source.py .............              [ 80%]
+tests/ranking/test_adapter_ranking.py ............                       [ 81%]
+tests/ranking/test_base_ranking_engine.py ..                             [ 81%]
+tests/ranking/test_business_ranking.py ...............                   [ 81%]
+tests/ranking/test_leisure_ranking.py .................                  [ 82%]
+tests/ranking/test_models.py .........                                   [ 82%]
+tests/ranking/test_persona_ranking_tradeoffs.py .......                  [ 82%]
+tests/ranking/test_score_bounds.py .                                     [ 82%]
+tests/ranking/test_source_confidence_explanation.py ......               [ 83%]
+tests/scripts/test_autopilot_step_timer.py .............                 [ 83%]
+tests/scripts/test_check_deploy_origin.py .....................          [ 84%]
+tests/scripts/test_check_full_product_verification.py .................. [ 84%]
+...................                                                      [ 85%]
+tests/scripts/test_check_full_stack_runtime_script.py .                  [ 85%]
+tests/scripts/test_create_dev_venv.py .s......                           [ 85%]
+tests/scripts/test_cross_repo_dev_pins.py .............ss............... [ 86%]
+........                                                                 [ 87%]
+tests/scripts/test_cross_repo_smoke_workflow.py ........................ [ 88%]
+.................                                                        [ 88%]
+tests/scripts/test_fetch_amtrak_gtfs.py ....                             [ 88%]
+tests/scripts/test_state_fingerprint.py .................                [ 89%]
+tests/scripts/test_tpp_migration_guard.py ..........                     [ 89%]
+tests/scripts/test_validate_dependency_test_setup.py ...............     [ 90%]
+tests/scripts/test_verify_local_suite.py ..........                      [ 90%]
+tests/sources/test_adapters.py ....                                      [ 90%]
+tests/sources/test_amtrak_gtfs_adapter.py ........................       [ 91%]
+tests/sources/test_dedup.py ....                                         [ 91%]
+tests/sources/test_duffel_adapter_offline.py .....................       [ 92%]
+tests/sources/test_lodging_deep_link.py ............                     [ 92%]
+tests/sources/test_resolution.py .................                       [ 93%]
+tests/sources/test_snapshots.py .....                                    [ 93%]
+tests/sources/test_source_models.py ......                               [ 93%]
+tests/sources/test_source_provenance.py .....                            [ 93%]
+tests/sources/test_source_quality.py ............................        [ 94%]
+tests/state/test_accounts.py ..........                                  [ 95%]
+tests/state/test_budget.py ............                                  [ 95%]
+tests/state/test_scenarios.py ...........                                [ 95%]
+tests/state/test_sessions.py .........                                   [ 96%]
+tests/state/test_trips.py ...........                                    [ 96%]
+tests/test_build_html.py ..                                              [ 96%]
+tests/test_ci_python_standard.py .                                       [ 96%]
+tests/test_complexity.py ...                                             [ 96%]
+tests/test_dependency_version_alignment.py .                             [ 96%]
+tests/test_gate_commit_status_fork_tolerance.py .............            [ 97%]
+tests/test_generate_segments.py .                                        [ 97%]
+tests/test_make_install.py ......                                        [ 97%]
+tests/test_measure_complexity.py ....                                    [ 97%]
+tests/test_packaging.py ....                                             [ 97%]
+tests/test_penalty.py ...                                                [ 97%]
+tests/test_pytest_collection.py .                                        [ 98%]
+tests/test_pytest_collection_audit.py ...                                [ 98%]
+tests/test_python_floor.py .................                             [ 98%]
+tests/test_render_pr_review_thread_report.py ......                      [ 98%]
+tests/test_repo_hygiene.py ..........s......                             [ 99%]
+tests/test_runtime_requirements.py ...........                           [ 99%]
+tests/test_validators.py ....                                            [100%]
+
+=============================== warnings summary ===============================
+../../../../Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/.venv/lib/python3.13/site-packages/anyio/pytest_plugin.py:14
+  /Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/.venv/lib/python3.13/site-packages/anyio/pytest_plugin.py:14: PytestRemovedIn10Warning: _pytest.python.CallSpec2 has been renamed to CallSpec.
+  The CallSpec2 alias will be removed in pytest 10.
+  Update imports to use CallSpec instead.
+  See https://docs.pytest.org/en/stable/deprecations.html#callspec2-renamed
+    from _pytest.python import CallSpec2
+
+../../../../Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/app/test_auth.py: 5 warnings
+tests/app/test_budget_routes.py: 10 warnings
+tests/app/test_compare_truthfulness.py: 4 warnings
+tests/app/test_demo_seed.py: 7 warnings
+tests/app/test_flight_search_sandbox.py: 16 warnings
+tests/app/test_full_product_verification.py: 2 warnings
+tests/app/test_health.py: 6 warnings
+tests/app/test_inventory.py: 6 warnings
+tests/app/test_plain_language.py: 3 warnings
+tests/app/test_planner_chat_truth.py: 2 warnings
+tests/app/test_planner_fallback.py: 3 warnings
+tests/app/test_planner_intent.py: 3 warnings
+tests/app/test_planner_routes.py: 39 warnings
+tests/app/test_planner_turn_e2e.py: 2 warnings
+tests/app/test_policy.py: 18 warnings
+tests/app/test_policy_sync_route.py: 7 warnings
+tests/app/test_portal_handoff_flow.py: 138 warnings
+tests/app/test_proposal.py: 99 warnings
+tests/app/test_proposal_payload_truth.py: 11 warnings
+tests/app/test_rail_timetable_wiring.py: 48 warnings
+tests/app/test_scenario_history.py: 1 warning
+tests/app/test_scenario_policy_preview.py: 2 warnings
+tests/app/test_trip_prices.py: 24 warnings
+tests/app/test_trip_routes.py: 14 warnings
+tests/app/test_trips_api.py: 6 warnings
+tests/app/test_workspace.py: 55 warnings
+tests/app/test_workspace_scenario_fallback.py: 4 warnings
+tests/docs/test_product_contract_probe_drift.py: 3 warnings
+tests/integration/test_portal_handoff_identity.py: 10 warnings
+tests/integration/test_saved_portal_handoff.py: 89 warnings
+tests/integration/test_workspace_portal_preparation.py: 67 warnings
+tests/integration/test_workspace_portal_receipt.py: 52 warnings
+tests/integrations/test_canonical_state_seam.py: 6 warnings
+tests/integrations/test_tpp_cross_repo_smoke.py: 2 warnings
+tests/integrations/test_tpp_policy_import.py: 1 warning
+tests/persistence/test_migration_compat.py: 2 warnings
+tests/planner/test_planner_adapter_path.py: 7 warnings
+tests/planner/test_planner_turn_acceptance.py: 1 warning
+tests/scripts/test_check_full_product_verification.py: 15 warnings
+  /Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/.venv/lib/python3.13/site-packages/alembic/config.py:612: DeprecationWarning: No path_separator found in configuration; falling back to legacy splitting on spaces, commas, and colons for prepend_sys_path.  Consider adding path_separator=os to Alembic config.
+    util.warn_deprecated(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+========== 2904 passed, 7 skipped, 792 warnings in 235.72s (0:03:55) ===========

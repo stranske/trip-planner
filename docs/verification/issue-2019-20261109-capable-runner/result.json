@@ -1,0 +1,25 @@
+{
+  "commit": "b53982af26527c5f292c4d8a3a66d39d5f482ab5",
+  "verified_ancestors": [
+    "29c6aa01064f9eb3cbf15debd32cac3327ec43b8",
+    "4c6ff3e81b412db4039f7d1a48fa95d0aecff753"
+  ],
+  "runtime": {
+    "version": "3.13.13",
+    "executable": "/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/.venv/bin/python",
+    "implementation": "CPython",
+    "optimization": 0
+  },
+  "requires_python": ">=3.13,<3.15",
+  "preferred_python": "3.14",
+  "command": [
+    "/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2020__closer/.venv/bin/python",
+    "-m",
+    "pytest"
+  ],
+  "cwd": "/private/tmp/trip-planner-2020-20261109-acceptance/checkout",
+  "log": "/private/tmp/trip-planner-2020-20261109-acceptance/pytest.log",
+  "started_at": "2026-11-09T11:05:50.400257+00:00",
+  "exit_status": 0,
+  "finished_at": "2026-11-09T11:09:51.621887+00:00"
+}
