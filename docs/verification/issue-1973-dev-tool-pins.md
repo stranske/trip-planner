@@ -1666,3 +1666,78 @@ Acceptance-thread dispositions against this reduced scope:
   source was executed with both ancestors verified, and its artifacts are retained.
 - `PRRT_kwDOOzvyds61CY6K` (exit-0 acceptance): out of scope for this PR — moved
   to the follow-up; the unchecked exit-0 boxes above stay unchecked.
+
+## Issue #2019 dependency provisioning — 2026-11-09
+
+Created `/tmp/trip-planner-issue-2019-source` as an isolated shared clone and
+checked out main at **903fa32727388e40d4e143614b6b7ba6358b2e12**. Both required
+`git merge-base --is-ancestor` checks exited **0**, for
+`29c6aa01064f9eb3cbf15debd32cac3327ec43b8` and
+`4c6ff3e81b412db4039f7d1a48fa95d0aecff753`. Selected **CPython 3.14.10** matches
+`.python-version` **3.14** and satisfies `>=3.13,<3.15`.
+
+Created a dedicated environment using
+`/opt/hostedtoolcache/Python/3.14.10/x64/bin/python -m venv /tmp/trip-planner-issue-2019-venv`.
+Its interpreter is `/tmp/trip-planner-issue-2019-venv/bin/python`, optimization
+**0**. Installation from `requirements.lock` failed because this runtime cannot
+resolve `pypi.org`. An offline attempt using cached wheels also exited **1**:
+the first unavailable pin is **annotated-doc==0.0.4**; the cache contains only
+**0.0.5**. No dependency pins were relaxed. Installing cached setuptools 84.2.1
+allowed a separate editable-metadata attempt, but did not complete provisioning.
+
+Inspected `tests/baseline` imports and `pyproject.toml` development dependencies.
+They require `baseline_kit` from `app-baseline-kit` at
+`git+https://github.com/stranske/Workflows.git#subdirectory=packages/app-baseline-kit`.
+That package is deliberately excluded from the lock, so installing only the
+lock cannot provide it. `git ls-remote` of its declared repository exited **128**
+with `Could not resolve host: github.com`. The preinstalled interpreter has
+app-baseline-kit 0.2.0 with origin metadata naming that repository/subdirectory
+and commit `dc88475b617e52bb06f86ab4d79b01d21462ee67`; that existing installation
+was not substituted for a successful dedicated-environment install.
+
+Fixed the repository provisioning command: `make install` now installs the lock
+and editable development extras in one pip resolution, and the README manual
+instructions match:
+
+```sh
+.venv/bin/python -m pip install -r requirements.lock -e ".[dev]"
+```
+
+`make -n install` confirms this recipe and `python
+scripts/validate_dependency_test_setup.py` exits **0**. Focused validation using
+the preinstalled Python 3.14.10 interpreter, after the source change:
+
+```sh
+python -m pytest tests/test_repo_hygiene.py tests/test_pytest_collection.py tests/baseline -m 'not slow' -q
+```
+
+Exit **0**: **71 passed, 1 skipped, 14 warnings**. The skip is the pre-existing
+TPP rename guard requiring pull-request diff context. Collection and baseline
+tests pass; this filtered command does not establish full-suite acceptance.
+
+Durable provisioning evidence: [setup.json](issue-2019-20261109-provisioning/setup.json)
+and [provisioning.log](issue-2019-20261109-provisioning/provisioning.log), recording
+the isolated source, runtime, actual installation commands, and exits. An
+independent socketpair probe using the dedicated interpreter also exited **1**
+at `sendall` with `PermissionError: [Errno 1] Operation not permitted`.
+
+The dedicated environment remains incomplete. No provisioned full-suite command
+was run, and no new full-suite `result.json` or `pytest.log` is claimed. Retain
+all predecessor evidence above. Resume dependency installation in an environment
+with PyPI/GitHub access and local socket I/O, then run the existing verifier
+with both required ancestors and a fresh output directory.
+
+- [x] Create the isolated main checkout containing both required ancestors and select a supported interpreter.
+- [ ] Complete locked dependency and declared-source development-extra installation.
+- [ ] Run the provisioned unrestricted verifier and retain matching successful evidence.
+
+The workspace `.git` directory is read-only: `git add` fails creating
+`.git/index.lock`. The source change was committed in the writable clone at
+`/tmp/trip-planner-issue-2019-delivery` as
+`b4e8672552921bb8b834cdbe5124c90f42ec20f6`. The workspace retains the same source
+edits for handoff; no commit was added to its read-only Git database or pushed.
+
+The GitHub tool rejected adding `needs-human` to PR #2020 with
+`MCP tool call requires approval, but approval policy is never`; no remote label
+was applied. The verified task checkbox above is local documentation. Remote
+task-list and blocker-comment updates remain for an authorized controller.

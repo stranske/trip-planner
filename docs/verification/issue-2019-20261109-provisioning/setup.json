@@ -1,0 +1,72 @@
+{
+  "started_at": "2026-11-09T03:40:28.882279+00:00",
+  "source_commit": "903fa32727388e40d4e143614b6b7ba6358b2e12",
+  "source_checkout": "/tmp/trip-planner-issue-2019-source",
+  "verified_ancestors": [
+    "29c6aa01064f9eb3cbf15debd32cac3327ec43b8",
+    "4c6ff3e81b412db4039f7d1a48fa95d0aecff753"
+  ],
+  "runtime": {
+    "version": "3.14.10",
+    "executable": "/tmp/trip-planner-issue-2019-venv/bin/python",
+    "optimization": 0
+  },
+  "preferred_python": "3.14",
+  "requires_python": ">=3.13,<3.15",
+  "provisioning_complete": false,
+  "full_suite_run": false,
+  "commands": [
+    {
+      "command": [
+        "/tmp/trip-planner-issue-2019-venv/bin/python",
+        "-m",
+        "pip",
+        "install",
+        "--retries",
+        "0",
+        "--timeout",
+        "5",
+        "-r",
+        "/tmp/trip-planner-issue-2019-source/requirements.lock",
+        "-e",
+        "/tmp/trip-planner-issue-2019-source[dev]"
+      ],
+      "exit_status": 1
+    },
+    {
+      "command": [
+        "/tmp/trip-planner-issue-2019-venv/bin/python",
+        "-m",
+        "pip",
+        "install",
+        "--no-index",
+        "--find-links",
+        "/tmp/issue-2019-wheelhouse",
+        "--no-build-isolation",
+        "-r",
+        "/tmp/trip-planner-issue-2019-source/requirements.lock",
+        "-e",
+        "/tmp/trip-planner-issue-2019-source[dev]"
+      ],
+      "exit_status": 1
+    },
+    {
+      "command": [
+        "git",
+        "ls-remote",
+        "https://github.com/stranske/Workflows.git",
+        "HEAD"
+      ],
+      "exit_status": 128
+    },
+    {
+      "command": [
+        "/tmp/trip-planner-issue-2019-venv/bin/python",
+        "-c",
+        "import socket; a,b=socket.socketpair(); a.sendall(b\"x\"); print(b.recv(1)); a.close(); b.close()"
+      ],
+      "exit_status": 1
+    }
+  ],
+  "finished_at": "2026-11-09T03:40:38.074110+00:00"
+}

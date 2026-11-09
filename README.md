@@ -108,14 +108,14 @@ Install all backend and frontend dependencies once from a clean checkout:
 make install
 ```
 
-This creates `.venv`, installs the Python dev extras into it, and installs `frontend/node_modules`. No manual venv activation is needed before running `make runtime-check` afterward — the script detects `.venv` automatically.
+This creates `.venv`, installs the locked Python dependencies and project dev extras into it, and installs `frontend/node_modules`. The dev extras also resolve `app-baseline-kit` from its declared Workflows repository source. No manual venv activation is needed before running `make runtime-check` afterward — the script detects `.venv` automatically.
 
 If you prefer to manage the virtualenv yourself:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -e ".[dev]"
+python -m pip install -r requirements.lock -e ".[dev]"
 npm --prefix frontend ci
 ```
 

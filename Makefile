@@ -5,7 +5,7 @@ test:
 
 install:
 	python -m venv .venv
-	.venv/bin/pip install -e ".[dev]"
+	.venv/bin/python -m pip install -r requirements.lock -e ".[dev]"
 	npm --prefix frontend ci
 
 runtime-backend:

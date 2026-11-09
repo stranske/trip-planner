@@ -1,0 +1,51 @@
+Command: ["/tmp/trip-planner-issue-2019-venv/bin/python", "-m", "pip", "install", "--retries", "0", "--timeout", "5", "-r", "/tmp/trip-planner-issue-2019-source/requirements.lock", "-e", "/tmp/trip-planner-issue-2019-source[dev]"]
+Exit: 1
+WARNING: The directory '/home/runner/.cache/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+Obtaining file:///tmp/trip-planner-issue-2019-source
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'error'
+  error: subprocess-exited-with-error
+  
+  × installing build dependencies did not run successfully.
+  │ exit code: 1
+  ╰─> [8 lines of output]
+      WARNING: The directory '/home/runner/.cache/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+      WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NameResolutionError("HTTPSConnection(host='pypi.org', port=443): Failed to resolve 'pypi.org' ([Errno -2] Name or service not known)")': /simple/setuptools/
+      WARNING: Retrying (Retry(total=3, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NameResolutionError("HTTPSConnection(host='pypi.org', port=443): Failed to resolve 'pypi.org' ([Errno -2] Name or service not known)")': /simple/setuptools/
+      WARNING: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NameResolutionError("HTTPSConnection(host='pypi.org', port=443): Failed to resolve 'pypi.org' ([Errno -2] Name or service not known)")': /simple/setuptools/
+      WARNING: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NameResolutionError("HTTPSConnection(host='pypi.org', port=443): Failed to resolve 'pypi.org' ([Errno -2] Name or service not known)")': /simple/setuptools/
+      WARNING: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NameResolutionError("HTTPSConnection(host='pypi.org', port=443): Failed to resolve 'pypi.org' ([Errno -2] Name or service not known)")': /simple/setuptools/
+      ERROR: Could not find a version that satisfies the requirement setuptools>=82.0.1 (from versions: none)
+      ERROR: No matching distribution found for setuptools>=82.0.1
+      [end of output]
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+ERROR: Failed to build 'file:///tmp/trip-planner-issue-2019-source' when installing build dependencies
+
+Command: ["/tmp/trip-planner-issue-2019-venv/bin/python", "-m", "pip", "install", "--no-index", "--find-links", "/tmp/issue-2019-wheelhouse", "--no-build-isolation", "-r", "/tmp/trip-planner-issue-2019-source/requirements.lock", "-e", "/tmp/trip-planner-issue-2019-source[dev]"]
+Exit: 1
+WARNING: The directory '/home/runner/.cache/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+Looking in links: /tmp/issue-2019-wheelhouse
+Obtaining file:///tmp/trip-planner-issue-2019-source
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Ignoring colorama: markers 'sys_platform == "win32"' don't match your environment
+Ignoring tzdata: markers 'sys_platform == "emscripten" or sys_platform == "win32"' don't match your environment
+Processing /tmp/issue-2019-wheelhouse/alembic-1.18.5-py3-none-any.whl (from -r /tmp/trip-planner-issue-2019-source/requirements.lock (line 3))
+ERROR: Could not find a version that satisfies the requirement annotated-doc==0.0.4 (from versions: 0.0.5)
+ERROR: No matching distribution found for annotated-doc==0.0.4
+
+Command: ["git", "ls-remote", "https://github.com/stranske/Workflows.git", "HEAD"]
+Exit: 128
+fatal: unable to access 'https://github.com/stranske/Workflows.git/': Could not resolve host: github.com
+
+Command: ["/tmp/trip-planner-issue-2019-venv/bin/python", "-c", "import socket; a,b=socket.socketpair(); a.sendall(b\"x\"); print(b.recv(1)); a.close(); b.close()"]
+Exit: 1
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import socket; a,b=socket.socketpair(); a.sendall(b"x"); print(b.recv(1)); a.close(); b.close()
+                                            ~~~~~~~~~^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
