@@ -2,8 +2,9 @@
 
 Runs 42449207754 and 42484305260 install local editable projects with [dev].
 The former selects TPP acc4aed and fails; the latter selects b56d92b and passes.
-Metadata-only wheels retain the three reported tool requirements and dev extra
-markers. This checks resolution, not builds, runtime dependencies or publication.
+Metadata-only wheels and editable checkouts retain the three reported tool
+requirements and dev extra markers. This checks resolution, not product builds,
+runtime dependencies or publication.
 """
 
 from __future__ import annotations
@@ -56,14 +57,36 @@ def write_wheel(directory: Path, name: str, version: str, metadata: str = "") ->
         wheel.writestr(f"{dist_info}/RECORD", "")
 
 
-def resolve(directory: Path, paths: dict[str, Path]) -> tuple[subprocess.CompletedProcess, Path]:
+def resolve(
+    directory: Path, paths: dict[str, Path], *, editable: bool = False
+) -> tuple[subprocess.CompletedProcess, Path]:
     directory.mkdir()
+    roots = []
     for project, path in paths.items():
         requirements = tool_requirements(path)
         metadata = "Provides-Extra: dev\n" + "".join(
             f'Requires-Dist: {req}; extra == "dev"\n' for req in requirements.values()
         )
-        write_wheel(directory, project, "0.1.0", metadata)
+        if editable:
+            checkout = directory / project
+            checkout.mkdir()
+            (checkout / "editable_backend.py").write_bytes(
+                (FIXTURES / "editable_backend.py").read_bytes()
+            )
+            # Retain the same bounded requirements as the wheel cases, while
+            # asking pip to prepare both local editable projects' dev extras.
+            (checkout / "pyproject.toml").write_text(
+                '[build-system]\nrequires = []\nbuild-backend = "editable_backend"\n'
+                'backend-path = ["."]\n[project]\n'
+                f'name = "{project}"\nversion = "0.1.0"\n'
+                "[project.optional-dependencies]\n"
+                f"dev = {json.dumps([str(req) for req in requirements.values()])}\n",
+                encoding="utf-8",
+            )
+            roots.extend(["-e", f"{checkout}[dev]"])
+        else:
+            write_wheel(directory, project, "0.1.0", metadata)
+            roots.append(f"{project}[dev]==0.1.0")
         # Include both sides' candidates: missing wheels must not explain failure.
         for name, req in requirements.items():
             write_wheel(directory, name, next(iter(req.specifier)).version)
@@ -80,15 +103,16 @@ def resolve(directory: Path, paths: dict[str, Path]) -> tuple[subprocess.Complet
             "--ignore-installed",
             "--no-index",
             "--no-cache-dir",
+            "--no-build-isolation",
             "--find-links",
             str(directory),
             "--report",
             str(report),
-            *(f"{project}[dev]==0.1.0" for project in PROJECTS),
+            *roots,
         ],
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=8,
         check=False,
     )
     return result, report
@@ -107,9 +131,10 @@ def assert_resolved(result: subprocess.CompletedProcess, report: Path, planner: 
     assert actual == {**expected, **dict.fromkeys(PROJECTS, "0.1.0")}
 
 
-def test_original_checkouts_reproduce_resolution_impossible(tmp_path: Path) -> None:
+@pytest.mark.parametrize("editable", [False, True], ids=["wheels", "editable"])
+def test_original_checkouts_reproduce_resolution_impossible(tmp_path: Path, editable: bool) -> None:
     paths = {name: FIXTURES / "failed" / f"{name}.toml" for name in PROJECTS}
-    result, _ = resolve(tmp_path / "wheels", paths)
+    result, _ = resolve(tmp_path / "wheels", paths, editable=editable)
     diagnostics = result.stdout + result.stderr
     assert result.returncode == 1, diagnostics
     assert "ResolutionImpossible" in diagnostics
@@ -118,10 +143,19 @@ def test_original_checkouts_reproduce_resolution_impossible(tmp_path: Path) -> N
         assert str(tool_requirements(path)["ruff"]) in diagnostics
 
 
-def test_successful_checkouts_resolve(tmp_path: Path) -> None:
+@pytest.mark.parametrize("editable", [False, True], ids=["wheels", "editable"])
+def test_successful_checkouts_resolve(tmp_path: Path, editable: bool) -> None:
     paths = {name: FIXTURES / "successful" / f"{name}.toml" for name in PROJECTS}
-    result, report = resolve(tmp_path / "wheels", paths)
+    result, report = resolve(tmp_path / "wheels", paths, editable=editable)
     assert_resolved(result, report, paths["trip-planner"])
+    if editable:
+        installed = json.loads(report.read_text(encoding="utf-8"))["install"]
+        projects = [item for item in installed if item["metadata"]["name"] in PROJECTS]
+        assert len(projects) == 2
+        for item in projects:
+            download = item["download_info"]
+            assert download["dir_info"]["editable"] is True
+            assert download["url"] == (tmp_path / "wheels" / item["metadata"]["name"]).as_uri()
 
 
 @pytest.mark.parametrize("tool", sorted(TOOLS))

@@ -9,6 +9,19 @@ contains the same files as Workflows commit
 Workflows checkout with `git am /path/to/workflows-regression.patch`.
 No workflow, pin, synced consumer file or sync manifest changes are included.
 
+Editable-install follow-up, 2026-11-10: apply
+`../workflows-editable-resolution.patch` after `workflows-tool-mutations.patch`.
+Both historical checkout tests now also ask pip to prepare two local editable
+projects with dev extras. The passing report must identify both projects as
+editable directories. The stdlib-only fixture backend exports the same three
+tool requirements as the wheel tests; it does not build either product or
+resolve runtime dependencies. The suite makes twelve pip calls with eight-second
+deadlines. In the reconstructed owning source, all **8 tests pass in 5.59s**;
+changing successful TPP Ruff back to 0.17.2 fails the editable positive case,
+and restoring it passes. `../owner-editable-verification.json` records the
+command, source hashes and mutation results. Upstream publication and the
+documented broad local validation remain blocked.
+
 Follow-up on 2026-11-10: apply `../workflows-tool-mutations.patch` with `git apply`
 after the original patch. Together they reproduce the exported test source,
 including its earlier type annotation correction. Three new parameterized cases

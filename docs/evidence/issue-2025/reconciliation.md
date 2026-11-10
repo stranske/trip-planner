@@ -403,3 +403,38 @@ the `needs-human` label and the blocker comment because approval policy is
 upstream test publication remain incomplete. Shared `.git/index.lock` is also
 read-only, so commit delivery uses `/tmp/issue2025-merge-checkout-delivery`;
 matching changes remain in this workspace.
+
+Follow-up on consumer base `924fa6259b5b1db20a6a8f901ce74a609d046a67`, 2026-11-10:
+
+The owning resolver regression now exercises pip's local editable metadata path
+for both historical checkout pairs, alongside the existing wheel cases. The
+successful pip report must identify both project directories as editable. A
+stdlib-only fixture backend exports the three historical tool requirements;
+it deliberately refuses wheel builds. This remains a bounded metadata resolver
+test, without product builds or runtime dependencies. Twelve pip calls each have
+an eight-second deadline.
+
+From the sparse immutable Workflows reconstruction, the selected interpreter's
+`-m pytest tests/test_dependency_resolution.py -m 'not slow' -q` exits 0:
+**8 passed in 5.59 seconds**, 6.06 seconds wall. Mutating the successful TPP Ruff
+pin back to 0.17.2 makes the editable positive case fail with
+`ResolutionImpossible`; restoring the fixture passes. Exact commands, immutable
+source hashes and results are in `owner-editable-verification.json` and the
+three `owner-editable-*.log` files. All three exported patches apply in order
+and reproduce every exported source and fixture byte-for-byte.
+
+Existing consumer validation passes: **158 passed, 2 skipped in 5.36 seconds**;
+both existing skips require a sibling checkout. Ruff with the owner configuration
+and `git diff --check` pass. After serial per-file checks prepared a writable
+cache, the required whole-tree Black gate exits 0 with **533 files unchanged**:
+`BLACK_CACHE_DIR=/tmp/issue2025-editable-black black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .`.
+
+Both requested `gh` log reads and the JSON query fail to connect. Connected API
+readback confirms merged #2006 at its final head and successful smoke. Applying
+the reviewed ledger patch fails on the read-only `.agents` mount. Automatic
+approval review rejects PR-body checkbox reconciliation, the `needs-human` label
+and the blocker comment with `MCP tool call requires approval, but approval policy
+is never`. No checkbox changed. Source publication and successful documented
+broad owner validation remain incomplete. Shared `.git/index.lock` is read-only;
+the commit is delivered in `/tmp/issue2025-editable-delivery`, retaining matching
+workspace changes.
