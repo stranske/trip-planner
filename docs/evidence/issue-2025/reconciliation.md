@@ -206,3 +206,45 @@ BLACK_CACHE_DIR=/tmp/issue2025-checkout-black black --check --line-length 100 --
 The shared Git index also rejects writes with `Read-only file system`. Commit
 delivery uses `/tmp/issue2025-checkout-delivery`, an isolated consumer clone;
 matching source, tests and evidence remain in this workspace for automation.
+
+Follow-up on consumer base `008bc316703fd3d9982c72e3b964cf78cf66d0f7`, 2026-11-10:
+
+The install comparison now binds resolver output to the combined editable
+install command. The historical log must identify the exact Ruff requirement
+and dev extra for each project after that command. The successful log must
+list `ruff-0.17.3`, `trip-planner-0.1.0` and `travel-plan-permission-0.1.0` in
+one subsequent `Successfully installed` line. Earlier planner-only installs,
+download messages, partial version matches and missing project installs cannot
+establish that both projects resolved together. Eight negative cases failed
+against the previous implementation before passing with this change.
+
+Fresh connected GitHub job logs confirm why this distinction matters: both
+runs first successfully install planner and Ruff 0.17.3 alone. Only the later
+combined install fails in run `42449207754` and succeeds in `42484305260`.
+Reconciliation using freshly fetched install/checkout excerpts produces the
+same patch as the retained receipts. The PR and commit-run lookup independently
+confirm the merged final head and successful smoke job. The three requested
+`gh run view` commands still fail to connect to api.github.com.
+
+Validation with `/opt/hostedtoolcache/Python/3.14.10/x64/bin/python`:
+
+```sh
+python -m pytest tests/scripts/test_reconcile_issue_2007.py tests/scripts/test_cross_repo_dev_pins.py tests/test_dependency_version_alignment.py -q -m 'not slow'
+```
+
+Exit 0 after formatting: 138 passed, 2 skipped in 3.87 seconds; both skips
+require a live sibling TPP checkout. Ruff and `git diff --check` pass. Black
+formatted the changed files, then the required whole-tree check exited 0 with
+532 files unchanged. Serial CLI verification populated the cache first because
+the runner denies Black's worker socket:
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue2025-install-serial black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+The proposed ledger patch passes `git apply --check`, but applying it fails
+with `Read-only file system`. Shared `git add` likewise fails on
+`.git/index.lock`; delivery uses `/tmp/issue2025-install-delivery`, retaining
+the matching source and tests here. PR #2026 remains open with draft=false.
+No task checkbox is newly completed. Successful owning-repository broad
+validation, upstream test publication and ledger application remain incomplete.

@@ -217,6 +217,54 @@ def test_requires_install_and_checkout_evidence(run: str, text: str, diagnostic:
 
 
 @pytest.mark.parametrize(
+    "mutation",
+    ["earlier-install", "different-line", "wrong-version", "missing-planner", "missing-tpp"],
+)
+def test_requires_success_from_the_combined_editable_install(mutation: str) -> None:
+    """An earlier planner-only install cannot prove that both dev extras co-resolve."""
+    evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    lines = evidence["log_excerpts"]["42484305260"]
+    installed = next(line for line in lines if "Successfully installed" in line)
+    index = lines.index(installed)
+    if mutation == "earlier-install":
+        lines.remove(installed)
+        lines.insert(0, installed)
+    elif mutation == "different-line":
+        lines[index] = installed.replace("ruff-0.17.3", "")
+        lines.append("Downloading ruff-0.17.3.whl")
+    elif mutation == "wrong-version":
+        lines[index] = installed.replace("ruff-0.17.3", "ruff-0.17.30")
+    elif mutation == "missing-planner":
+        lines[index] = installed.replace("trip-planner-0.1.0", "")
+    else:
+        lines[index] = installed.replace("travel-plan-permission-0.1.0", "")
+    with pytest.raises(ValueError, match="resolved installation"):
+        reconciliation(LEDGER.read_text(encoding="utf-8"), evidence)
+
+
+@pytest.mark.parametrize("mutation", ["earlier-error", "wrong-owner", "wrong-version"])
+def test_requires_conflict_from_the_combined_editable_install(mutation: str) -> None:
+    """Stray version strings cannot establish which local project's dev extra failed."""
+    evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    lines = evidence["log_excerpts"]["42449207754"]
+    if mutation == "earlier-error":
+        diagnostics = [
+            line for line in lines if "depends on" in line or "ResolutionImpossible" in line
+        ]
+        lines[:] = diagnostics + [line for line in lines if line not in diagnostics]
+    else:
+        index = next(i for i, line in enumerate(lines) if "travel-plan-permission[dev]" in line)
+        if mutation == "wrong-owner":
+            lines[index] = lines[index].replace(
+                "travel-plan-permission[dev]", "another-project[dev]"
+            )
+        else:
+            lines[index] = lines[index].replace("ruff==0.17.2", "ruff==0.17.20")
+    with pytest.raises(ValueError, match="conflicting Ruff"):
+        reconciliation(LEDGER.read_text(encoding="utf-8"), evidence)
+
+
+@pytest.mark.parametrize(
     ("run", "checkout"),
     [
         ("42449207754", "Merge 4ea6a28d050bbcf2233b725de13ade495f132002"),

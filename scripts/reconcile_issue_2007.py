@@ -122,13 +122,26 @@ def reconciliation(ledger: str, evidence: dict, sync_core_document: str | None =
         or f"TPP_PINNED_REF: {SUCCESSFUL_TPP}" not in passed
     ):
         raise ValueError("Both logs must identify the actual pinned TPP checkouts")
+    # Earlier steps install the planner alone. Only output following the
+    # combined editable install can establish this cross-repository conflict.
+    failed_install = failed.partition(INSTALL)[2]
+    passed_install = passed.partition(INSTALL)[2]
     if not all(
-        value in failed for value in ("ResolutionImpossible", "ruff==0.17.2", "ruff==0.17.3")
+        value in failed_install
+        for value in (
+            "ResolutionImpossible",
+            'travel-plan-permission[dev] 0.1.0 depends on ruff==0.17.2; extra == "dev"',
+            'trip-planner[dev] 0.1.0 depends on ruff==0.17.3; extra == "dev"',
+        )
     ):
         raise ValueError("Historical log must establish the conflicting Ruff metadata")
     if f"Merge {head} into " not in passed:
         raise ValueError("Successful checkout must contain the final PR head")
-    if not all(value in passed for value in ("Successfully installed", "ruff-0.17.3")):
+    required_installs = {"ruff-0.17.3", "trip-planner-0.1.0", "travel-plan-permission-0.1.0"}
+    if not any(
+        required_installs <= set(packages.split())
+        for packages in re.findall(r"Successfully installed ([^\n]+)", passed_install)
+    ):
         raise ValueError("Successful log must establish the resolved installation")
     checkouts = [
         checkout_note(42449207754, failed, FAILED_HEAD, FAILED_TPP),
