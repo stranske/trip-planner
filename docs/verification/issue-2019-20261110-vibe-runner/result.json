@@ -1,0 +1,25 @@
+{
+  "commit": "030e0c7c65ccc7621f6c1c70d53a43d6785387c7",
+  "verified_ancestors": [
+    "29c6aa01064f9eb3cbf15debd32cac3327ec43b8",
+    "4c6ff3e81b412db4039f7d1a48fa95d0aecff753"
+  ],
+  "runtime": {
+    "version": "3.13.13",
+    "executable": "/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2019__opener/.venv/bin/python",
+    "implementation": "CPython",
+    "optimization": 0
+  },
+  "requires_python": ">=3.13,<3.15",
+  "preferred_python": "3.14",
+  "command": [
+    "/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2019__opener/.venv/bin/python",
+    "-m",
+    "pytest"
+  ],
+  "cwd": "/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2019__opener/docs/verification/issue-2019-20261110-vibe-runner/checkout",
+  "log": "/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2019__opener/docs/verification/issue-2019-20261110-vibe-runner/pytest.log",
+  "started_at": "2026-11-10T14:15:41.241699+00:00",
+  "exit_status": 0,
+  "finished_at": "2026-11-10T14:19:15.424734+00:00"
+}
