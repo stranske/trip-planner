@@ -403,6 +403,96 @@ def test_cli_invalid_evidence_fails_without_patch(tmp_path: Path) -> None:
     assert "Cannot reconcile ledger" in result.stderr
 
 
+@pytest.mark.parametrize(
+    "case", ["valid", "empty-failed", "empty-successful", "swapped", "missing"]
+)
+def test_cli_verifies_supplied_run_logs_instead_of_retained_excerpts(
+    tmp_path: Path, case: str
+) -> None:
+    """Full gh logs replace retained excerpts and cannot fall back to stale success."""
+    evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    excerpts = evidence.pop("log_excerpts")
+    # Valid stale excerpts would hide a broken replacement if the CLI ignored
+    # the supplied paths. Conversely, the valid case needs no retained excerpts.
+    if case != "valid":
+        evidence["log_excerpts"] = excerpts
+    receipt = tmp_path / "evidence.json"
+    receipt.write_text(json.dumps(evidence), encoding="utf-8")
+    ledger = tmp_path / "ledger.yml"
+    ledger.write_bytes(LEDGER.read_bytes())
+    originals = {path: path.read_bytes() for path in (ledger, receipt)}
+    logs = {}
+    for label, run in (("failed", "42449207754"), ("successful", "42484305260")):
+        path = tmp_path / f"{label}.log"
+        lines = excerpts[run]
+        if case == "swapped":
+            lines = excerpts["42484305260" if label == "failed" else "42449207754"]
+        # gh run view prefixes each raw job-log line with the job and step.
+        text = "\n".join(f"cross-repo-full-product\tstep\t{line}" for line in lines)
+        if case == f"empty-{label}":
+            text = ""
+        path.write_text(text, encoding="utf-8-sig")
+        logs[label] = path
+        originals[path] = path.read_bytes()
+    if case == "missing":
+        logs["failed"] = tmp_path / "absent.log"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts/reconcile_issue_2007.py"),
+            "--ledger",
+            ledger.name,
+            "--evidence",
+            str(receipt),
+            "--failed-log",
+            str(logs["failed"]),
+            "--successful-log",
+            str(logs["successful"]),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert all(path.read_bytes() == original for path, original in originals.items())
+    if case == "valid":
+        assert result.returncode == 0, result.stderr
+        evidence["log_excerpts"] = excerpts
+        expected = reconciliation(ledger.read_text(encoding="utf-8"), evidence)
+        subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, capture_output=True)
+        applied = subprocess.run(
+            ["git", "apply", "-"],
+            input=result.stdout,
+            cwd=tmp_path,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert applied.returncode == 0, applied.stderr
+        assert ledger.read_text(encoding="utf-8") == expected
+    else:
+        assert result.returncode == 1
+        assert not result.stdout
+        assert "Cannot reconcile ledger" in result.stderr
+
+
+@pytest.mark.parametrize("option", ["--failed-log", "--successful-log"])
+def test_cli_requires_both_run_logs(tmp_path: Path, option: str) -> None:
+    """Do not combine one newly supplied log with the other run's retained excerpt."""
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts/reconcile_issue_2007.py"), option, "unused.log"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert not result.stdout
+    assert "--failed-log and --successful-log must be supplied together" in result.stderr
+
+
 @pytest.mark.parametrize("head", [None, "a" * 40])
 def test_requires_native_run_head_even_when_lookup_and_log_match(head: str | None) -> None:
     """A commit-filtered lookup cannot substitute for the run's own head receipt."""

@@ -326,3 +326,48 @@ consumer clone, retaining matching edits here. Automatic approval review again
 rejected checkbox reconciliation, the label and the blocker comment because
 approval policy is `never`. No new checkbox was applied. Upstream test
 publication and successful documented broad validation remain incomplete.
+
+Follow-up on consumer base `bb70e92d43d65fb2846852c869be75e596cb576c`, 2026-11-10:
+
+The consumer reconciliation CLI now accepts the two requested run-log files
+directly. Capture them in an environment with working `gh` access, then run:
+
+```sh
+gh run view 42449207754 --repo stranske/trip-planner --log > /tmp/failed.log
+gh run view 42484305260 --repo stranske/trip-planner --log > /tmp/successful.log
+python scripts/reconcile_issue_2007.py --failed-log /tmp/failed.log --successful-log /tmp/successful.log --sync-core-document docs/evidence/issue-2025/sync-core-classification.md
+```
+
+Both files are required together and replace both retained log excerpts. Empty,
+swapped or missing files fail without emitting a patch; valid stale excerpts
+cannot mask a failed fresh comparison. Tests exercise CLI job/step prefixes,
+UTF-8 BOMs, applicable patch output and preservation of all input files.
+
+The three requested `gh run view` commands again failed to connect. Fresh
+connected API PR, run-lookup and job receipts confirm the same merged head and
+successful smoke. Fresh install/checkout lines from both connected job logs,
+passed through the new options, produce the retained ledger patch byte-for-byte.
+This verifies those selected lines; it does not claim a successful `gh` invocation.
+Applying the patch again failed on the read-only `.agents` mount.
+
+Validation with the selected Python 3.14.10 interpreter:
+
+```sh
+python -m pytest tests/scripts/test_reconcile_issue_2007.py tests/scripts/test_cross_repo_dev_pins.py tests/test_dependency_version_alignment.py -q -m 'not slow'
+```
+
+Exit 0: **154 passed, 2 skipped in 5.12 seconds**. Both existing skips require
+a sibling TPP checkout. No task checkbox is newly complete. The ledger write,
+owning documented-command exit-0 result and upstream test publication remain
+incomplete. Shared Git metadata is read-only, so commit delivery uses
+`/tmp/issue2025-raw-logs-delivery`; matching edits remain in this workspace.
+
+Black formatted both Python files. Serial per-file checks prepared a writable
+cache because the runner denies Black's worker socket; the required gate then
+exited 0 with **532 files unchanged**:
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue2025-raw-logs-black black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+Ruff and `git diff --check` pass. PR #2026 readback is open with draft=false.

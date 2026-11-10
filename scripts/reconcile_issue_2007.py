@@ -289,15 +289,33 @@ def main() -> int:
         type=Path,
         help="Retained controller classification excerpt; omit to leave task-16 unchanged",
     )
+    parser.add_argument(
+        "--failed-log",
+        type=Path,
+        help="Full gh run view 42449207754 --repo stranske/trip-planner --log output",
+    )
+    parser.add_argument(
+        "--successful-log",
+        type=Path,
+        help="Full gh run view 42484305260 --repo stranske/trip-planner --log output",
+    )
     args = parser.parse_args()
+    if (args.failed_log is None) != (args.successful_log is None):
+        parser.error("--failed-log and --successful-log must be supplied together")
     try:
         original = args.ledger.read_text(encoding="utf-8")
         document = (
             args.sync_core_document.read_text(encoding="utf-8") if args.sync_core_document else None
         )
-        updated = reconciliation(
-            original, json.loads(args.evidence.read_text(encoding="utf-8")), document
-        )
+        evidence = json.loads(args.evidence.read_text(encoding="utf-8"))
+        if args.failed_log is not None:
+            # Supplied logs replace both retained excerpts. Never fall back to
+            # stale installation evidence when a fresh log is empty or invalid.
+            evidence["log_excerpts"] = {
+                "42449207754": args.failed_log.read_text(encoding="utf-8-sig").splitlines(),
+                str(RUN): args.successful_log.read_text(encoding="utf-8-sig").splitlines(),
+            }
+        updated = reconciliation(original, evidence, document)
     except (OSError, ValueError, KeyError, TypeError, yaml.YAMLError) as exc:
         print(f"Cannot reconcile ledger: {exc}", file=sys.stderr)
         return 1
