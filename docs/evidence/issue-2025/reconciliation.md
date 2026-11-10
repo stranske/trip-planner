@@ -152,3 +152,57 @@ The owning repository's documented-command exit-0 criterion remains incomplete.
 The Git index is also read-only, so source, tests and evidence are committed in
 the isolated delivery checkout `/tmp/issue2025-reconcile-delivery`, with matching
 edits retained here for automation pickup.
+
+Follow-up on consumer base `c17b1d7b2cf4abe9c071f64f383ea59d5937a678`, 2026-11-10:
+
+The reconciliation now checks actual Git checkout lines, in addition to the
+requested `TPP_PINNED_REF` environment values. Removing or changing the failed
+planner checkout, failed TPP checkout, or successful TPP checkout previously
+still produced a patch. Six new negative cases reproduced that problem before
+the fix. The generated task-05 notes now retain both exact checkout pairs and
+the successful `ruff-0.17.3` install result. The task-16 layout tests also cover
+missing/duplicate task blocks and missing/duplicate completion fields. All test
+functions in the changed test module now have docstrings.
+
+Verification:
+
+```sh
+python -m pytest tests/scripts/test_reconcile_issue_2007.py tests/scripts/test_cross_repo_dev_pins.py tests/test_dependency_version_alignment.py -q -m 'not slow'
+```
+
+Exit 0: 130 passed, 2 skipped in 3.95 seconds with Python 3.14.10. The existing
+skips require a sibling TPP checkout. Ruff and `git diff --check` pass.
+Black formatted the changed Python files individually; serial checks populated
+the writable cache because the runner denies Black's worker socket.
+
+The requested `gh run view` commands again failed to connect to api.github.com.
+Fresh connected GitHub PR, commit-run lookup and job receipts independently
+confirm #2006 merged at `fcb6e97a291bd620629aa228561d36c3ee6cdf0d` and
+`cross-repo-full-product` succeeded in run `42484305260`.
+
+The currently selected Workflows checkout has advanced to
+`8c678c19a4f9f60fa5be6a00f08794a9626c87bd`. From `.workflows-lib`, with the
+selected Python 3.14.10 interpreter, this exact documented-command attempt:
+
+```sh
+PIP_NO_INDEX=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_RETRIES=0 ./scripts/dev_check.sh
+```
+
+still exits 1 while provisioning unavailable isort/docformatter/flake8. See
+`owner-dev-check-current.log`. This does not satisfy the exit-0 criterion.
+
+The regenerated ledger patch passes `git apply --check`, but applying it fails
+with `Read-only file system` for `.agents/issue-2007-ledger.yml`. No ledger task
+is newly completed. PR checkbox reconciliation was attempted before continuing;
+automatic approval review rejected the PR-body update with `MCP tool call
+requires approval, but approval policy is never`. No PR checkbox change applied.
+
+The required whole-tree formatting command exits 0 with 532 files unchanged:
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue2025-checkout-black black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+The shared Git index also rejects writes with `Read-only file system`. Commit
+delivery uses `/tmp/issue2025-checkout-delivery`, an isolated consumer clone;
+matching source, tests and evidence remain in this workspace for automation.

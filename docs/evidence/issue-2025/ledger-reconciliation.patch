@@ -1,6 +1,6 @@
 --- a/.agents/issue-2007-ledger.yml
 +++ b/.agents/issue-2007-ledger.yml
-@@ -66,17 +66,18 @@
+@@ -66,17 +66,20 @@
    - id: task-05
      title: 'Update the conflicting dev-tool pins in the source file so pip dependency
        resolution succeeds (verify: dependencies updated)'
@@ -22,15 +22,17 @@
 +    notes:
 +      - '2026-11-10: PR #2006 merged 2026-11-08T13:23:04Z; final head fcb6e97a291bd620629aa228561d36c3ee6cdf0d.'
 +      - 'Both run logs install local editable dev extras: .venv/bin/python -m pip install -e ".[dev]" -e "../trip-planner[dev]"'
-+      - Historical run 42449207754 fails on Ruff 0.17.2 versus 0.17.3. Run 42484305260 installs compatible checkouts
-+        successfully.
++      - Run 42449207754 checks out planner PR head 4ea6a28d050bbcf2233b725de13ade495f132002 and TPP acc4aeddee5f4ffefbdc73fcb07505cd3d198197.
++      - Run 42484305260 checks out planner PR head fcb6e97a291bd620629aa228561d36c3ee6cdf0d and TPP b56d92b389736c70370aa9134f379ac8cd1f3ad1.
++      - Historical run 42449207754 fails on Ruff 0.17.2 versus 0.17.3. Run 42484305260 installs the compatible
++        checkout pair successfully and records ruff-0.17.3 in its Successfully installed output.
 +      - The source-pin edit and PyPI republication proposal are superseded. This also corrects task-03's PyPI
 +        diagnosis. No source-pin edit was performed; defer rather than mark it complete.
 +      - 'Historical task-05 started_at: 2026-11-08T05:39:41Z.'
    - id: task-06
      title: 'Run pip install against the updated pins locally to confirm that dependency
        resolution completes without conflicts (verify: dependencies updated)'
-@@ -152,13 +153,11 @@
+@@ -152,13 +155,11 @@
      finished_at: null
      commit: ''
      notes:
@@ -49,7 +51,7 @@
    - id: task-15
      title: Reintroducing the reported behavior makes the regression test fail; reverting
        restores a passing result.
-@@ -170,11 +169,18 @@
+@@ -170,11 +171,18 @@
    - id: task-16
      title: The next sync-core round classifies stranske/trip-planner#2006 without
        this finding.

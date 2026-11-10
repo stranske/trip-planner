@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -20,6 +21,7 @@ CLASSIFICATION = ROOT / "docs/evidence/issue-2025/sync-core-classification.md"
 
 
 def test_reconciles_actual_receipts_without_claiming_unperformed_work() -> None:
+    """Reconcile only the requested tasks without claiming an unperformed pin edit."""
     original = LEDGER.read_text(encoding="utf-8")
     updated = reconciliation(original, json.loads(EVIDENCE.read_text(encoding="utf-8")))
     before = BLOCK.findall(original)
@@ -65,7 +67,7 @@ def test_requires_nonempty_receipt_dates(
         reconciliation(LEDGER.read_text(encoding="utf-8"), evidence, document)
 
 
-@pytest.mark.parametrize("task_id", ["task-05", "task-14"])
+@pytest.mark.parametrize("task_id", ["task-05", "task-14", "task-16"])
 @pytest.mark.parametrize(
     ("mutation", "diagnostic"),
     [
@@ -86,12 +88,18 @@ def test_rejects_unsupported_target_layouts(task_id: str, mutation: str, diagnos
     elif mutation == "duplicate":
         replacement = block * 2
     elif mutation == "notes":
-        replacement = block.replace("    notes:\n", "    notes: null\n")
+        replacement = re.sub(r"    notes:.*\n", "    notes: null\n", block, count=1)
     else:
-        replacement = block.replace("    status: blocked\n", "    status: [blocked]\n")
+        replacement = re.sub(
+            r"^    status:.*\n", "    status: [blocked]\n", block, flags=re.MULTILINE
+        )
     assert replacement != block
     with pytest.raises(ValueError, match=diagnostic):
-        reconciliation(ledger.replace(block, replacement), json.loads(EVIDENCE.read_text()))
+        reconciliation(
+            ledger.replace(block, replacement),
+            json.loads(EVIDENCE.read_text()),
+            CLASSIFICATION.read_text(encoding="utf-8") if task_id == "task-16" else None,
+        )
 
 
 def test_rejects_missing_issue_header() -> None:
@@ -99,6 +107,22 @@ def test_rejects_missing_issue_header() -> None:
     ledger = LEDGER.read_text(encoding="utf-8").replace("issue: 2007\n", "")
     with pytest.raises(ValueError, match="Expected issue-2007 ledger"):
         reconciliation(ledger, json.loads(EVIDENCE.read_text(encoding="utf-8")))
+
+
+@pytest.mark.parametrize("duplicate", [False, True])
+def test_requires_one_completion_field_for_classification(duplicate: bool) -> None:
+    """A completed classification needs exactly one place to record its completion."""
+    ledger = LEDGER.read_text(encoding="utf-8")
+    block = next(block for block in BLOCK.findall(ledger) if block.startswith("  - id: task-16\n"))
+    line = "    finished_at: null\n"
+    replacement = block.replace(line, line * 2 if duplicate else "")
+    assert replacement != block
+    with pytest.raises(ValueError, match="Unsupported ledger completion layout"):
+        reconciliation(
+            ledger.replace(block, replacement),
+            json.loads(EVIDENCE.read_text(encoding="utf-8")),
+            CLASSIFICATION.read_text(encoding="utf-8"),
+        )
 
 
 @pytest.mark.parametrize("duplicate", [False, True])
@@ -144,6 +168,7 @@ def test_deferral_preserves_supplied_start_in_notes_only(started_at: str) -> Non
 def test_rejects_unmerged_or_wrong_head_receipts(
     section: str, field: str, value: object, diagnostic: str
 ) -> None:
+    """Require the merged target and its final head in the PR and run lookup."""
     evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
     evidence[section][field] = value
     with pytest.raises(ValueError, match=diagnostic):
@@ -152,6 +177,7 @@ def test_rejects_unmerged_or_wrong_head_receipts(
 
 @pytest.mark.parametrize("target", ["run", "job", "job-run", "duplicate-job", "duplicate-run"])
 def test_rejects_failed_or_ambiguous_smoke_receipts(target: str) -> None:
+    """Reject unsuccessful, duplicate or unrelated smoke run and job receipts."""
     evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
     runs = evidence["run_lookup"]["workflow_runs"]
     if target == "run":
@@ -181,6 +207,7 @@ def test_rejects_failed_or_ambiguous_smoke_receipts(target: str) -> None:
     ],
 )
 def test_requires_install_and_checkout_evidence(run: str, text: str, diagnostic: str) -> None:
+    """Require the install, checkout and resolver lines supporting reconciliation."""
     evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
     evidence["log_excerpts"][run] = [
         line for line in evidence["log_excerpts"][run] if text not in line
@@ -189,7 +216,48 @@ def test_requires_install_and_checkout_evidence(run: str, text: str, diagnostic:
         reconciliation(LEDGER.read_text(encoding="utf-8"), evidence)
 
 
+@pytest.mark.parametrize(
+    ("run", "checkout"),
+    [
+        ("42449207754", "Merge 4ea6a28d050bbcf2233b725de13ade495f132002"),
+        ("42449207754", "HEAD is now at acc4aed"),
+        ("42484305260", "HEAD is now at b56d92b"),
+    ],
+)
+@pytest.mark.parametrize("mutation", ["missing", "wrong-head"])
+def test_requires_actual_checkout_receipts(run: str, checkout: str, mutation: str) -> None:
+    """A pinned-ref environment variable alone does not prove what was checked out."""
+    evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    lines = evidence["log_excerpts"][run]
+    matching = [line for line in lines if checkout in line]
+    assert len(matching) == 1
+    if mutation == "missing":
+        lines.remove(matching[0])
+    else:
+        lines[lines.index(matching[0])] = matching[0].replace(checkout, "HEAD is now at aaaaaaa")
+    with pytest.raises(ValueError, match="actual .*checkout"):
+        reconciliation(LEDGER.read_text(encoding="utf-8"), evidence)
+
+
+def test_notes_record_the_actual_checkout_pair_and_resolution() -> None:
+    """Ledger notes must identify how the successful install differs from the failure."""
+    updated = reconciliation(
+        LEDGER.read_text(encoding="utf-8"), json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    )
+    task = yaml.safe_load(next(b for b in BLOCK.findall(updated) if "id: task-05\n" in b))[0]
+    notes = "\n".join(task["notes"])
+    for ref in (
+        "4ea6a28d050bbcf2233b725de13ade495f132002",
+        "acc4aeddee5f4ffefbdc73fcb07505cd3d198197",
+        "fcb6e97a291bd620629aa228561d36c3ee6cdf0d",
+        "b56d92b389736c70370aa9134f379ac8cd1f3ad1",
+    ):
+        assert ref in notes
+    assert "ruff-0.17.3" in notes
+
+
 def test_cli_emits_applicable_patch_and_leaves_input_unchanged(tmp_path: Path) -> None:
+    """The default CLI must print an applicable patch without editing its ledger."""
     ledger = tmp_path / ".agents/issue-2007-ledger.yml"
     ledger.parent.mkdir()
     original = LEDGER.read_bytes()
@@ -227,6 +295,7 @@ def test_cli_emits_applicable_patch_and_leaves_input_unchanged(tmp_path: Path) -
 
 
 def test_cli_invalid_evidence_fails_without_patch(tmp_path: Path) -> None:
+    """Invalid evidence must produce a diagnostic and no partial patch."""
     invalid = tmp_path / "invalid.json"
     invalid.write_text("{}", encoding="utf-8")
     result = subprocess.run(
@@ -250,6 +319,7 @@ def test_cli_invalid_evidence_fails_without_patch(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("head", [None, "a" * 40])
 def test_requires_native_run_head_even_when_lookup_and_log_match(head: str | None) -> None:
+    """A commit-filtered lookup cannot substitute for the run's own head receipt."""
     evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
     run = evidence["run_lookup"]["workflow_runs"][0]
     if head is None:
@@ -261,6 +331,7 @@ def test_requires_native_run_head_even_when_lookup_and_log_match(head: str | Non
 
 
 def test_records_retained_classification_without_closing_local_validation() -> None:
+    """Controller classification can finish task 16 while local validation stays blocked."""
     ledger = LEDGER.read_text(encoding="utf-8")
     evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
     document = CLASSIFICATION.read_text(encoding="utf-8")
@@ -305,6 +376,7 @@ def test_records_retained_classification_without_closing_local_validation() -> N
 def test_rejects_wrong_stale_or_uncleared_controller_receipts(
     old: str, new: str, diagnostic: str
 ) -> None:
+    """Require an unambiguous post-merge classification without retained findings."""
     document = CLASSIFICATION.read_text(encoding="utf-8").replace(old, new)
     with pytest.raises(ValueError, match=diagnostic):
         reconciliation(
@@ -316,6 +388,7 @@ def test_rejects_wrong_stale_or_uncleared_controller_receipts(
 
 @pytest.mark.parametrize("document", ["", "{}", "duplicate", "maint-68"])
 def test_report_absence_or_producer_success_cannot_clear_finding(document: str) -> None:
+    """Producer reports and absent receipts cannot establish controller clearance."""
     if document == "duplicate":
         document = CLASSIFICATION.read_text(encoding="utf-8") * 2
     elif document == "maint-68":
@@ -335,6 +408,7 @@ def test_report_absence_or_producer_success_cannot_clear_finding(document: str) 
 
 
 def test_cli_classification_patch_applies_without_writing_input(tmp_path: Path) -> None:
+    """The optional classification patch must apply while preserving its input."""
     ledger = tmp_path / "ledger.yml"
     original = LEDGER.read_bytes()
     ledger.write_bytes(original)

@@ -20,12 +20,28 @@ import yaml
 
 INSTALL = '.venv/bin/python -m pip install -e ".[dev]" -e "../trip-planner[dev]"'
 RUN = 42484305260
+FAILED_HEAD = "4ea6a28d050bbcf2233b725de13ade495f132002"
+FAILED_TPP = "acc4aeddee5f4ffefbdc73fcb07505cd3d198197"
+SUCCESSFUL_TPP = "b56d92b389736c70370aa9134f379ac8cd1f3ad1"
 BLOCK = re.compile(r"^  - id: task-\d+\n.*?(?=^  - id: |\Z)", re.MULTILINE | re.DOTALL)
 SYNC_CORE_SOURCE = (
     "https://github.com/stranske/trip-planner/blob/"
     "903fa32727388e40d4e143614b6b7ba6358b2e12/"
     "docs/verification/issue-1973-dev-tool-pins.md#subsequent-controller-owned-classification"
 )
+
+
+def checkout_note(run: int, log: str, planner_head: str, tpp_ref: str) -> str:
+    """Bind the requested refs to actual Git checkout receipts before recording them."""
+    if not re.search(
+        rf"HEAD is now at [0-9a-f]{{7,40}} Merge {planner_head} into [0-9a-f]{{40}}(?:\s|$)",
+        log,
+    ):
+        raise ValueError(f"Run {run} must establish the actual planner checkout")
+    checkouts = re.findall(r"HEAD is now at ([0-9a-f]{7,40})(?:\s|$)", log)
+    if not any(tpp_ref.startswith(sha) for sha in checkouts):
+        raise ValueError(f"Run {run} must establish the actual TPP checkout")
+    return f"Run {run} checks out planner PR head {planner_head} and TPP {tpp_ref}."
 
 
 def classification_notes(document: str, pr: dict) -> list[str]:
@@ -102,8 +118,8 @@ def reconciliation(ledger: str, evidence: dict, sync_core_document: str | None =
     if not all(INSTALL in log for log in (failed, passed)):
         raise ValueError("Both logs must establish the local editable install inputs")
     if (
-        "TPP_PINNED_REF: acc4aeddee5f4ffefbdc73fcb07505cd3d198197" not in failed
-        or "TPP_PINNED_REF: b56d92b389736c70370aa9134f379ac8cd1f3ad1" not in passed
+        f"TPP_PINNED_REF: {FAILED_TPP}" not in failed
+        or f"TPP_PINNED_REF: {SUCCESSFUL_TPP}" not in passed
     ):
         raise ValueError("Both logs must identify the actual pinned TPP checkouts")
     if not all(
@@ -114,6 +130,10 @@ def reconciliation(ledger: str, evidence: dict, sync_core_document: str | None =
         raise ValueError("Successful checkout must contain the final PR head")
     if not all(value in passed for value in ("Successfully installed", "ruff-0.17.3")):
         raise ValueError("Successful log must establish the resolved installation")
+    checkouts = [
+        checkout_note(42449207754, failed, FAILED_HEAD, FAILED_TPP),
+        checkout_note(RUN, passed, head, SUCCESSFUL_TPP),
+    ]
 
     # Historical notes elsewhere contain unquoted colons and are invalid YAML.
     # Do not reinterpret or rewrite them while correcting the selected entries.
@@ -130,9 +150,11 @@ def reconciliation(ledger: str, evidence: dict, sync_core_document: str | None =
         "task-05": [
             receipt,
             f"Both run logs install local editable dev extras: {INSTALL}",
+            *checkouts,
             (
                 "Historical run 42449207754 fails on Ruff 0.17.2 versus 0.17.3. "
-                "Run 42484305260 installs compatible checkouts successfully."
+                "Run 42484305260 installs the compatible checkout pair successfully "
+                "and records ruff-0.17.3 in its Successfully installed output."
             ),
             (
                 "The source-pin edit and PyPI republication proposal are superseded. "
