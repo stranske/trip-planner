@@ -419,15 +419,15 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
         # Both logs install local editable checkouts with [dev], not published
         # packages. Preserve those exact dependency sections so later pin bumps
         # cannot turn this historical regression into arbitrary equal versions.
-        original = restored_tool == "issue-2007-original"
+        use_original_fixtures = restored_tool == "issue-2007-original"
         planner_ref = (
             "4ea6a28d050bbcf2233b725de13ade495f132002"
-            if original
+            if use_original_fixtures
             else "fcb6e97a291bd620629aa228561d36c3ee6cdf0d"
         )
         producer_ref = (
             "acc4aeddee5f4ffefbdc73fcb07505cd3d198197"
-            if original
+            if use_original_fixtures
             else "b56d92b389736c70370aa9134f379ac8cd1f3ad1"
         )
         fixtures = REPO_ROOT / "tests" / "fixtures"
@@ -458,8 +458,8 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
             selected = requirements[tool]
             if name == "tpp" and restored_tool in ("all", tool):
                 selected = [Requirement(f"{tool}=={old_version}")]
-            for original in selected:
-                req = Requirement(str(original))
+            for requirement in selected:
+                req = Requirement(str(requirement))
                 req.marker = Marker(
                     f'({req.marker}) and extra == "dev"' if req.marker else 'extra == "dev"'
                 )
