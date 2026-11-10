@@ -1,0 +1,52 @@
+The 2026-11-10 run comparison confirms that #2006 merged at
+`fcb6e97a291bd620629aa228561d36c3ee6cdf0d` and smoke run `42484305260`
+passed at that head. `run-reconciliation.json` retains fresh connected GitHub
+API receipts and selected install/checkout log lines from both requested runs.
+The requested `gh run view` commands still fail to connect to api.github.com.
+
+Both logs install local editable dev extras. The failing run selects TPP
+`acc4aeddee5f4ffefbdc73fcb07505cd3d198197`; the successful run selects
+`b56d92b389736c70370aa9134f379ac8cd1f3ad1`. Publication is not established as
+a prerequisite by these logs. Source pin edits and regeneration are superseded.
+
+From the consumer root, generate the scoped reconciliation:
+
+```sh
+python scripts/reconcile_issue_2007.py > /tmp/issue-2007-ledger.patch
+```
+
+The command verifies the final merged head, run/job success, editable install
+inputs, original Ruff conflict, pinned TPP checkouts and successful installation.
+It prints a patch without writing the ledger. `ledger-reconciliation.patch` is
+its retained output. Task 05 becomes deferred because no source-pin edit was
+performed. Task 14 remains blocked on successful owning-repository validation.
+Other tasks are preserved byte-for-byte. The existing ledger has invalid YAML
+in unrelated historical notes (including line 28); this tool only parses and
+repairs the two corrected task blocks. Applying the patch does not validate the
+whole historical ledger.
+
+Verification on consumer base `2cefe497` with the new source/tests:
+
+```sh
+python -m pytest tests/scripts/test_reconcile_issue_2007.py tests/scripts/test_cross_repo_dev_pins.py tests/test_dependency_version_alignment.py -q -m 'not slow'
+```
+
+Exit 0: 60 passed, 2 skipped in 4.23 seconds. The skips require a live sibling
+TPP checkout. Tests also apply the generated patch in an isolated Git repository,
+check idempotence, and reject mismatched heads, failed/ambiguous receipts and
+missing install evidence.
+
+The owning repository's documented command was retried from `.workflows-lib`
+at commit `1ff1a3c5071824adc2fd421702f583b14dc6b477`, using selected interpreter
+`/opt/hostedtoolcache/Python/3.14.10/x64/bin/python`:
+
+```sh
+PIP_NO_INDEX=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_RETRIES=0 ./scripts/dev_check.sh
+```
+
+Exit 1 during provisioning of unavailable isort/docformatter/flake8; see
+`owner-dev-check-reconciliation.log`. This is not successful broad validation.
+
+The mounted ledger and shared Git metadata remain read-only. The patch is ready
+for review/application in a writable checkout; the ledger task remains incomplete.
+No additional task checkbox is marked complete by this change.

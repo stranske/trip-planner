@@ -1,0 +1,50 @@
+--- a/.agents/issue-2007-ledger.yml
++++ b/.agents/issue-2007-ledger.yml
+@@ -66,17 +66,17 @@
+   - id: task-05
+     title: 'Update the conflicting dev-tool pins in the source file so pip dependency
+       resolution succeeds (verify: dependencies updated)'
+-    status: blocked
+-    started_at: '2026-11-08T05:39:41Z'
+-    finished_at: null
+-    commit: ''
+-    notes:
+-      - BLOCKED: Critical instruction forbids editing dependency pins
+-      - File to edit: stranske/Workflows/.github/workflows/autofix-versions.env
+-      - Required change: RUFF_VERSION needs to be synchronized across all consumer repos
+-      - Current state: Workflows has RUFF_VERSION=0.17.3, travel-plan-permission has RUFF_VERSION=0.17.3 in repo but published package 0.1.0 has ruff==0.17.2
+-      - Root cause: Published package travel-plan-permission 0.1.0 on PyPI has ruff==0.17.2
+-      - Solution requires: Re-publish travel-plan-permission with ruff==0.17.3 to PyPI
++    status: deferred
++    started_at: '2026-11-08T05:39:41Z'
++    finished_at: null
++    commit: ''
++    notes:
++      - '2026-11-10: PR #2006 merged 2026-11-08T13:23:04Z; final head fcb6e97a291bd620629aa228561d36c3ee6cdf0d.'
++      - 'Both run logs install local editable dev extras: .venv/bin/python -m pip install -e ".[dev]" -e "../trip-planner[dev]"'
++      - Historical run 42449207754 fails on Ruff 0.17.2 versus 0.17.3. Run 42484305260 installs compatible checkouts
++        successfully.
++      - The source-pin edit and PyPI republication proposal are superseded. This also corrects task-03's PyPI
++        diagnosis. No source-pin edit was performed; defer rather than mark it complete.
+   - id: task-06
+     title: 'Run pip install against the updated pins locally to confirm that dependency
+       resolution completes without conflicts (verify: dependencies updated)'
+@@ -152,13 +152,11 @@
+     finished_at: null
+     commit: ''
+     notes:
+-      - BLOCKED: Cannot trigger regeneration via .github/workflows/maint-68-sync-consumer-repos.yml
+-      - Regeneration path: stranske/Workflows/.github/workflows/maint-68-sync-consumer-repos.yml
+-      - Target PR: stranske/trip-planner#2006 (deps: sync dev tool versions)
+-      - Current PR #2006 head: 4ea6a28d050bbcf2233b725de13ade495f132002
+-      - Failing run IDs: 42449207902, 42449207754
+-      - Verification requires: gh run view <regenerated-run-id> --repo stranske/trip-planner
+-      - Expected result: Cross-Repo Smoke / cross-repo-full-product should pass after regeneration
++      - '2026-11-10: PR #2006 merged 2026-11-08T13:23:04Z; final head fcb6e97a291bd620629aa228561d36c3ee6cdf0d.'
++      - 'Run 42484305260: cross-repo-full-product success at the final PR head. Regeneration is no longer a
++        blocker.'
++      - The documented owning-repository local command still needs a successful run. Retained owner-dev-check.log
++        exits 1 provisioning missing formatter tooling; do not infer local test success from historical smoke.
+   - id: task-15
+     title: Reintroducing the reported behavior makes the regression test fail; reverting
+       restores a passing result.
