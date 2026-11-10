@@ -1666,3 +1666,60 @@ Acceptance-thread dispositions against this reduced scope:
   source was executed with both ancestors verified, and its artifacts are retained.
 - `PRRT_kwDOOzvyds61CY6K` (exit-0 acceptance): out of scope for this PR — moved
   to the follow-up; the unchecked exit-0 boxes above stay unchecked.
+
+## Issue #2019 follow-up acceptance — 2026-11-10
+
+The follow-up work from #2012 has been completed. A dedicated virtual environment was
+provisioned from `requirements.lock` and the development extras (including `baseline_kit`
+from its declared repository source). The unrestricted suite was executed via
+`scripts/verify_local_suite.py` with both `--require-ancestor` arguments into a fresh
+output directory, and recorded durable exit-0 evidence.
+
+**Tested source:**
+- Commit: `030e0c7c65ccc7621f6c1c70d53a43d6785387c7`
+- Verified ancestors:
+  - `29c6aa01064f9eb3cbf15debd32cac3327ec43b8`
+  - `4c6ff3e81b412db4039f7d1a48fa95d0aecff753`
+
+**Runtime:**
+- Python version: 3.13.13
+- Python executable: `/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2019__opener/.venv/bin/python`
+- Python implementation: CPython
+- Optimization: 0
+- Requires Python: `>=3.13,<3.15`
+- Preferred Python: 3.14
+
+**Command:**
+```
+/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2019__opener/.venv/bin/python -m pytest
+```
+
+**Working directory:**
+```
+/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2019__opener/docs/verification/issue-2019-20261110-vibe-runner/checkout
+```
+
+**Exit status:** 0
+
+**Terminal summary:**
+```
+========== 2893 passed, 6 skipped, 792 warnings in 208.48s (0:03:28) ===========
+```
+
+**Evidence files:**
+- [result.json](issue-2019-20261110-vibe-runner/result.json)
+- [pytest.log](issue-2019-20261110-vibe-runner/pytest.log)
+
+**Acceptance criteria met:**
+- [x] The selected virtual-environment interpreter runs `python -m pytest` without exclusions and exits 0.
+- [x] `python -m pytest tests/test_pytest_collection.py` exits 0 and confirms default collection retains explicitly discoverable tests.
+- [x] The verification document and retained `result.json` identify the same tested source and supported interpreter, and `pytest.log` contains the matching successful terminal summary.
+
+**Dependency setup:**
+- Virtual environment created using `/opt/homebrew/bin/python3.13 -m venv .venv`
+- Installed from `requirements.lock` using `.venv/bin/pip install -r requirements.lock`
+- Installed project in editable mode with dev extras using `.venv/bin/pip install -e ".[dev]"`
+- `app-baseline-kit` (v0.2.0) resolved and installed from `git+https://github.com/stranske/Workflows.git#subdirectory=packages/app-baseline-kit`
+- `baseline_kit` module successfully importable
+
+**Stop rule:** First provisioning attempt succeeded; no failure occurred, so no repair was needed.
