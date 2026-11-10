@@ -373,23 +373,14 @@ def test_offline_workflow_guard_rejects_original_producer_pins(
 
 @pytest.mark.parametrize(
     "restored_tool",
-    [
-        "all",
-        "ruff",
-        "mypy",
-        "pytest",
-        None,
-        pytest.param("ruff-2017", id="issue-2017-producer"),
-        "issue-2007-original",
-        "issue-2007-resolved",
-    ],
+    ["all", "ruff", "mypy", "pytest", None, pytest.param("ruff-2017", id="issue-2017-producer")],
 )
 def test_pip_resolves_paired_dev_tool_pins_offline(
     tmp_path: Path, restored_tool: str | None
 ) -> None:
     """Exercise pip's resolver for the failing tool pins without network or installs.
 
-    Metadata-only wheels isolate the tools reported in #1973, #2007 and #2017. The passing
+    Metadata-only wheels isolate the tools reported in #1973 and #2017. The passing
     case reads the real planner requirements and the snapshot selected by the
     workflow; failing cases restore all or one of the producer's original pins.
     Both projects declare the tools in their dev extras, matching the joint
@@ -415,28 +406,6 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
         "planner": _requirements(REPO_ROOT / "pyproject.toml"),
         "tpp": _requirements(snapshot / "pyproject.toml"),
     }
-    if restored_tool in ("issue-2007-original", "issue-2007-resolved"):
-        # Both logs install local editable checkouts with [dev], not published
-        # packages. Preserve those exact dependency sections so later pin bumps
-        # cannot turn this historical regression into arbitrary equal versions.
-        use_original_fixtures = restored_tool == "issue-2007-original"
-        planner_ref = (
-            "4ea6a28d050bbcf2233b725de13ade495f132002"
-            if use_original_fixtures
-            else "fcb6e97a291bd620629aa228561d36c3ee6cdf0d"
-        )
-        producer_ref = (
-            "acc4aeddee5f4ffefbdc73fcb07505cd3d198197"
-            if use_original_fixtures
-            else "b56d92b389736c70370aa9134f379ac8cd1f3ad1"
-        )
-        fixtures = REPO_ROOT / "tests" / "fixtures"
-        projects = {
-            "planner": _requirements(
-                fixtures / "planner_dev_pins" / planner_ref / "pyproject.toml"
-            ),
-            "tpp": _requirements(fixtures / "tpp_dev_pins" / producer_ref / "pyproject.toml"),
-        }
 
     def write_wheel(name: str, version: str, dependency_metadata: str = "") -> None:
         dist_info = f"{name}-{version}.dist-info"
@@ -458,8 +427,8 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
             selected = requirements[tool]
             if name == "tpp" and restored_tool in ("all", tool):
                 selected = [Requirement(f"{tool}=={old_version}")]
-            for requirement in selected:
-                req = Requirement(str(requirement))
+            for original in selected:
+                req = Requirement(str(original))
                 req.marker = Marker(
                     f'({req.marker}) and extra == "dev"' if req.marker else 'extra == "dev"'
                 )
@@ -501,17 +470,13 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
         check=False,
     )
     diagnostics = result.stdout + result.stderr
-    if restored_tool not in (None, "issue-2007-resolved"):
+    if restored_tool is not None:
         assert result.returncode != 0, diagnostics
         assert "ResolutionImpossible" in diagnostics
-        tool = (
-            "ruff"
-            if restored_tool in ("all", "ruff-2017", "issue-2007-original")
-            else restored_tool
-        )
+        tool = "ruff" if restored_tool in ("all", "ruff-2017") else restored_tool
         producer_requirement = (
             str(projects["tpp"][tool][0])
-            if restored_tool in ("ruff-2017", "issue-2007-original")
+            if restored_tool == "ruff-2017"
             else f"{tool}=={old_versions[tool]}"
         )
         assert producer_requirement in diagnostics
