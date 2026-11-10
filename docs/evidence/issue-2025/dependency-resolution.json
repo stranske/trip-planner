@@ -1,7 +1,7 @@
 {
   "issue": 2025,
   "checked_at": "2026-11-10",
-  "scope": "Historical dependency inputs and consumer regression; owning-repository acceptance remains incomplete.",
+  "scope": "Historical dependency inputs, consumer regression and verified local Workflows resolver implementation; upstream publication and broader validation remain incomplete.",
   "access": {
     "cli_commands": [
       "gh run view 42484305260 --repo stranske/trip-planner --log",
@@ -11,7 +11,7 @@
     "cli_outcome": "All failed: error connecting to api.github.com.",
     "fallback": "Connected GitHub API: workflow run metadata, run jobs, decoded logs for jobs 128634593803 and 128742727094; PR #2006 metadata.",
     "ledger_write": "apply_patch rejected the .agents/issue-2007-ledger.yml edit: writing outside of the project; rejected by user approval settings. The environment mounts .agents read-only; no ledger change was made.",
-    "owner_checkout": "Not present; git ls-remote https://github.com/stranske/Workflows.git HEAD failed: Could not resolve host: github.com."
+    "owner_checkout": "Sparse Workflows checkout materialized in /tmp/issue2025-workflows from .workflows-lib's existing Git database at 1ff1a3c5071824adc2fd421702f583b14dc6b477. Missing original conftest/support blobs were read with the GitHub connector and their Git hashes verified. Shell network remains unavailable."
   },
   "installation": {
     "working_directory": "Travel-Plan-Permission",
@@ -83,7 +83,7 @@
     },
     "task-14": {
       "proposed_status": "blocked",
-      "reason": "Smoke passed at the final head and #2006 merged; regeneration is no longer a blocker. Owning-repository local validation remains unperformed."
+      "reason": "Smoke passed at the final head and #2006 merged; regeneration is no longer a blocker. The requested Workflows resolver tests now pass locally, but the documented ./scripts/dev_check.sh exits 1 because formatter tooling is unavailable."
     },
     "historical_notes": "The earlier task-03 PyPI claim is superseded by the local editable inputs established above."
   },
@@ -113,16 +113,44 @@
     }
   },
   "owner_validation": {
-    "status": "not_run",
+    "status": "resolver_verified_locally_publication_blocked",
     "requested_test": "tests/test_dependency_resolution.py",
-    "file_lookup": "Connected GitHub file API returned 404 on 2026-11-10.",
+    "file_lookup": "Connected GitHub file API returned 404 on 2026-11-10; implemented the requested new test locally in Workflows instead of adding another consumer regression.",
+    "base_commit": "1ff1a3c5071824adc2fd421702f583b14dc6b477",
+    "checked_commit": "2a1605a42fa5767ece7020a2f375e9a15cdf5e48",
+    "source_export": "workflows/tests/test_dependency_resolution.py",
+    "patch": "workflows-regression.patch",
+    "interpreter": "/tmp/issue2025-resolver-env/bin/python",
+    "environment": "Isolated offline CPython 3.14.10 venv with preinstalled pytest 9.2.0, pip 26.3, packaging and pytest dependencies linked into its site-packages. Original Workflows pytest configuration/conftest retained, no test skips or warning suppression added. The inherited environment cannot load its old AnyIO plugin under Workflows' warning policy.",
+    "command": "/tmp/issue2025-resolver-env/bin/python -m pytest tests/test_dependency_resolution.py -m 'not slow' -q",
+    "outcome": "exit 0; 3 passed in 1.25s on the checked commit; owner-pytest.log retained.",
+    "coverage_scope": "Offline pip dry-run of actual historical Ruff/mypy/pytest requirements in both project dev extras; canonical current autofix-versions.env integration through existing parse_env_file and sync_pyproject. One-consumer sync fails; paired sync passes. Does not establish full install/build or the complete owning-repository suite.",
+    "mutation": {
+      "command": "/tmp/issue2025-resolver-env/bin/python -m pytest tests/test_dependency_resolution.py -m 'not slow' -q -k successful_checkouts",
+      "file": "tests/fixtures/dependency_resolution/successful/travel-plan-permission.toml",
+      "mutated": "ruff==0.17.3 -> ruff==0.17.2; exit 1 with ResolutionImpossible, 0.69s wall; mutation.log retained.",
+      "restored": "Original fixture bytes restored; exit 0, 1 passed in 0.34s (0.68s wall); restored.log retained."
+    },
+    "formatting": {
+      "format_command": "black --line-length 100 tests/test_dependency_resolution.py",
+      "check_command": "BLACK_NUM_WORKERS=1 BLACK_CACHE_DIR=/tmp/issue2025-owner-black black --check --line-length 100 --exclude '(\\.workflows-lib|node_modules)' .",
+      "outcome": "exit 0; 7 materialized Python files unchanged. Serial Black verification prepared the cache because worker socket writes are blocked; this is a sparse-checkout check, not full Workflows-tree formatting.",
+      "consumer_check": "The same required whole-tree check in trip-planner exited 0: 530 files unchanged, using /tmp/issue2025-consumer-black after serial cache preparation."
+    },
     "documented_commands": [
       "./scripts/dev_check.sh",
       "./scripts/check_branch.sh"
     ],
     "source": "https://github.com/stranske/Workflows#running-tests",
     "alternate_interpreter": "/opt/anaconda3/bin/python3 is absent.",
-    "acceptance": "The consumer regression does not complete the requested Workflows test/integration or documented local command acceptance."
+    "documented_attempt": {
+      "command": "PIP_NO_INDEX=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_RETRIES=0 ./scripts/dev_check.sh",
+      "checked_commit": "2a1605a42fa5767ece7020a2f375e9a15cdf5e48",
+      "interpreter": "/opt/hostedtoolcache/Python/3.14.10/x64/bin/python",
+      "outcome": "exit 1 while provisioning missing isort/docformatter/flake8; no offline isort distribution found. owner-dev-check.log retained."
+    },
+    "publication": "Automatic approval review rejected creating codex/issue-2025-dependency-resolution in stranske/Workflows: MCP tool call requires approval, but approval policy is never. No remote branch or PR was created.",
+    "acceptance": "Requested bounded resolver test and canonical pin integration are verified in the owning sparse checkout. Upstream publication, documented local command exit 0, and read-only ledger reconciliation remain incomplete."
   },
   "subsequent_report": {
     "reporting_path": "Maint 68 summary uploads artifact consumer-sync-run-report containing artifacts/consumer-sync-run-report.json; its summary also dispatches maint-71-merge-sync-prs.yml.",
@@ -161,13 +189,29 @@
     },
     "classification_2006": "not present",
     "dependency_pin_finding": "not assessed by this report; absence is not clearance",
-    "acceptance": "Still requires a dated sync-core classification naming #2006 or an explicit evidence-backed terminal classification for that PR."
+    "retained_sync_core_receipt": {
+      "source": "https://github.com/stranske/trip-planner/blob/903fa32727388e40d4e143614b6b7ba6358b2e12/docs/verification/issue-1973-dev-tool-pins.md#subsequent-controller-owned-classification",
+      "round": "20261108T133016Z",
+      "completed_at": "2026-11-08T13:30:21Z",
+      "target": "stranske/trip-planner#2006",
+      "disposition": "delivered",
+      "terminal": "delivered",
+      "error": null,
+      "handoffs": [],
+      "reasons": ["merged 2026-11-08T13:23:04Z; 1 files, 0 mismatches"],
+      "dependency_pin_finding": "Absent from the retained receipt's reasons and handoffs; same final head as the live merged PR and successful smoke run.",
+      "limitation": "Retained controller receipt in an immutable repository document, not a fresh direct read of ~/.codex/orchestrator/sync-core/rounds.jsonl; that controller file is unavailable here. Maint 68's artifact report is a separate report and does not itself classify #2006."
+    },
+    "acceptance": "A dated subsequent controller classification naming #2006 is retained in the linked document and agrees with live merge/smoke evidence. Direct canonical report access and writing this reconciliation to the read-only ledger remain unavailable."
   },
   "commit_delivery": {
     "shared_checkout": "git add/commit could not proceed: .git/index.lock is read-only. No shared-checkout commit was created.",
-    "isolated_checkout": "/tmp/issue-2025-delivery",
-    "bundle": "/tmp/issue-2025-delivery.bundle",
-    "method": "Local clone without checkout; stage only the five changed files against the same base. Existing workflow and protected-file content remains unchanged in the commit tree."
+    "owning_checkout": "/tmp/issue2025-workflows",
+    "owning_commit": "2a1605a42fa5767ece7020a2f375e9a15cdf5e48",
+    "isolated_checkout": "/tmp/issue2025-consumer-delivery",
+    "method": "Commit new source/tests in the owning Workflows sparse checkout; retain its format-patch, exact source export and verification logs in trip-planner. Commit that delivery from an isolated consumer clone because shared .git is read-only. Protected files are unchanged.",
+    "remote_handoff": "Automatic approval review rejected both the requested needs-human label and blocker comment on PR #2026: MCP tool call requires approval, but approval policy is never.",
+    "readiness": "PR #2026 read back open, draft=false, head 73d27af5356820846ab6c0986f0e629fb0f3bad0 before delivery. No remote PR changes applied."
   },
   "task_progress": [
     {
@@ -178,17 +222,17 @@
     {
       "task": "Workflows resolver regression",
       "status": "incomplete",
-      "reason": "Consumer regression implemented; owning test and pin-file integration not performed."
+      "reason": "Owning Workflows test and canonical pin-file integration implemented and verified in local commit 2a1605a42fa5767ece7020a2f375e9a15cdf5e48; remote publication rejected. Patch and matching source retained for upstream application."
     },
     {
       "task": "Owning repository documented command",
       "status": "incomplete",
-      "reason": "Owning checkout unavailable."
+      "reason": "Documented ./scripts/dev_check.sh attempted at the owning implementation commit; exits 1 due to unavailable formatter dependencies."
     },
     {
       "task": "Subsequent sync-core classification",
       "status": "incomplete",
-      "reason": "Subsequent Maint 68 report located; no #2006 classification."
+      "reason": "Subsequent Maint 68 report and immutable retained sync-core delivered receipt located; direct canonical report access and ledger write remain blocked."
     }
   ]
 }
