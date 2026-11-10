@@ -48,3 +48,27 @@
    - id: task-15
      title: Reintroducing the reported behavior makes the regression test fail; reverting
        restores a passing result.
+@@ -170,11 +168,18 @@
+   - id: task-16
+     title: The next sync-core round classifies stranske/trip-planner#2006 without
+       this finding.
+-    status: todo
+-    started_at: null
+-    finished_at: null
+-    commit: ''
+-    notes: []
++    status: done
++    started_at: null
++    finished_at: '2026-11-10'
++    commit: ''
++    notes:
++      - Retained sync-core round 20261108T133016Z completed 2026-11-08T13:30:21Z; target stranske/trip-planner#2006,
++        final head fcb6e97a291bd620629aa228561d36c3ee6cdf0d.
++      - 'Disposition and terminal: delivered. Reasons: merged 2026-11-08T13:23:04Z; 1 files, 0 mismatches. No
++        dependency-pin finding in reasons or handoffs.'
++      - 'Immutable retained source: https://github.com/stranske/trip-planner/blob/903fa32727388e40d4e143614b6b7ba6358b2e12/docs/verification/issue-1973-dev-tool-pins.md#subsequent-controller-owned-classification'
++      - 'This is a retained controller classification, not a fresh read of canonical rounds.jsonl. Maint 68
++        consumer-sync-run-report artifacts alone do not classify #2006 or establish dependency-pin clearance.'
+   - id: task-17
+     title: Fix the failure named in the title (`Dev-tool pin update breaks Cross-Repo
+       Smoke / cross-repo-full-product`) at its source; the failing check's log is

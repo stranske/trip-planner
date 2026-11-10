@@ -1,0 +1,54 @@
+{
+  "checked_at": "2026-11-10",
+  "source": {
+    "url": "https://github.com/stranske/trip-planner/blob/903fa32727388e40d4e143614b6b7ba6358b2e12/docs/verification/issue-1973-dev-tool-pins.md",
+    "blob_sha": "c50ab7754517b3e3494e92b3018bcf6d39df2e21",
+    "retained_section": "Subsequent controller-owned classification",
+    "excerpt": "sync-core-classification.md",
+    "scope": "Retained controller receipt read from an immutable GitHub document. Canonical local rounds.jsonl is unavailable here."
+  },
+  "controller": {
+    "round": "20261108T133016Z",
+    "completed_at": "2026-11-08T13:30:21Z",
+    "target": "stranske/trip-planner#2006",
+    "head_sha": "fcb6e97a291bd620629aa228561d36c3ee6cdf0d",
+    "disposition": "delivered",
+    "terminal": "delivered",
+    "dependency_pin_finding": "Absent from retained reasons and handoffs; merged delivery supersedes the original finding."
+  },
+  "maint68_reporting_path": {
+    "workflow": ".github/workflows/maint-68-sync-consumer-repos.yml",
+    "step": "Build sync run report",
+    "helper": ".github/scripts/sync_run_contract.js",
+    "output": "artifacts/consumer-sync-run-report.json",
+    "artifact_name": "consumer-sync-run-report",
+    "retention_days": 14
+  },
+  "subsequent_maint68_run": {
+    "id": 42761261918,
+    "url": "https://github.com/stranske/Workflows/actions/runs/42761261918",
+    "created_at": "2026-11-10T05:18:03Z",
+    "head_sha": "ee964d5139fed02fcba57844ce93fc84a29dbc3e",
+    "status": "completed",
+    "conclusion": "success",
+    "report_artifact": {
+      "id": 13737713043,
+      "created_at": "2026-11-10T05:21:26Z",
+      "expired": false,
+      "url": "https://github.com/stranske/Workflows/actions/runs/42761261918/artifacts/13737713043"
+    },
+    "summary_job": {
+      "id": 129647707055,
+      "conclusion": "success"
+    },
+    "limitation": "Artifact metadata and upload logs verified. ZIP body not inspected. This producer report is separate from sync-core and does not prove #2006 clearance."
+  },
+  "run_readback": {
+    "id": 42484305260,
+    "head_sha": "fcb6e97a291bd620629aa228561d36c3ee6cdf0d",
+    "conclusion": "success",
+    "verification": "Connected GitHub API; requested gh log/JSON commands fail to connect. Native run head now required by reconciliation."
+  },
+  "ledger_write": "Rejected by environment: writing outside of the project; rejected by user approval settings. No ledger edits applied.",
+  "local_validation": "Owning repository documented-command exit-0 acceptance remains incomplete; retained owner-dev-check.log reports provisioning failure."
+}
