@@ -28,7 +28,7 @@ PROJECTS = ("trip-planner", "travel-plan-permission")
 
 def tool_requirements(path: Path) -> dict[str, Requirement]:
     project = tomllib.loads(path.read_text(encoding="utf-8"))["project"]
-    requirements = {
+    requirements: dict[str, Requirement] = {
         canonicalize_name(req.name): req
         for entry in project["optional-dependencies"]["dev"]
         if canonicalize_name((req := Requirement(entry)).name) in TOOLS
