@@ -90,6 +90,30 @@ def classification_notes(document: str, pr: dict) -> list[str]:
     ]
 
 
+def failed_local_command_notes(attempt: dict) -> list[str]:
+    """Record an exact failed owner command while preserving the local-validation blocker."""
+    fields = ("checked_at", "checked_commit", "command", "interpreter", "outcome", "log")
+    if (
+        not isinstance(attempt, dict)
+        or attempt.get("repository") != "stranske/Workflows"
+        or any(not isinstance(attempt.get(key), str) or not attempt[key].strip() for key in fields)
+        or not re.fullmatch(r"[0-9a-f]{40}", attempt["checked_commit"])
+        or type(attempt.get("exit_code")) is not int
+        or attempt["exit_code"] == 0
+    ):
+        raise ValueError("Expected failed owning-repository command receipt")
+    return [
+        (
+            f"Local command checked {attempt['checked_at']} in stranske/Workflows "
+            f"at commit {attempt['checked_commit']}; interpreter {attempt['interpreter']}."
+        ),
+        f"Exact command: {attempt['command']}",
+        f"Actual outcome: exit {attempt['exit_code']}; {attempt['outcome']}",
+        f"Retained command log: {attempt['log']}",
+        "Successful documented local validation remains unverified; task-14 stays blocked.",
+    ]
+
+
 def reconciliation(ledger: str, evidence: dict, sync_core_document: str | None = None) -> str:
     """Correct superseded blockers only when receipts establish the merged head."""
     pr = evidence["pull_request"]
@@ -189,6 +213,8 @@ def reconciliation(ledger: str, evidence: dict, sync_core_document: str | None =
         ],
     }
     statuses = {"task-05": "deferred", "task-14": "blocked"}
+    if "local_command_attempt" in evidence:
+        notes["task-14"][-1:] = failed_local_command_notes(evidence["local_command_attempt"])
     if sync_core_document is not None:
         notes["task-16"] = classification_notes(sync_core_document, pr)
         statuses["task-16"] = "done"

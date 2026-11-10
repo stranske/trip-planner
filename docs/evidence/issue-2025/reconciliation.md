@@ -248,3 +248,50 @@ with `Read-only file system`. Shared `git add` likewise fails on
 the matching source and tests here. PR #2026 remains open with draft=false.
 No task checkbox is newly completed. Successful owning-repository broad
 validation, upstream test publication and ledger application remain incomplete.
+
+Follow-up on consumer base `e1380685715a5804e9e168a2c78d030637505f09`, 2026-11-10:
+
+The reconciliation tool now includes the exact failed owning-repository command,
+checked commit, interpreter, timestamp, exit code, outcome and retained log in
+task-14's proposed notes. Previously these details were omitted in favor of a
+generic historical provisioning failure. `run-reconciliation.json` contains the
+new receipt; `ledger-reconciliation.patch` was regenerated and passes
+`git apply --check`. The tool keeps task-14 blocked and refuses to use a successful
+or malformed command receipt to substantiate that failure. Nine new regression
+cases failed before the implementation and pass afterward.
+
+The recorded attempt used Workflows commit
+`8c678c19a4f9f60fa5be6a00f08794a9626c87bd`, selected interpreter
+`/opt/hostedtoolcache/Python/3.14.10/x64/bin/python`, and exact command:
+
+```sh
+PIP_NO_INDEX=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_RETRIES=0 ./scripts/dev_check.sh
+```
+
+Exit **1** while provisioning unavailable isort/docformatter/flake8; no validation
+checks ran. `owner-dev-check-current.log` retains the terminal result.
+
+Focused consumer validation:
+
+```sh
+python -m pytest tests/scripts/test_reconcile_issue_2007.py tests/scripts/test_cross_repo_dev_pins.py tests/test_dependency_version_alignment.py -q -m 'not slow'
+```
+
+Exit **0**, **147 passed, 2 skipped in 4.71 seconds**. Both existing skips require
+a sibling TPP checkout. Ruff and `git diff --check` pass. Black formatted the
+changed Python files individually; the required whole-tree check uses a writable
+cache prepared by per-file CLI checks because worker sockets are denied here.
+The following gate exited **0**, with **532 files unchanged**:
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue2025-command-black black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+Fresh connected GitHub readback confirms merged #2006, the successful smoke job,
+and the immutable retained controller classification. All three requested `gh`
+commands still fail to connect. The ledger patch cannot be applied to the
+read-only `.agents` mount, and the shared Git index is also read-only. Delivery
+uses an isolated consumer checkout, retaining matching edits in this workspace.
+No new task is marked complete. Automatic approval review rejected the PR-body
+checkbox reconciliation, `needs-human` label and blocker comment with
+`MCP tool call requires approval, but approval policy is never`.

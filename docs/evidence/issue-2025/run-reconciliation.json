@@ -167,5 +167,15 @@
       "2026-11-08T13:19:38.2933538Z Successfully installed Mako-1.4.3 MarkupSafe-3.0.4 PyJWT-2.15.1 Werkzeug-3.1.9 alembic-1.18.5 annotated-doc-0.0.5 annotated-types-0.8.0 anyio-4.14.2 app-baseline-kit-0.2.0 ast-serialize-0.13.1 attrs-26.1.0 black-26.10.1 certifi-2026.10.23 cffi-2.1.1 charset-normalizer-3.5.2 click-8.5.1 coverage-7.17.2 cryptography-50.0.2 distro-1.9.0 et-xmlfile-2.0.0 fastapi-0.141.1 geonamescache-3.0.2 greenlet-3.5.6 h11-0.16.0 httpcore-1.0.9 httpcore2-2.16.0 httptools-0.9.0 httpx-0.28.1 httpx2-2.16.0 hypothesis-6.170.15 idna-3.20 iniconfig-2.3.1 jinja2-3.1.6 jiter-0.19.0 jsonpatch-1.44 jsonpointer-3.10 jsonschema-4.26.0 jsonschema-specifications-2025.9.1 langchain-core-1.5.3 langchain-openai-1.4.1 langchain-protocol-0.0.21 langgraph-1.2.20 langgraph-checkpoint-4.3.1 langgraph-prebuilt-1.1.1 langgraph-sdk-0.4.14 langsmith-0.14.17 librt-0.16.0 mypy-2.4.1 mypy-extensions-1.2.0 numpy-2.5.1 openai-2.54.0 openpyxl-3.1.5 orjson-3.13.0 ormsgpack-1.13.0 packaging-26.2 pandas-3.0.5 pathspec-1.1.1 pillow-13.0.0 platformdirs-4.14.5 pluggy-1.7.0 psycopg-3.3.4 psycopg-binary-3.3.4 pyarrow-26.0.1 pycparser-3.12 pydantic-2.13.4 pydantic-core-2.46.4 pygments-2.21.0 pytest-9.2.0 pytest-cov-7.1.0 pytest-datadir-1.9.0 pytest-httpserver-1.1.5 pytest-regressions-2.11.0 python-dateutil-4.0.0 python-dotenv-1.2.4 pytokens-0.4.1 pyyaml-6.0.3 referencing-0.37.0 regex-2026.11.7 reportlab-5.1.0 requests-2.34.2 requests-toolbelt-1.0.0 rpds-py-2026.9.1 ruff-0.17.3 sniffio-1.3.1 sortedcontainers-2.4.0 sqlalchemy-2.0.51 starlette-1.3.1 tenacity-9.2.1 tiktoken-0.14.0 tqdm-4.70.1 travel-plan-permission-0.1.0 trip-planner-0.1.0 truststore-0.10.5 types-PyYAML-6.0.12.20260724 typing-extensions-4.16.0 typing-inspection-0.4.5 tzdata-2026.6 urllib3-2.8.0 uuid-utils-0.19.0 uvicorn-0.52.0 uvloop-0.23.0 watchfiles-1.3.0 websockets-17.4 xxhash-4.0.2 zstandard-0.25.0",
       "2026-11-08T13:19:49.6691207Z 3 passed, 17 warnings in 6.11s"
     ]
+  },
+  "local_command_attempt": {
+    "repository": "stranske/Workflows",
+    "checked_at": "2026-11-10T16:46:49.152182+00:00",
+    "checked_commit": "8c678c19a4f9f60fa5be6a00f08794a9626c87bd",
+    "command": "PIP_NO_INDEX=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_RETRIES=0 ./scripts/dev_check.sh",
+    "interpreter": "/opt/hostedtoolcache/Python/3.14.10/x64/bin/python",
+    "exit_code": 1,
+    "outcome": "Failed while provisioning missing isort/docformatter/flake8; no offline isort distribution available. Validation checks did not run.",
+    "log": "docs/evidence/issue-2025/owner-dev-check-current.log"
   }
 }

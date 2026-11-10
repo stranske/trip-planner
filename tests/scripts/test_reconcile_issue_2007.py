@@ -20,6 +20,44 @@ EVIDENCE = ROOT / "docs/evidence/issue-2025/run-reconciliation.json"
 CLASSIFICATION = ROOT / "docs/evidence/issue-2025/sync-core-classification.md"
 
 
+def test_records_exact_failed_owner_command_without_closing_combined_task() -> None:
+    """Retain reproducible local failure evidence alongside the successful smoke receipt."""
+    evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    attempt = evidence["local_command_attempt"]
+    original = LEDGER.read_text(encoding="utf-8")
+    updated = reconciliation(original, evidence)
+    task = yaml.safe_load(next(b for b in BLOCK.findall(updated) if "id: task-14\n" in b))[0]
+    notes = "\n".join(task["notes"])
+    for field in ("checked_at", "checked_commit", "command", "interpreter", "outcome", "log"):
+        assert attempt[field] in notes
+    assert f"exit {attempt['exit_code']}" in notes
+    assert task["status"] == "blocked"
+    assert task["finished_at"] is None
+    assert "cross-repo-full-product success" in notes
+    assert reconciliation(updated, evidence) == updated
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("repository", "stranske/trip-planner"),
+        ("checked_commit", "main"),
+        ("command", ""),
+        ("interpreter", None),
+        ("outcome", "   "),
+        ("exit_code", 0),
+        ("exit_code", True),
+        ("exit_code", "1"),
+    ],
+)
+def test_rejects_unusable_local_failure_receipt(field: str, value: object) -> None:
+    """A generic or successful command receipt cannot substantiate this local blocker."""
+    evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    evidence["local_command_attempt"][field] = value
+    with pytest.raises(ValueError, match="failed owning-repository command receipt"):
+        reconciliation(LEDGER.read_text(encoding="utf-8"), evidence)
+
+
 def test_reconciles_actual_receipts_without_claiming_unperformed_work() -> None:
     """Reconcile only the requested tasks without claiming an unperformed pin edit."""
     original = LEDGER.read_text(encoding="utf-8")

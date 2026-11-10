@@ -32,7 +32,7 @@
    - id: task-06
      title: 'Run pip install against the updated pins locally to confirm that dependency
        resolution completes without conflicts (verify: dependencies updated)'
-@@ -152,13 +155,11 @@
+@@ -152,13 +155,16 @@
      finished_at: null
      commit: ''
      notes:
@@ -46,12 +46,17 @@
 +      - '2026-11-10: PR #2006 merged 2026-11-08T13:23:04Z; final head fcb6e97a291bd620629aa228561d36c3ee6cdf0d.'
 +      - 'Run 42484305260: cross-repo-full-product success at the final PR head. Regeneration is no longer a
 +        blocker.'
-+      - The documented owning-repository local command still needs a successful run. Retained owner-dev-check.log
-+        exits 1 provisioning missing formatter tooling; do not infer local test success from historical smoke.
++      - Local command checked 2026-11-10T16:46:49.152182+00:00 in stranske/Workflows at commit 8c678c19a4f9f60fa5be6a00f08794a9626c87bd;
++        interpreter /opt/hostedtoolcache/Python/3.14.10/x64/bin/python.
++      - 'Exact command: PIP_NO_INDEX=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_RETRIES=0 ./scripts/dev_check.sh'
++      - 'Actual outcome: exit 1; Failed while provisioning missing isort/docformatter/flake8; no offline isort
++        distribution available. Validation checks did not run.'
++      - 'Retained command log: docs/evidence/issue-2025/owner-dev-check-current.log'
++      - Successful documented local validation remains unverified; task-14 stays blocked.
    - id: task-15
      title: Reintroducing the reported behavior makes the regression test fail; reverting
        restores a passing result.
-@@ -170,11 +171,18 @@
+@@ -170,11 +176,18 @@
    - id: task-16
      title: The next sync-core round classifies stranske/trip-planner#2006 without
        this finding.
