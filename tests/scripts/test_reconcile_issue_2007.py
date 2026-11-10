@@ -39,7 +39,97 @@ def test_reconciles_actual_receipts_without_claiming_unperformed_work() -> None:
         assert new["commit"] == old_fields["commit"]
         assert new["title"] == old_fields["title"]
         assert any("final head fcb6e97" in note for note in new["notes"])
+        if task_id == "task-05":
+            assert new["started_at"] is None
+            assert f"Historical task-05 started_at: {old_fields['started_at']}." in new["notes"]
+        else:
+            assert new["started_at"] == old_fields["started_at"]
     assert reconciliation(updated, json.loads(EVIDENCE.read_text(encoding="utf-8"))) == updated
+
+
+@pytest.mark.parametrize("field", ["checked_at", "merged_at"])
+@pytest.mark.parametrize("value", [None, "", "   ", 0, [], {}])
+@pytest.mark.parametrize("with_classification", [False, True])
+def test_requires_nonempty_receipt_dates(
+    field: str, value: object, with_classification: bool
+) -> None:
+    """Neither optional classification nor receipt rendering can accept absent dates."""
+    evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    target = evidence if field == "checked_at" else evidence["pull_request"]
+    target[field] = value
+    document = CLASSIFICATION.read_text(encoding="utf-8") if with_classification else None
+    with pytest.raises(ValueError, match=f"Expected non-empty string for {field}"):
+        reconciliation(LEDGER.read_text(encoding="utf-8"), evidence, document)
+    del target[field]
+    with pytest.raises(ValueError, match=f"Expected non-empty string for {field}"):
+        reconciliation(LEDGER.read_text(encoding="utf-8"), evidence, document)
+
+
+@pytest.mark.parametrize("task_id", ["task-05", "task-14"])
+@pytest.mark.parametrize(
+    ("mutation", "diagnostic"),
+    [
+        ("missing", "Expected exactly one"),
+        ("duplicate", "Expected exactly one"),
+        ("notes", "Unsupported ledger notes layout"),
+        ("status", "Unsupported ledger status layout"),
+    ],
+)
+def test_rejects_unsupported_target_layouts(task_id: str, mutation: str, diagnostic: str) -> None:
+    """Changed ledger layouts must not silently lose or duplicate a reconciled task."""
+    ledger = LEDGER.read_text(encoding="utf-8")
+    block = next(
+        block for block in BLOCK.findall(ledger) if block.startswith(f"  - id: {task_id}\n")
+    )
+    if mutation == "missing":
+        replacement = ""
+    elif mutation == "duplicate":
+        replacement = block * 2
+    elif mutation == "notes":
+        replacement = block.replace("    notes:\n", "    notes: null\n")
+    else:
+        replacement = block.replace("    status: blocked\n", "    status: [blocked]\n")
+    assert replacement != block
+    with pytest.raises(ValueError, match=diagnostic):
+        reconciliation(ledger.replace(block, replacement), json.loads(EVIDENCE.read_text()))
+
+
+def test_rejects_missing_issue_header() -> None:
+    """A similarly shaped ledger for another issue cannot be reconciled."""
+    ledger = LEDGER.read_text(encoding="utf-8").replace("issue: 2007\n", "")
+    with pytest.raises(ValueError, match="Expected issue-2007 ledger"):
+        reconciliation(ledger, json.loads(EVIDENCE.read_text(encoding="utf-8")))
+
+
+@pytest.mark.parametrize("duplicate", [False, True])
+def test_requires_one_start_field_before_deferring(duplicate: bool) -> None:
+    """An ambiguous start cannot be moved into historical notes reliably."""
+    ledger = LEDGER.read_text(encoding="utf-8")
+    block = next(block for block in BLOCK.findall(ledger) if block.startswith("  - id: task-05\n"))
+    line = "    started_at: '2026-11-08T05:39:41Z'\n"
+    replacement = block.replace(line, line * 2 if duplicate else "")
+    with pytest.raises(ValueError, match="Unsupported ledger start layout"):
+        reconciliation(ledger.replace(block, replacement), json.loads(EVIDENCE.read_text()))
+
+
+@pytest.mark.parametrize("started_at", ["'2026-11-07T10:11:12Z'", "null"])
+def test_deferral_preserves_supplied_start_in_notes_only(started_at: str) -> None:
+    """Deferring an unperformed edit clears active state without inventing history."""
+    ledger = LEDGER.read_text(encoding="utf-8")
+    block = next(block for block in BLOCK.findall(ledger) if block.startswith("  - id: task-05\n"))
+    prefix = block.split("    notes:\n")[0]
+    original = yaml.safe_load(prefix)[0]["started_at"]
+    changed = prefix.replace(f"started_at: '{original}'", f"started_at: {started_at}")
+    ledger = ledger.replace(block, changed + "    notes: []\n")
+    evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    updated = reconciliation(ledger, evidence)
+    task = yaml.safe_load(next(b for b in BLOCK.findall(updated) if "id: task-05\n" in b))[0]
+    history = [note for note in task["notes"] if note.startswith("Historical task-05 started_at: ")]
+    assert task["started_at"] is None
+    assert history == (
+        [] if started_at == "null" else ["Historical task-05 started_at: 2026-11-07T10:11:12Z."]
+    )
+    assert reconciliation(updated, evidence) == updated
 
 
 @pytest.mark.parametrize(

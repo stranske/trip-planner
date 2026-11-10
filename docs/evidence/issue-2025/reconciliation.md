@@ -108,3 +108,47 @@ source, tests and evidence left in the workspace for automation pickup. The
 `needs-human` label and blocker comment were each rejected with `MCP tool call
 requires approval, but approval policy is never`; neither remote write applied.
 PR #2026 readback was open with draft=false. No PR task checkboxes were updated.
+
+Follow-up on consumer base `bc9d0687359496d5b2c7580c0531f698fa147660`, 2026-11-10:
+
+The reconciliation rejects missing, empty and non-string `checked_at`/`merged_at`
+values before rendering receipts, with or without the optional classification.
+Task 05 now has `started_at: null` when deferred; its original timestamp moves
+to notes and survives repeated reconciliation. Task 14's timestamps are preserved.
+New tests reject missing/duplicate task blocks and unsupported notes, status and
+start layouts. The retained ledger patch was regenerated and passes
+`git apply --check`; the actual ledger write was rejected by the filesystem policy.
+
+The three requested `gh run view` commands were attempted again and could not
+connect to api.github.com. Fresh connected GitHub PR, run-lookup, job and log
+receipts confirm the same merged head, successful smoke and local editable
+installation inputs already retained in `run-reconciliation.json`.
+
+Validation with the selected Python 3.14.10 interpreter:
+
+```sh
+python -m pytest tests/scripts/test_reconcile_issue_2007.py tests/scripts/test_cross_repo_dev_pins.py tests/test_dependency_version_alignment.py --cov=scripts.reconcile_issue_2007 --cov-config=/tmp/issue2025-reconcile.coveragerc --cov-report=term-missing -q -m 'not slow'
+```
+
+Exit 0: 117 passed, 2 skipped in 4.10 seconds. The skips require a sibling TPP
+checkout. The temporary coverage configuration sets only
+`[run] source = scripts.reconcile_issue_2007` and `[report] show_missing = True`:
+the repository's product coverage configuration otherwise omits scripts.
+The targeted script reports 87%; this task has no percentage threshold.
+Ruff and `git diff --check` pass. After serial Black verification prepared its
+writable cache, the required command exits 0, with 532 files unchanged:
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue2025-dates-black black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+PR checkbox reconciliation was attempted for the duplicated regression task,
+the retained owning-repository resolver/mutation result and the evidence-backed
+subsequent classification criterion. Automatic approval review rejected the
+PR-body update, `needs-human` label and blocker comment with
+`MCP tool call requires approval, but approval policy is never`; none applied.
+The combined ledger tasks remain unchecked because the ledger is read-only.
+The owning repository's documented-command exit-0 criterion remains incomplete.
+The Git index is also read-only, so source, tests and evidence are committed in
+the isolated delivery checkout `/tmp/issue2025-reconcile-delivery`, with matching
+edits retained here for automation pickup.

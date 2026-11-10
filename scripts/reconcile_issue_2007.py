@@ -119,6 +119,12 @@ def reconciliation(ledger: str, evidence: dict, sync_core_document: str | None =
     # Do not reinterpret or rewrite them while correcting the selected entries.
     if not re.search(r"^issue: 2007$", ledger, re.MULTILINE):
         raise ValueError("Expected issue-2007 ledger")
+    for field, value in (
+        ("checked_at", evidence.get("checked_at")),
+        ("merged_at", pr.get("merged_at")),
+    ):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"Expected non-empty string for {field}")
     receipt = f"{evidence['checked_at']}: PR #2006 merged {pr['merged_at']}; final head {head}."
     notes = {
         "task-05": [
@@ -157,6 +163,7 @@ def reconciliation(ledger: str, evidence: dict, sync_core_document: str | None =
             raise ValueError(f"Expected exactly one {task_id}")
 
     def replace(match: re.Match) -> str:
+        """Render only the selected task while preserving its historical start."""
         task_id = match[0].splitlines()[0].removeprefix("  - id: ")
         if task_id not in notes:
             return match[0]
@@ -172,6 +179,26 @@ def reconciliation(ledger: str, evidence: dict, sync_core_document: str | None =
         )
         if count != 1:
             raise ValueError("Unsupported ledger status layout")
+        task_notes = notes[task_id].copy()
+        if task_id == "task-05":
+            starts = re.findall(r"^    started_at: (.*)$", prefix, re.MULTILINE)
+            if len(starts) != 1:
+                raise ValueError("Unsupported ledger start layout")
+            started_at = yaml.safe_load(starts[0])
+            history_prefix = "Historical task-05 started_at: "
+            if started_at is not None:
+                task_notes.append(f"{history_prefix}{started_at}.")
+            else:
+                # A second reconciliation must retain the history already moved
+                # to notes, without restoring an active-work timestamp.
+                task_notes.extend(
+                    note
+                    for note in yaml.safe_load(match[0])[0]["notes"]
+                    if isinstance(note, str) and note.startswith(history_prefix)
+                )
+            prefix = re.sub(
+                r"^    started_at: .*$", "    started_at: null", prefix, flags=re.MULTILINE
+            )
         if task_id == "task-16":
             prefix, count = re.subn(
                 r"^    finished_at: .*$",
@@ -181,15 +208,16 @@ def reconciliation(ledger: str, evidence: dict, sync_core_document: str | None =
             )
             if count != 1:
                 raise ValueError("Unsupported ledger completion layout")
-        rendered = yaml.safe_dump(notes[task_id], width=100).splitlines(keepends=True)
+        rendered = yaml.safe_dump(task_notes, width=100).splitlines(keepends=True)
         result = prefix + separator + "".join("      " + line for line in rendered)
-        assert yaml.safe_load(result)[0]["notes"] == notes[task_id]
+        assert yaml.safe_load(result)[0]["notes"] == task_notes
         return result
 
     return BLOCK.sub(replace, ledger)
 
 
 def main() -> int:
+    """Validate retained evidence and print an applicable patch without writing inputs."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ledger", type=Path, default=Path(".agents/issue-2007-ledger.yml"))
     parser.add_argument(

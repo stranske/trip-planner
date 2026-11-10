@@ -1,6 +1,6 @@
 --- a/.agents/issue-2007-ledger.yml
 +++ b/.agents/issue-2007-ledger.yml
-@@ -66,17 +66,17 @@
+@@ -66,17 +66,18 @@
    - id: task-05
      title: 'Update the conflicting dev-tool pins in the source file so pip dependency
        resolution succeeds (verify: dependencies updated)'
@@ -16,7 +16,7 @@
 -      - Root cause: Published package travel-plan-permission 0.1.0 on PyPI has ruff==0.17.2
 -      - Solution requires: Re-publish travel-plan-permission with ruff==0.17.3 to PyPI
 +    status: deferred
-+    started_at: '2026-11-08T05:39:41Z'
++    started_at: null
 +    finished_at: null
 +    commit: ''
 +    notes:
@@ -26,10 +26,11 @@
 +        successfully.
 +      - The source-pin edit and PyPI republication proposal are superseded. This also corrects task-03's PyPI
 +        diagnosis. No source-pin edit was performed; defer rather than mark it complete.
++      - 'Historical task-05 started_at: 2026-11-08T05:39:41Z.'
    - id: task-06
      title: 'Run pip install against the updated pins locally to confirm that dependency
        resolution completes without conflicts (verify: dependencies updated)'
-@@ -152,13 +152,11 @@
+@@ -152,13 +153,11 @@
      finished_at: null
      commit: ''
      notes:
@@ -48,7 +49,7 @@
    - id: task-15
      title: Reintroducing the reported behavior makes the regression test fail; reverting
        restores a passing result.
-@@ -170,11 +168,18 @@
+@@ -170,11 +169,18 @@
    - id: task-16
      title: The next sync-core round classifies stranske/trip-planner#2006 without
        this finding.
