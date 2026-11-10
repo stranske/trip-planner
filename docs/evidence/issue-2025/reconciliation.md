@@ -371,3 +371,35 @@ BLACK_CACHE_DIR=/tmp/issue2025-raw-logs-black black --check --line-length 100 --
 ```
 
 Ruff and `git diff --check` pass. PR #2026 readback is open with draft=false.
+
+Follow-up on consumer base `7951af8ca1187d66237d869cef9203917500ca4c`, 2026-11-10:
+
+The generated task-05 notes now distinguish the actual synthetic merge checkout
+from its PR head: failed run 42449207754 executed `175cf38`, and successful run
+42484305260 executed `ee78c56`. Both PR-head and TPP identifiers remain in the
+notes. The generator derives these checkout commits from the supplied logs and
+rejects conflicting merge receipts. Four regression cases verify both runs,
+changed checkout identifiers and ambiguous receipts.
+
+Fresh connected logs for jobs 128634593803 and 128742727094 regenerate
+`ledger-reconciliation.patch`. All three requested `gh run view` commands still
+fail to connect. Connected PR/job metadata confirms #2006 merged at final head
+`fcb6e97a291bd620629aa228561d36c3ee6cdf0d` with successful smoke.
+
+Validation: `python -m pytest tests/scripts/test_reconcile_issue_2007.py
+tests/scripts/test_cross_repo_dev_pins.py tests/test_dependency_version_alignment.py
+-q -m 'not slow'` exits 0: **158 passed, 2 skipped in 4.73 seconds**. The two
+existing skips require a sibling checkout. Black formatted both changed Python
+files individually. After serial Black CLI checks populated a writable cache,
+`BLACK_CACHE_DIR=/tmp/issue2025-checkout-black black --check --line-length 100
+--exclude '(\.workflows-lib|node_modules)' .` exits 0 with 532 files unchanged.
+Ruff and `git diff --check` pass.
+
+Applying the ledger patch was rejected because `.agents` is read-only. The
+PR-body update attempted to check the owner resolver/mutation acceptance item
+based on the retained verified receipts; automatic approval review rejected it,
+the `needs-human` label and the blocker comment because approval policy is
+`never`. No checkbox changed. Successful documented broad validation and
+upstream test publication remain incomplete. Shared `.git/index.lock` is also
+read-only, so commit delivery uses `/tmp/issue2025-merge-checkout-delivery`;
+matching changes remain in this workspace.

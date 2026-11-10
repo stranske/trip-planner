@@ -342,6 +342,44 @@ def test_notes_record_the_actual_checkout_pair_and_resolution() -> None:
     assert "ruff-0.17.3" in notes
 
 
+@pytest.mark.parametrize(
+    ("run", "merge", "head"),
+    [
+        ("42449207754", "175cf38", "4ea6a28d050bbcf2233b725de13ade495f132002"),
+        ("42484305260", "ee78c56", "fcb6e97a291bd620629aa228561d36c3ee6cdf0d"),
+    ],
+)
+def test_records_synthetic_checkout_separately_from_pr_head(
+    run: str, merge: str, head: str
+) -> None:
+    """Smoke tests execute the merge checkout, which differs from the PR head."""
+    evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    updated = reconciliation(LEDGER.read_text(encoding="utf-8"), evidence)
+    assert f"Run {run} checks out planner synthetic merge {merge} containing PR head {head}" in (
+        updated
+    )
+    # Derive the checkout from the supplied log rather than a historical constant.
+    evidence["log_excerpts"][run] = [
+        line.replace(f"HEAD is now at {merge} Merge", "HEAD is now at abcdef0 Merge")
+        for line in evidence["log_excerpts"][run]
+    ]
+    updated = reconciliation(LEDGER.read_text(encoding="utf-8"), evidence)
+    assert f"Run {run} checks out planner synthetic merge abcdef0 containing PR head {head}" in (
+        updated
+    )
+
+
+@pytest.mark.parametrize("run", ["42449207754", "42484305260"])
+def test_rejects_ambiguous_planner_checkout(run: str) -> None:
+    """Conflicting checkout receipts cannot identify a single executed commit."""
+    evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    lines = evidence["log_excerpts"][run]
+    checkout = next(line for line in lines if "HEAD is now at" in line and " Merge " in line)
+    lines.append(re.sub(r"HEAD is now at [0-9a-f]+", "HEAD is now at abcdef0", checkout))
+    with pytest.raises(ValueError, match="actual planner checkout"):
+        reconciliation(LEDGER.read_text(encoding="utf-8"), evidence)
+
+
 def test_cli_emits_applicable_patch_and_leaves_input_unchanged(tmp_path: Path) -> None:
     """The default CLI must print an applicable patch without editing its ledger."""
     ledger = tmp_path / ".agents/issue-2007-ledger.yml"

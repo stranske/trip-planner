@@ -33,15 +33,19 @@ SYNC_CORE_SOURCE = (
 
 def checkout_note(run: int, log: str, planner_head: str, tpp_ref: str) -> str:
     """Bind the requested refs to actual Git checkout receipts before recording them."""
-    if not re.search(
-        rf"HEAD is now at [0-9a-f]{{7,40}} Merge {planner_head} into [0-9a-f]{{40}}(?:\s|$)",
+    planner_checkouts = re.findall(
+        rf"HEAD is now at ([0-9a-f]{{7,40}}) Merge {planner_head} into [0-9a-f]{{40}}(?:\s|$)",
         log,
-    ):
+    )
+    if len(set(planner_checkouts)) != 1:
         raise ValueError(f"Run {run} must establish the actual planner checkout")
     checkouts = re.findall(r"HEAD is now at ([0-9a-f]{7,40})(?:\s|$)", log)
     if not any(tpp_ref.startswith(sha) for sha in checkouts):
         raise ValueError(f"Run {run} must establish the actual TPP checkout")
-    return f"Run {run} checks out planner PR head {planner_head} and TPP {tpp_ref}."
+    return (
+        f"Run {run} checks out planner synthetic merge {planner_checkouts[0]} "
+        f"containing PR head {planner_head}, and TPP {tpp_ref}."
+    )
 
 
 def classification_notes(document: str, pr: dict) -> list[str]:
