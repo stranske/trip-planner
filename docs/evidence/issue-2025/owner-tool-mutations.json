@@ -1,0 +1,46 @@
+{
+  "checked_at": "2026-11-10",
+  "repository": "stranske/Workflows",
+  "owner_base_commit": "8c678c19a4f9f60fa5be6a00f08794a9626c87bd",
+  "source_kind": "Sparse source reconstruction from immutable GitHub blobs; new tests remain unpublished.",
+  "source_blobs": {
+    "pyproject.toml": "4d4cd8282099d5451df0762a75e2d0add1d5fb70",
+    "AGENTS.md": "61578a18f99679bd06815087654994aa8d5d96a7",
+    "README.md": "a1fb7d9cf5ee497d3715f75ea57b75881f241418",
+    "tests/__init__.py": "cff7db5d8c5c33d791ea11a27d33ee5d7c917332",
+    "tests/conftest.py": "5a57260b0929d4f773ab92a4c156c27753f1a59f",
+    "tests/_autofix_diag.py": "d031f2f4405927e7c128a2a85ece24b4446d4eb8",
+    "scripts/sync_dev_dependencies.py": "adaa9d1937bc852a812d2eff2716caab993b8cbf",
+    "scripts/dev_check.sh": "cca6ba5bb370f52c8e86e793c1206cdad42fd2bf",
+    ".github/workflows/autofix-versions.env": "71e9fc3e4d3f204b80afcc15f14cc041017b4197"
+  },
+  "interpreter": "/tmp/issue2025-tool-mutations-env/bin/python",
+  "interpreter_version": "Python 3.14.10",
+  "environment": "Offline venv exposing preinstalled pytest 9.2.0, pip 26.3, packaging and pytest dependencies by symlinks; normal plugin discovery and owner warning/marker settings remain enabled.",
+  "working_directory": "/tmp/issue2025-tool-mutations-owner",
+  "command": "/tmp/issue2025-tool-mutations-env/bin/python -m pytest tests/test_dependency_resolution.py -m 'not slow' -q",
+  "exit_code": 0,
+  "summary": "6 passed in 4.32s",
+  "log": "docs/evidence/issue-2025/owner-tool-mutations-pytest.log",
+  "mutation": {
+    "change": "Successful TPP fixture Ruff 0.17.3 -> original conflicting Ruff 0.17.2",
+    "command": "/tmp/issue2025-tool-mutations-env/bin/python -m pytest tests/test_dependency_resolution.py -k test_successful_checkouts_resolve -m 'not slow' -q",
+    "exit_code": 1,
+    "restored_exit_code": 0,
+    "failure_log": "docs/evidence/issue-2025/owner-tool-mutations-failure.log",
+    "restored_log": "docs/evidence/issue-2025/owner-tool-mutations-restored.log",
+    "failure_wall_seconds": 1.03,
+    "restored_wall_seconds": 0.96
+  },
+  "blockers": [
+    "Read-only .agents mount prevents ledger reconciliation.",
+    "Shared .git is read-only; consumer commit must use isolated clone.",
+    "Automatic approval review rejects PR body/label/comment writes (approval policy never).",
+    "Owning source test publication and successful documented ./scripts/dev_check.sh validation remain incomplete."
+  ],
+  "tested_source_sha256": "c5e7584e13446cdc3891a2c84733edebb3624e99fcb311128c70191eb6334b34",
+  "formatting_command": "BLACK_CACHE_DIR=/tmp/issue2025-tool-mutations-serial-black black --check --line-length 100 --exclude '(\\.workflows-lib|node_modules)' .",
+  "formatting_outcome": "Exit 0; 532 files unchanged. Serial per-file Black checks populated the cache first because worker sockets are denied.",
+  "lint_command": "ruff check --config /tmp/issue2025-tool-mutations-owner/pyproject.toml docs/evidence/issue-2025/workflows/tests/test_dependency_resolution.py",
+  "lint_outcome": "Exit 0; all checks passed."
+}

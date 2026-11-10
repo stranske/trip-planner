@@ -1,0 +1,72 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______________________ test_successful_checkouts_resolve _______________________
+
+tmp_path = PosixPath('/tmp/pytest-of-runner/pytest-5/test_successful_checkouts_reso0')
+
+    def test_successful_checkouts_resolve(tmp_path: Path) -> None:
+        paths = {name: FIXTURES / "successful" / f"{name}.toml" for name in PROJECTS}
+        result, report = resolve(tmp_path / "wheels", paths)
+>       assert_resolved(result, report, paths["trip-planner"])
+
+tests/test_dependency_resolution.py:125:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+result = CompletedProcess(args=['/tmp/issue2025-tool-mutations-env/bin/python', '-m', 'pip', '--isolated', '--disable-pip-versi...sible: for help visit https://pip.pypa.io/en/latest/topics/dependency-resolution/#dealing-with-dependency-conflicts\n')
+report = PosixPath('/tmp/pytest-of-runner/pytest-5/test_successful_checkouts_reso0/wheels/report.json')
+planner = PosixPath('/tmp/issue2025-tool-mutations-owner/tests/fixtures/dependency_resolution/successful/trip-planner.toml')
+
+    def assert_resolved(result: subprocess.CompletedProcess, report: Path, planner: Path) -> None:
+>       assert result.returncode == 0, result.stdout + result.stderr
+E       AssertionError: Looking in links: /tmp/pytest-of-runner/pytest-5/test_successful_checkouts_reso0/wheels
+E         Processing /tmp/pytest-of-runner/pytest-5/test_successful_checkouts_reso0/wheels/trip_planner-0.1.0-py3-none-any.whl (from trip-planner[dev]==0.1.0)
+E         Processing /tmp/pytest-of-runner/pytest-5/test_successful_checkouts_reso0/wheels/travel_plan_permission-0.1.0-py3-none-any.whl (from travel-plan-permission[dev]==0.1.0)
+E         Processing /tmp/pytest-of-runner/pytest-5/test_successful_checkouts_reso0/wheels/pytest-9.2.0-py3-none-any.whl (from travel-plan-permission[dev]==0.1.0)
+E         Processing /tmp/pytest-of-runner/pytest-5/test_successful_checkouts_reso0/wheels/ruff-0.17.2-py3-none-any.whl (from travel-plan-permission[dev]==0.1.0)
+E         Processing /tmp/pytest-of-runner/pytest-5/test_successful_checkouts_reso0/wheels/mypy-2.4.1-py3-none-any.whl (from travel-plan-permission[dev]==0.1.0)
+E         INFO: pip is looking at multiple versions of trip-planner[dev] to determine which version is compatible with other requirements. This could take a while.
+E
+E         The conflict is caused by:
+E             travel-plan-permission[dev] 0.1.0 depends on ruff==0.17.2; extra == "dev"
+E             trip-planner[dev] 0.1.0 depends on ruff==0.17.3; extra == "dev"
+E
+E         Additionally, some packages in these conflicts have no matching distributions available for your environment:
+E             ruff
+E
+E         To fix this you could try to:
+E         1. loosen the range of package versions you've specified
+E         2. remove package versions to allow pip to attempt to solve the dependency conflict
+E
+E         ERROR: Cannot install travel-plan-permission[dev]==0.1.0 and trip-planner[dev]==0.1.0 because these package versions have conflicting dependencies.
+E         ERROR: ResolutionImpossible: for help visit https://pip.pypa.io/en/latest/topics/dependency-resolution/#dealing-with-dependency-conflicts
+E
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/tmp/issue2025-tool-mutations-env/bin/python', '-m', 'pip', '--isolated', '--disable-pip-versi...sible: for help visit https://pip.pypa.io/en/latest/topics/dependency-resolution/#dealing-with-dependency-conflicts\n').returncode
+
+tests/test_dependency_resolution.py:99: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_dependency_resolution.py::test_successful_checkouts_resolve - AssertionError: Looking in links: /tmp/pytest-of-runner/pytest-5/test_successful_checkouts_reso0/wheels
+  Processing /tmp/pytest-of-runner/pytest-5/test_successful_checkouts_reso0/wheels/trip_planner-0.1.0-py3-none-any.whl (from trip-planner[dev]==0.1.0)
+  Processing /tmp/pytest-of-runner/pytest-5/test_successful_checkouts_reso0/wheels/travel_plan_permission-0.1.0-py3-none-any.whl (from travel-plan-permission[dev]==0.1.0)
+  Processing /tmp/pytest-of-runner/pytest-5/test_successful_checkouts_reso0/wheels/pytest-9.2.0-py3-none-any.whl (from travel-plan-permission[dev]==0.1.0)
+  Processing /tmp/pytest-of-runner/pytest-5/test_successful_checkouts_reso0/wheels/ruff-0.17.2-py3-none-any.whl (from travel-plan-permission[dev]==0.1.0)
+  Processing /tmp/pytest-of-runner/pytest-5/test_successful_checkouts_reso0/wheels/mypy-2.4.1-py3-none-any.whl (from travel-plan-permission[dev]==0.1.0)
+  INFO: pip is looking at multiple versions of trip-planner[dev] to determine which version is compatible with other requirements. This could take a while.
+
+  The conflict is caused by:
+      travel-plan-permission[dev] 0.1.0 depends on ruff==0.17.2; extra == "dev"
+      trip-planner[dev] 0.1.0 depends on ruff==0.17.3; extra == "dev"
+
+  Additionally, some packages in these conflicts have no matching distributions available for your environment:
+      ruff
+
+  To fix this you could try to:
+  1. loosen the range of package versions you've specified
+  2. remove package versions to allow pip to attempt to solve the dependency conflict
+
+  ERROR: Cannot install travel-plan-permission[dev]==0.1.0 and trip-planner[dev]==0.1.0 because these package versions have conflicting dependencies.
+  ERROR: ResolutionImpossible: for help visit https://pip.pypa.io/en/latest/topics/dependency-resolution/#dealing-with-dependency-conflicts
+
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/tmp/issue2025-tool-mutations-env/bin/python', '-m', 'pip', '--isolated', '--disable-pip-versi...sible: for help visit https://pip.pypa.io/en/latest/topics/dependency-resolution/#dealing-with-dependency-conflicts\n').returncode
+1 failed, 5 deselected in 0.53s

@@ -9,6 +9,23 @@ contains the same files as Workflows commit
 Workflows checkout with `git am /path/to/workflows-regression.patch`.
 No workflow, pin, synced consumer file or sync manifest changes are included.
 
+Follow-up on 2026-11-10: apply `../workflows-tool-mutations.patch` with `git apply`
+after the original patch. Together they reproduce the exported test source,
+including its earlier type annotation correction. Three new parameterized cases
+restore each historical producer Ruff, mypy or pytest pin independently, require
+pip to name that exact conflict, then restore the successful metadata and require
+resolution. Ruff can otherwise mask the other two conflicting pins. Each pip
+subprocess now has a ten-second deadline (ten invocations in the whole suite).
+
+The expanded suite passed with **6 tests in 4.32 seconds** in an offline sparse
+source reconstruction of Workflows base
+`8c678c19a4f9f60fa5be6a00f08794a9626c87bd`. The source configuration, production
+sync module and test support match nine immutable Git blob hashes recorded in
+`../owner-tool-mutations.json`; it also records the tested source hash and exact
+command. `../owner-tool-mutations-pytest.log` retains the result. The original
+Ruff mutation still fails and restoring it passes; the corresponding follow-up
+logs retain both results. The new tests remain unpublished in Workflows.
+
 `tests/test_dependency_resolution.py` runs pip offline with metadata-only wheels
 for the two projects' dev extras and Ruff, mypy and pytest. Fixtures preserve the
 dependency sections at the exact checkout commits in failed run 42449207754 and

@@ -15,9 +15,9 @@ import tomllib
 from pathlib import Path
 from zipfile import ZipFile
 
+import pytest
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
-
 from scripts.sync_dev_dependencies import parse_env_file, sync_pyproject
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,7 +88,7 @@ def resolve(directory: Path, paths: dict[str, Path]) -> tuple[subprocess.Complet
         ],
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=10,
         check=False,
     )
     return result, report
@@ -121,6 +121,36 @@ def test_original_checkouts_reproduce_resolution_impossible(tmp_path: Path) -> N
 def test_successful_checkouts_resolve(tmp_path: Path) -> None:
     paths = {name: FIXTURES / "successful" / f"{name}.toml" for name in PROJECTS}
     result, report = resolve(tmp_path / "wheels", paths)
+    assert_resolved(result, report, paths["trip-planner"])
+
+
+@pytest.mark.parametrize("tool", sorted(TOOLS))
+def test_each_historical_tool_mismatch_fails_until_restored(tmp_path: Path, tool: str) -> None:
+    """Ruff must not mask the historical mypy and pytest pin conflicts."""
+    paths = {name: tmp_path / f"{name}.toml" for name in PROJECTS}
+    for name, path in paths.items():
+        path.write_bytes((FIXTURES / "successful" / f"{name}.toml").read_bytes())
+
+    producer = paths["travel-plan-permission"]
+    successful = producer.read_bytes()
+    current = tool_requirements(producer)[tool]
+    original = tool_requirements(FIXTURES / "failed/travel-plan-permission.toml")[tool]
+    assert current != original, f"{tool} must reproduce a historical pin change"
+    assert current == tool_requirements(paths["trip-planner"])[tool]
+    producer.write_text(
+        successful.decode("utf-8").replace(f'"{current}"', f'"{original}"'),
+        encoding="utf-8",
+    )
+    assert tool_requirements(producer)[tool] == original
+
+    result, _ = resolve(tmp_path / "conflicting", paths)
+    diagnostics = result.stdout + result.stderr
+    assert result.returncode == 1 and "ResolutionImpossible" in diagnostics, diagnostics
+    for project, requirement in (("travel-plan-permission", original), ("trip-planner", current)):
+        assert f'{project}[dev] 0.1.0 depends on {requirement}; extra == "dev"' in diagnostics
+
+    producer.write_bytes(successful)
+    result, report = resolve(tmp_path / "restored", paths)
     assert_resolved(result, report, paths["trip-planner"])
 
 

@@ -295,3 +295,34 @@ uses an isolated consumer checkout, retaining matching edits in this workspace.
 No new task is marked complete. Automatic approval review rejected the PR-body
 checkbox reconciliation, `needs-human` label and blocker comment with
 `MCP tool call requires approval, but approval policy is never`.
+
+Follow-up on consumer base `cc5395a3239d5187ee1c20f790171adb7384cb33`, 2026-11-10:
+
+Advanced the owning resolver acceptance test instead of adding more consumer
+receipt-helper cases. Three new cases independently restore the historical
+producer Ruff, mypy and pytest mismatches, require pip's exact conflicting
+requirements, then restore the successful metadata and resolve again. This
+prevents Ruff's first reported conflict from masking the other changed tool
+pins. Ten bounded pip invocations now each have a ten-second timeout.
+
+The expanded owner suite passes: **6 passed in 4.32 seconds**. Reintroducing
+Ruff 0.17.2 in the successful producer fixture fails the positive resolver test
+with `ResolutionImpossible`; restoration passes. The exact commands, immutable
+owner base, nine verified source blob hashes, tested source hash and logs are
+recorded in `owner-tool-mutations.json`. `workflows-tool-mutations.patch`, applied
+after `workflows-regression.patch`, reproduces the exported source, including
+the previous type annotation correction and Workflows' required import grouping.
+
+Ruff passes with the owning configuration. The required whole-tree Black check
+passes with 532 files unchanged after serial per-file checks populated a writable
+cache; worker sockets remain restricted. Existing consumer validation before
+these owner-only test edits passed with 147 tests and two sibling-checkout skips.
+
+Fresh connected job logs again establish the editable install inputs and
+compatible checkout pair. The requested `gh` log commands still cannot connect.
+The reviewed ledger patch cannot be applied to the read-only `.agents` mount;
+shared `git add` also fails on `.git/index.lock`. Delivery uses an isolated
+consumer clone, retaining matching edits here. Automatic approval review again
+rejected checkbox reconciliation, the label and the blocker comment because
+approval policy is `never`. No new checkbox was applied. Upstream test
+publication and successful documented broad validation remain incomplete.
