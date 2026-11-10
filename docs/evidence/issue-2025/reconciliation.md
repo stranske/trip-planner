@@ -438,3 +438,49 @@ is never`. No checkbox changed. Source publication and successful documented
 broad owner validation remain incomplete. Shared `.git/index.lock` is read-only;
 the commit is delivered in `/tmp/issue2025-editable-delivery`, retaining matching
 workspace changes.
+Follow-up on consumer base `1f2cf184675fd46ff893245aa9d6891069a5c4b1`, 2026-11-10:
+
+The CLI now consumes the acceptance criterion's native smoke-run JSON directly:
+
+```sh
+gh run view 42484305260 --repo stranske/trip-planner --json headSha,conclusion,jobs > /tmp/smoke.json
+python scripts/reconcile_issue_2007.py --smoke-run-json /tmp/smoke.json --failed-log /tmp/failed.log --successful-log /tmp/successful.log --sync-core-document docs/evidence/issue-2025/sync-core-classification.md
+```
+
+The two log files come from the previously documented `gh run view --log`
+commands. Supplied JSON replaces retained run/job evidence. The job URL must
+identify run 42484305260 and its database ID; the existing checks then require
+the merged final head and successful run/job conclusions. Missing, malformed,
+ambiguous, failed or unrelated supplied receipts emit no patch, even when retained
+receipts pass. The CLI tests construct native field names from API fixtures;
+they do not claim the requested `gh` command succeeded in this runner.
+
+Validation using `/opt/hostedtoolcache/Python/3.14.10/x64/bin/python`:
+
+```sh
+python -m pytest tests/scripts/test_reconcile_issue_2007.py tests/scripts/test_cross_repo_dev_pins.py tests/test_dependency_version_alignment.py -q -m 'not slow'
+```
+
+Exit 0: **170 passed, 2 skipped in 5.06 seconds**. The existing skips require a
+sibling TPP checkout. Ruff and `git diff --check` pass. Black formatted the two
+changed Python files individually. Serial per-file Black CLI checks populated
+the cache because the runner blocks Black's worker socket, then the required
+whole-tree gate exited 0 with 533 files unchanged:
+
+```sh
+BLACK_CACHE_DIR=/tmp/issue2025-native-black black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+Fresh connected GitHub run/job/PR receipts and both job logs confirm the merged
+head and compatible editable checkouts. All three requested `gh` commands still
+fail to connect. Applying the validated ledger patch still fails with a read-only
+filesystem. At Workflows commit `8c678c19a4f9f60fa5be6a00f08794a9626c87bd`,
+`PIP_NO_INDEX=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_RETRIES=0 ./scripts/dev_check.sh`
+again exits 1 while provisioning unavailable isort/docformatter/flake8. No
+acceptance checkbox is newly completed. PR #2026 remains open with draft=false.
+
+Automatic approval review rejected the `needs-human` label and blocker comment
+with `MCP tool call requires approval, but approval policy is never`; neither
+remote write applied. The shared Git index is also read-only. Source, tests and
+these notes remain in the workspace; commit delivery uses the isolated checkout
+`/tmp/issue2025-native-delivery`.

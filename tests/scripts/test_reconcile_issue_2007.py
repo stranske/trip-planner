@@ -531,6 +531,105 @@ def test_cli_requires_both_run_logs(tmp_path: Path, option: str) -> None:
     assert "--failed-log and --successful-log must be supplied together" in result.stderr
 
 
+@pytest.mark.parametrize(
+    "case",
+    [
+        "valid",
+        "wrong-head",
+        "failed-run",
+        "failed-job",
+        "unfinished-job",
+        "wrong-run",
+        "wrong-job-url",
+        "missing-job",
+        "duplicate-job",
+        "malformed-jobs",
+        "empty",
+        "missing-file",
+    ],
+)
+def test_cli_consumes_native_gh_run_json_without_stale_fallback(tmp_path: Path, case: str) -> None:
+    """Native gh receipts replace retained success and bind the job to the requested run."""
+    evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    original = LEDGER.read_text(encoding="utf-8")
+    expected = reconciliation(original, evidence)
+    job = evidence["jobs"][0]
+    # Construct gh's field names from the independently retained API receipt.
+    # This fixture is not a claim that gh succeeded in the restricted runner.
+    native_job = {key: job[key] for key in ("name", "status", "conclusion")}
+    native_job.update(
+        databaseId=job["id"],
+        url=f"https://github.com/stranske/trip-planner/actions/runs/{job['run_id']}/job/{job['id']}",
+    )
+    native = {
+        "headSha": evidence["pull_request"]["head_sha"],
+        "conclusion": "success",
+        "jobs": [native_job],
+    }
+    if case == "valid":
+        del evidence["run_lookup"], evidence["jobs"]
+    elif case == "wrong-head":
+        native["headSha"] = "a" * 40
+    elif case == "failed-run":
+        native["conclusion"] = "failure"
+    elif case == "failed-job":
+        native_job["conclusion"] = "failure"
+    elif case == "unfinished-job":
+        native_job["status"] = "in_progress"
+    elif case == "wrong-run":
+        native_job["url"] = native_job["url"].replace("42484305260", "42449207754")
+    elif case == "wrong-job-url":
+        native_job["databaseId"] += 1
+    elif case == "missing-job":
+        native["jobs"] = []
+    elif case == "duplicate-job":
+        native["jobs"].append(native_job.copy())
+    elif case == "malformed-jobs":
+        native["jobs"] = [None]
+    ledger, receipt, run_json = (
+        tmp_path / name for name in ("ledger.yml", "receipt.json", "run.json")
+    )
+    ledger.write_text(original, encoding="utf-8")
+    receipt.write_text(json.dumps(evidence), encoding="utf-8")
+    run_json.write_text("" if case == "empty" else json.dumps(native), encoding="utf-8-sig")
+    originals = {path: path.read_bytes() for path in (ledger, receipt, run_json)}
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts/reconcile_issue_2007.py"),
+            "--ledger",
+            "ledger.yml",
+            "--evidence",
+            "receipt.json",
+            "--smoke-run-json",
+            "absent.json" if case == "missing-file" else "run.json",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert {path: path.read_bytes() for path in originals} == originals
+    if case == "valid":
+        assert result.returncode == 0, result.stderr
+        subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, capture_output=True)
+        applied = subprocess.run(
+            ["git", "apply", "-"],
+            input=result.stdout,
+            cwd=tmp_path,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert applied.returncode == 0, applied.stderr
+        assert ledger.read_text(encoding="utf-8") == expected
+    else:
+        assert result.returncode == 1
+        assert not result.stdout
+        assert "Cannot reconcile ledger" in result.stderr
+
+
 @pytest.mark.parametrize("head", [None, "a" * 40])
 def test_requires_native_run_head_even_when_lookup_and_log_match(head: str | None) -> None:
     """A commit-filtered lookup cannot substitute for the run's own head receipt."""

@@ -118,6 +118,35 @@ def failed_local_command_notes(attempt: dict) -> list[str]:
     ]
 
 
+def smoke_run_evidence(run: dict) -> tuple[dict, list[dict]]:
+    """Adapt native gh run view JSON without retaining stale run or job receipts."""
+    jobs = run["jobs"]
+    if not isinstance(jobs, list) or any(not isinstance(job, dict) for job in jobs):
+        raise ValueError("Expected gh smoke jobs array")
+    smoke = [job for job in jobs if job.get("name") == "cross-repo-full-product"]
+    if len(smoke) != 1:
+        raise ValueError("Expected exactly one gh smoke job")
+    job = smoke[0]
+    job_id = job["databaseId"]
+    if (
+        type(job_id) is not int
+        or job_id <= 0
+        or job.get("url")
+        != (f"https://github.com/stranske/trip-planner/actions/runs/{RUN}/job/{job_id}")
+    ):
+        raise ValueError("gh smoke job URL must identify run 42484305260 and its job")
+    receipt = {
+        "id": RUN,
+        "head_sha": run["headSha"],
+        "status": job["status"],
+        "conclusion": run["conclusion"],
+    }
+    return (
+        {"commit_sha": run["headSha"], "workflow_runs": [receipt]},
+        [{**job, "id": job_id, "run_id": RUN}],
+    )
+
+
 def reconciliation(ledger: str, evidence: dict, sync_core_document: str | None = None) -> str:
     """Correct superseded blockers only when receipts establish the merged head."""
     pr = evidence["pull_request"]
@@ -294,6 +323,11 @@ def main() -> int:
         help="Retained controller classification excerpt; omit to leave task-16 unchanged",
     )
     parser.add_argument(
+        "--smoke-run-json",
+        type=Path,
+        help="gh run view 42484305260 --repo stranske/trip-planner --json headSha,conclusion,jobs output",
+    )
+    parser.add_argument(
         "--failed-log",
         type=Path,
         help="Full gh run view 42449207754 --repo stranske/trip-planner --log output",
@@ -312,6 +346,10 @@ def main() -> int:
             args.sync_core_document.read_text(encoding="utf-8") if args.sync_core_document else None
         )
         evidence = json.loads(args.evidence.read_text(encoding="utf-8"))
+        if args.smoke_run_json is not None:
+            evidence["run_lookup"], evidence["jobs"] = smoke_run_evidence(
+                json.loads(args.smoke_run_json.read_text(encoding="utf-8-sig"))
+            )
         if args.failed_log is not None:
             # Supplied logs replace both retained excerpts. Never fall back to
             # stale installation evidence when a fresh log is empty or invalid.
