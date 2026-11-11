@@ -1,0 +1,196 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.2, pytest-9.2.0, pluggy-1.7.0
+rootdir: /private/tmp/trip-2025-workflows
+configfile: pyproject.toml
+plugins: platformdirs-4.14.5
+collected 8 items
+
+tests/test_dependency_resolution.py ..FFFFF.                             [100%]
+
+=================================== FAILURES ===================================
+__________________ test_successful_checkouts_resolve[wheels] ___________________
+
+tmp_path = PosixPath('/Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_successful_checkouts_reso0')
+editable = False
+
+    @pytest.mark.parametrize("editable", [False, True], ids=["wheels", "editable"])
+    def test_successful_checkouts_resolve(tmp_path: Path, editable: bool) -> None:
+        paths = {name: FIXTURES / "successful" / f"{name}.toml" for name in PROJECTS}
+        result, report = resolve(tmp_path / "wheels", paths, editable=editable)
+>       assert_resolved(result, report, paths["trip-planner"])
+
+tests/test_dependency_resolution.py:159:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+result = CompletedProcess(args=['/tmp/trip-2025-workflows/.venv/bin/python', '-m', 'pip', '--isolated', '--disable-pip-version-...sible: for help visit https://pip.pypa.io/en/latest/topics/dependency-resolution/#dealing-with-dependency-conflicts\n')
+report = PosixPath('/Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_successful_checkouts_reso0/wheels/report.json')
+planner = PosixPath('/private/tmp/trip-2025-workflows/tests/fixtures/dependency_resolution/successful/trip-planner.toml')
+
+    def assert_resolved(result: subprocess.CompletedProcess, report: Path, planner: Path) -> None:
+>       assert result.returncode == 0, result.stdout + result.stderr
+E       AssertionError: Looking in links: /Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_successful_checkouts_reso0/wheels
+E         Processing /Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_successful_checkouts_reso0/wheels/trip_planner-0.1.0-py3-none-any.whl (from trip-planner[dev]==0.1.0)
+E         Processing /Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_successful_checkouts_reso0/wheels/travel_plan_permission-0.1.0-py3-none-any.whl (from travel-plan-permission[dev]==0.1.0)
+E         Processing /Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_successful_checkouts_reso0/wheels/pytest-9.2.0-py3-none-any.whl (from travel-plan-permission[dev]==0.1.0)
+E         Processing /Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_successful_checkouts_reso0/wheels/ruff-0.17.2-py3-none-any.whl (from travel-plan-permission[dev]==0.1.0)
+E         Processing /Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_successful_checkouts_reso0/wheels/mypy-2.4.1-py3-none-any.whl (from travel-plan-permission[dev]==0.1.0)
+E         INFO: pip is looking at multiple versions of trip-planner[dev] to determine which version is compatible with other requirements. This could take a while.
+E
+E         The conflict is caused by:
+E             travel-plan-permission[dev] 0.1.0 depends on ruff==0.17.2; extra == "dev"
+E             trip-planner[dev] 0.1.0 depends on ruff==0.17.3; extra == "dev"
+E
+E         To fix this you could try to:
+E         1. loosen the range of package versions you've specified
+E         2. remove package versions to allow pip attempt to solve the dependency conflict
+E
+E         ERROR: Cannot install travel-plan-permission[dev]==0.1.0 and trip-planner[dev]==0.1.0 because these package versions have conflicting dependencies.
+E         ERROR: ResolutionImpossible: for help visit https://pip.pypa.io/en/latest/topics/dependency-resolution/#dealing-with-dependency-conflicts
+E
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/tmp/trip-2025-workflows/.venv/bin/python', '-m', 'pip', '--isolated', '--disable-pip-version-...sible: for help visit https://pip.pypa.io/en/latest/topics/dependency-resolution/#dealing-with-dependency-conflicts\n').returncode
+
+tests/test_dependency_resolution.py:131: AssertionError
+_________________ test_successful_checkouts_resolve[editable] __________________
+
+tmp_path = PosixPath('/Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_successful_checkouts_reso1')
+editable = True
+
+    @pytest.mark.parametrize("editable", [False, True], ids=["wheels", "editable"])
+    def test_successful_checkouts_resolve(tmp_path: Path, editable: bool) -> None:
+        paths = {name: FIXTURES / "successful" / f"{name}.toml" for name in PROJECTS}
+        result, report = resolve(tmp_path / "wheels", paths, editable=editable)
+>       assert_resolved(result, report, paths["trip-planner"])
+
+tests/test_dependency_resolution.py:159:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+result = CompletedProcess(args=['/tmp/trip-2025-workflows/.venv/bin/python', '-m', 'pip', '--isolated', '--disable-pip-version-...sible: for help visit https://pip.pypa.io/en/latest/topics/dependency-resolution/#dealing-with-dependency-conflicts\n')
+report = PosixPath('/Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_successful_checkouts_reso1/wheels/report.json')
+planner = PosixPath('/private/tmp/trip-2025-workflows/tests/fixtures/dependency_resolution/successful/trip-planner.toml')
+
+    def assert_resolved(result: subprocess.CompletedProcess, report: Path, planner: Path) -> None:
+>       assert result.returncode == 0, result.stdout + result.stderr
+E       AssertionError: Looking in links: /Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_successful_checkouts_reso1/wheels
+E         Obtaining file:///Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_successful_checkouts_reso1/wheels/trip-planner
+E           Checking if build backend supports build_editable: started
+E           Checking if build backend supports build_editable: finished with status 'done'
+E           Preparing editable metadata (pyproject.toml): started
+E           Preparing editable metadata (pyproject.toml): finished with status 'done'
+E         Obtaining file:///Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_successful_checkouts_reso1/wheels/travel-plan-permission
+E           Checking if build backend supports build_editable: started
+E           Checking if build backend supports build_editable: finished with status 'done'
+E           Preparing editable metadata (pyproject.toml): started
+E           Preparing editable metadata (pyproject.toml): finished with status 'done'
+E         Processing /Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_successful_checkouts_reso1/wheels/pytest-9.2.0-py3-none-any.whl (from travel-plan-permission==0.1.0)
+E         Processing /Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_successful_checkouts_reso1/wheels/ruff-0.17.2-py3-none-any.whl (from travel-plan-permission==0.1.0)
+E         Processing /Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_successful_checkouts_reso1/wheels/mypy-2.4.1-py3-none-any.whl (from travel-plan-permission==0.1.0)
+E         INFO: pip is looking at multiple versions of trip-planner[dev] to determine which version is compatible with other requirements. This could take a while.
+E
+E         The conflict is caused by:
+E             travel-plan-permission[dev] 0.1.0 depends on ruff==0.17.2; extra == "dev"
+E             trip-planner[dev] 0.1.0 depends on ruff==0.17.3; extra == "dev"
+E
+E         To fix this you could try to:
+E         1. loosen the range of package versions you've specified
+E         2. remove package versions to allow pip attempt to solve the dependency conflict
+E
+E         ERROR: Cannot install travel-plan-permission[dev]==0.1.0 and trip-planner[dev]==0.1.0 because these package versions have conflicting dependencies.
+E         ERROR: ResolutionImpossible: for help visit https://pip.pypa.io/en/latest/topics/dependency-resolution/#dealing-with-dependency-conflicts
+E
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/tmp/trip-2025-workflows/.venv/bin/python', '-m', 'pip', '--isolated', '--disable-pip-version-...sible: for help visit https://pip.pypa.io/en/latest/topics/dependency-resolution/#dealing-with-dependency-conflicts\n').returncode
+
+tests/test_dependency_resolution.py:131: AssertionError
+________ test_each_historical_tool_mismatch_fails_until_restored[mypy] _________
+
+tmp_path = PosixPath('/Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_each_historical_tool_mism0')
+tool = 'mypy'
+
+    @pytest.mark.parametrize("tool", sorted(TOOLS))
+    def test_each_historical_tool_mismatch_fails_until_restored(tmp_path: Path, tool: str) -> None:
+        """Ruff must not mask the historical mypy and pytest pin conflicts."""
+        paths = {name: tmp_path / f"{name}.toml" for name in PROJECTS}
+        for name, path in paths.items():
+            path.write_bytes((FIXTURES / "successful" / f"{name}.toml").read_bytes())
+
+        producer = paths["travel-plan-permission"]
+        successful = producer.read_bytes()
+        current = tool_requirements(producer)[tool]
+        original = tool_requirements(FIXTURES / "failed/travel-plan-permission.toml")[tool]
+        assert current != original, f"{tool} must reproduce a historical pin change"
+        assert current == tool_requirements(paths["trip-planner"])[tool]
+        producer.write_text(
+            successful.decode("utf-8").replace(f'"{current}"', f'"{original}"'),
+            encoding="utf-8",
+        )
+        assert tool_requirements(producer)[tool] == original
+
+        result, _ = resolve(tmp_path / "conflicting", paths)
+        diagnostics = result.stdout + result.stderr
+        assert result.returncode == 1 and "ResolutionImpossible" in diagnostics, diagnostics
+        for project, requirement in (("travel-plan-permission", original), ("trip-planner", current)):
+>           assert f'{project}[dev] 0.1.0 depends on {requirement}; extra == "dev"' in diagnostics
+E           assert 'travel-plan-permission[dev] 0.1.0 depends on mypy==2.4.0; extra == "dev"' in 'Looking in links: /Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_each_...ssible: for help visit https://pip.pypa.io/en/latest/topics/dependency-resolution/#dealing-with-dependency-conflicts\n'
+
+tests/test_dependency_resolution.py:193: AssertionError
+_______ test_each_historical_tool_mismatch_fails_until_restored[pytest] ________
+
+tmp_path = PosixPath('/Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_each_historical_tool_mism1')
+tool = 'pytest'
+
+    @pytest.mark.parametrize("tool", sorted(TOOLS))
+    def test_each_historical_tool_mismatch_fails_until_restored(tmp_path: Path, tool: str) -> None:
+        """Ruff must not mask the historical mypy and pytest pin conflicts."""
+        paths = {name: tmp_path / f"{name}.toml" for name in PROJECTS}
+        for name, path in paths.items():
+            path.write_bytes((FIXTURES / "successful" / f"{name}.toml").read_bytes())
+
+        producer = paths["travel-plan-permission"]
+        successful = producer.read_bytes()
+        current = tool_requirements(producer)[tool]
+        original = tool_requirements(FIXTURES / "failed/travel-plan-permission.toml")[tool]
+        assert current != original, f"{tool} must reproduce a historical pin change"
+        assert current == tool_requirements(paths["trip-planner"])[tool]
+        producer.write_text(
+            successful.decode("utf-8").replace(f'"{current}"', f'"{original}"'),
+            encoding="utf-8",
+        )
+        assert tool_requirements(producer)[tool] == original
+
+        result, _ = resolve(tmp_path / "conflicting", paths)
+        diagnostics = result.stdout + result.stderr
+        assert result.returncode == 1 and "ResolutionImpossible" in diagnostics, diagnostics
+        for project, requirement in (("travel-plan-permission", original), ("trip-planner", current)):
+>           assert f'{project}[dev] 0.1.0 depends on {requirement}; extra == "dev"' in diagnostics
+E           assert 'travel-plan-permission[dev] 0.1.0 depends on pytest==9.1.1; extra == "dev"' in 'Looking in links: /Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_each_...ssible: for help visit https://pip.pypa.io/en/latest/topics/dependency-resolution/#dealing-with-dependency-conflicts\n'
+
+tests/test_dependency_resolution.py:193: AssertionError
+________ test_each_historical_tool_mismatch_fails_until_restored[ruff] _________
+
+tmp_path = PosixPath('/Users/teacher/.codex/orchestrator/agent-runtime/codex/tmp/pytest-of-teacher/pytest-2368/test_each_historical_tool_mism2')
+tool = 'ruff'
+
+    @pytest.mark.parametrize("tool", sorted(TOOLS))
+    def test_each_historical_tool_mismatch_fails_until_restored(tmp_path: Path, tool: str) -> None:
+        """Ruff must not mask the historical mypy and pytest pin conflicts."""
+        paths = {name: tmp_path / f"{name}.toml" for name in PROJECTS}
+        for name, path in paths.items():
+            path.write_bytes((FIXTURES / "successful" / f"{name}.toml").read_bytes())
+
+        producer = paths["travel-plan-permission"]
+        successful = producer.read_bytes()
+        current = tool_requirements(producer)[tool]
+        original = tool_requirements(FIXTURES / "failed/travel-plan-permission.toml")[tool]
+>       assert current != original, f"{tool} must reproduce a historical pin change"
+E       AssertionError: ruff must reproduce a historical pin change
+E       assert <Requirement('ruff==0.17.2')> != <Requirement('ruff==0.17.2')>
+
+tests/test_dependency_resolution.py:181: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_dependency_resolution.py::test_successful_checkouts_resolve[wheels]
+FAILED tests/test_dependency_resolution.py::test_successful_checkouts_resolve[editable]
+FAILED tests/test_dependency_resolution.py::test_each_historical_tool_mismatch_fails_until_restored[mypy]
+FAILED tests/test_dependency_resolution.py::test_each_historical_tool_mismatch_fails_until_restored[pytest]
+FAILED tests/test_dependency_resolution.py::test_each_historical_tool_mismatch_fails_until_restored[ruff]
+========================= 5 failed, 3 passed in 3.07s ==========================

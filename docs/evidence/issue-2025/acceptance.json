@@ -1,0 +1,25 @@
+{
+  "checked_at": "2026-11-11T00:09:25.637118+00:00",
+  "owning_repository": "stranske/Workflows",
+  "owning_base": "a54f412a4aea3a49241b502abf415bf769e08dea",
+  "owning_commit": "f1ae1a4b8f704bf147938880c0010ded18d51022",
+  "owning_commit_url": "https://github.com/stranske/Workflows/commit/f1ae1a4b8f704bf147938880c0010ded18d51022",
+  "owning_branch": "codex/issue-2025",
+  "owning_integration": "Published source commit; not on main and no companion PR opened, preserving the requested one-PR limit. Integration required before claiming durable coverage on main.",
+  "recovered_from": "https://github.com/stranske/trip-planner/tree/salvage/pr-2026-d9273628/docs/evidence/issue-2025/workflows",
+  "test_command": "/tmp/trip-2025-workflows/.venv/bin/python -m pytest tests/test_dependency_resolution.py",
+  "interpreter": "/tmp/trip-2025-workflows/.venv/bin/python (Python 3.12.2 venv created with /opt/anaconda3/bin/python3)",
+  "runtime_limit": "This is the explicitly allowed fallback runtime; Workflows declares Python >=3.13. A supported-runtime CI result is still pending.",
+  "documented_local_command": "TMPDIR=/private/tmp PATH=\"/tmp/trip-2025-workflows/.venv/bin:$PATH\" ./scripts/dev_check.sh",
+  "documented_local_command_commit": "f1ae1a4b8f704bf147938880c0010ded18d51022",
+  "documented_local_command_exit_code": 1,
+  "first_broken_step": "mktemp for Syntax check attempts the protected macOS default temp directory despite TMPDIR; Operation not permitted.",
+  "stop_rule": "At most three repair attempts and 60 minutes. Environment-repair attempts exhausted; repairs stopped.",
+  "ledger": "Read-only .agents directory; proposed changes are ledger-reconciliation.patch, not applied ledger state.",
+  "acceptance": {
+    "bounded_resolver_and_mutation": true,
+    "documented_local_command_exit_zero": false,
+    "final_head_smoke": true,
+    "subsequent_sync_core_classification": true
+  }
+}

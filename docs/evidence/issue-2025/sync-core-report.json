@@ -1,0 +1,39 @@
+{
+  "checked_at": "2026-11-11T00:09:25.637118+00:00",
+  "report_source": "/Users/teacher/.codex/orchestrator/sync-core/rounds.jsonl",
+  "round": "20261108T133016Z",
+  "timestamp": "2026-11-08T13:30:21Z",
+  "apply": true,
+  "item": {
+    "age_h": 8.0,
+    "disposition": "delivered",
+    "error": null,
+    "first_seen": "2026-11-08T05:31:57Z",
+    "handoffs": [],
+    "owner": "-",
+    "reasons": [
+      "merged 2026-11-08T13:23:04Z; 1 files, 0 mismatches"
+    ],
+    "target": "stranske/trip-planner#2006",
+    "terminal": "delivered"
+  },
+  "target_state": {
+    "disposition": "delivered",
+    "first_seen": 1794115917.497448,
+    "head": "fcb6e97a291bd620629aa228561d36c3ee6cdf0d",
+    "hold_until": null,
+    "last_round": "20261108T133016Z",
+    "owner": "-",
+    "terminal": "delivered",
+    "terminal_at": 1794115917.49747
+  },
+  "dependency_pin_finding": "absent in reasons and handoffs",
+  "workflow_reporting_path": {
+    "repository": "stranske/Workflows",
+    "commit": "a54f412a4aea3a49241b502abf415bf769e08dea",
+    "workflow": ".github/workflows/maint-68-sync-consumer-repos.yml",
+    "artifact": "consumer-sync-run-report",
+    "path": "artifacts/consumer-sync-run-report.json",
+    "scope": "Native template-sync report, not the controller classifier for the Maint 52 dev-pin PR. The subsequent canonical sync-core round above supplies the explicitly requested superseding classification."
+  }
+}

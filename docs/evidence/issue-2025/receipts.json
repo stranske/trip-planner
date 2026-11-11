@@ -1,0 +1,26 @@
+[
+  {
+    "phase": "baseline",
+    "command": "/tmp/trip-2025-workflows/.venv/bin/python -m pytest tests/test_dependency_resolution.py",
+    "cwd": "/tmp/trip-2025-workflows",
+    "commit": "f1ae1a4b8f704bf147938880c0010ded18d51022",
+    "exit_code": 0,
+    "wall_seconds": 4.653
+  },
+  {
+    "phase": "mutation",
+    "command": "/tmp/trip-2025-workflows/.venv/bin/python -m pytest tests/test_dependency_resolution.py",
+    "cwd": "/tmp/trip-2025-workflows",
+    "commit": "f1ae1a4b8f704bf147938880c0010ded18d51022",
+    "exit_code": 1,
+    "wall_seconds": 3.258
+  },
+  {
+    "phase": "restored",
+    "command": "/tmp/trip-2025-workflows/.venv/bin/python -m pytest tests/test_dependency_resolution.py",
+    "cwd": "/tmp/trip-2025-workflows",
+    "commit": "f1ae1a4b8f704bf147938880c0010ded18d51022",
+    "exit_code": 0,
+    "wall_seconds": 4.582
+  }
+]

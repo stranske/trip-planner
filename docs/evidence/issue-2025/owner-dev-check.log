@@ -1,0 +1,7 @@
+=== Ultra-Fast Development Check ===
+Installing ruff==0.17.4 to match CI
+WARNING: The directory '/Users/teacher/Library/Caches/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+Installing mypy==2.4.1 to match CI
+WARNING: The directory '/Users/teacher/Library/Caches/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+1. Syntax check...
+mktemp: mkstemp failed on /var/folders/qm/w0dtc0j132gd6ymf1hxtd2p00000gp/T/devcheck_Syntax_check.XXXX.RIzIQdXTXq: Operation not permitted
