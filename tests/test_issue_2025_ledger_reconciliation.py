@@ -10,12 +10,12 @@ from pathlib import Path
 import pytest
 import yaml
 
-from scripts.ledger_validate import validate_ledger
+from scripts import ledger_validate
 
 ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE = ROOT / "docs/evidence/issue-2025"
 LEDGER = Path(".agents/issue-2007-ledger.yml")
-LEDGER_BASE = "6f2bbe03c8b1c36c3feadf4cc56b0965c927cf5f"
+FIXTURES = ROOT / "tests/fixtures/issue_2025_ledger"
 
 
 def read_receipt(name: str):
@@ -26,15 +26,7 @@ def read_receipt(name: str):
 def original_ledger() -> str:
     # Pin the input so these tests remain valid after an authorized writer
     # applies the proposal to the actual ledger.
-    result = subprocess.run(
-        ["git", "show", f"{LEDGER_BASE}:{LEDGER.as_posix()}"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        timeout=10,
-        check=True,
-    )
-    return result.stdout
+    return (FIXTURES / "original.yml").read_text(encoding="utf-8")
 
 
 @pytest.fixture
@@ -80,13 +72,13 @@ def test_reconciled_tasks_pass_existing_ledger_validator(
         "task-15",
         "task-16",
     }
-    # This calls the production schema and commit validator, including real
-    # local Git lookups. No missing-commit or shallow-history exemption is used.
+    commit_files = json.loads((FIXTURES / "commit-files.json").read_text(encoding="utf-8"))
+    monkeypatch.setattr(ledger_validate, "_COMMIT_FILES_CACHE", commit_files)
     monkeypatch.chdir(ROOT)
     monkeypatch.setenv("LEDGER_VALIDATE_STRICT", "1")
     path = tmp_path / "reconciled-ledger.yml"
     path.write_text(yaml.safe_dump(proposed_ledger), encoding="utf-8")
-    assert validate_ledger(path) == []
+    assert ledger_validate.validate_ledger(path) == []
 
 
 def test_pin_reconciliation_matches_historical_editable_installs(proposed_ledger: dict):

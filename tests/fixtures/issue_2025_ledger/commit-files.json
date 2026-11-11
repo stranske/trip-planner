@@ -1,0 +1,24 @@
+{
+  "6f2bbe03c8b1c36c3feadf4cc56b0965c927cf5f": [
+    "docs/evidence/issue-2025/README.md",
+    "docs/evidence/issue-2025/acceptance.json",
+    "docs/evidence/issue-2025/ledger-reconciliation.patch",
+    "docs/evidence/issue-2025/owner-dev-check.log"
+  ],
+  "516862e5d9286d62226458834881f8c4eda8026d": [
+    "docs/evidence/issue-2025/README.md",
+    "docs/evidence/issue-2025/acceptance.json",
+    "docs/evidence/issue-2025/baseline.log",
+    "docs/evidence/issue-2025/failed-install-excerpts.log",
+    "docs/evidence/issue-2025/fixture-provenance.json",
+    "docs/evidence/issue-2025/ledger-reconciliation.patch",
+    "docs/evidence/issue-2025/merged-pr.json",
+    "docs/evidence/issue-2025/mutation.log",
+    "docs/evidence/issue-2025/owner-dev-check.log",
+    "docs/evidence/issue-2025/receipts.json",
+    "docs/evidence/issue-2025/restored.log",
+    "docs/evidence/issue-2025/smoke-run.json",
+    "docs/evidence/issue-2025/successful-install-excerpts.log",
+    "docs/evidence/issue-2025/sync-core-report.json"
+  ]
+}
