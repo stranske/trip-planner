@@ -1,0 +1,44 @@
+{
+  "checked_at": "2026-11-11T00:33:12.084392+00:00",
+  "consumer_start_commit": "6f2bbe03c8b1c36c3feadf4cc56b0965c927cf5f",
+  "owning_commit": "f1ae1a4b8f704bf147938880c0010ded18d51022",
+  "owning_checkout_diff": "",
+  "resolver_command": "/tmp/trip-2025-workflows/.venv/bin/python -m pytest tests/test_dependency_resolution.py",
+  "resolver_result": "exit 0; 8 passed in 4.85s",
+  "documented_local_command": "TMPDIR=/private/tmp npm_config_cache=/private/tmp/trip-2028-npm-cache PATH=\"/opt/homebrew/opt/coreutils/libexec/gnubin:/tmp/trip-2025-workflows/.venv/bin:$PATH\" /opt/homebrew/bin/bash ./scripts/dev_check.sh --verbose",
+  "documented_local_command_exit_code": 0,
+  "sync_core_readback": {
+    "round": "20261108T133016Z",
+    "timestamp": "2026-11-08T13:30:21Z",
+    "apply": true,
+    "item": {
+      "age_h": 8.0,
+      "disposition": "delivered",
+      "error": null,
+      "first_seen": "2026-11-08T05:31:57Z",
+      "handoffs": [],
+      "owner": "-",
+      "reasons": [
+        "merged 2026-11-08T13:23:04Z; 1 files, 0 mismatches"
+      ],
+      "target": "stranske/trip-planner#2006",
+      "terminal": "delivered"
+    }
+  },
+  "ledger_applied": false,
+  "ledger_blocker": "Execution seat grants read-only access to .agents; no write attempted.",
+  "remaining_tasks": [
+    "T1: apply ledger reconciliation",
+    "T3: record command, commit and outcome in actual ledger",
+    "T4: record report in actual ledger"
+  ],
+  "verified_criteria": [
+    "A1: fresh focused pass; existing mutation/restoration receipts unchanged",
+    "A3: fresh final-head successful smoke readback",
+    "A4: fresh subsequent report readback"
+  ],
+  "incomplete_criteria": [
+    "A2: command passed; required actual-ledger record remains absent"
+  ],
+  "post_push_review": "Deferred to next scheduled keepalive round at least seven minutes after push, per post-push-review automation workflow."
+}

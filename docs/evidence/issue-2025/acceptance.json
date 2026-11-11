@@ -18,6 +18,13 @@
     "bounded_resolver_and_mutation": true,
     "documented_local_command_exit_zero": true,
     "final_head_smoke": true,
-    "subsequent_sync_core_classification": true
-  }
+    "subsequent_sync_core_classification": true,
+    "A2_command_and_actual_ledger_record": false
+  },
+  "remaining_task_status": {
+    "T1": "incomplete: actual ledger unchanged",
+    "T3": "incomplete: actual ledger unchanged",
+    "T4": "incomplete: actual ledger unchanged"
+  },
+  "latest_readback": "round-3-readback.json"
 }

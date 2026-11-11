@@ -1,7 +1,8 @@
 # Issue 2025 acceptance evidence
 
-Checked 2026-11-11T00:19:36+00:00. All four acceptance checks have evidence. The ledger
-reconciliation and Workflows main integration are still open.
+Checked 2026-11-11T00:19:36+00:00. The executable acceptance checks have evidence. A2 and tasks T1, T3 and T4
+still require records in the actual ledger; the proposed patch does not satisfy
+that requirement. Workflows main integration is also still open.
 
 The owning regression is published in [Workflows commit
 f1ae1a4b8f704bf147938880c0010ded18d51022](https://github.com/stranske/Workflows/commit/f1ae1a4b8f704bf147938880c0010ded18d51022),
@@ -101,3 +102,24 @@ Task 05 is deferred because the proposed pin/publication fix was superseded;
 the proposed task 14 records the passing smoke and documented local check.
 Source integration into Workflows main and the actual ledger write remain
 outstanding.
+
+## Keepalive round 3 readback
+
+The two named run logs and final-head smoke JSON were fetched again. The owning
+checkout remains clean at `f1ae1a4b8f704bf147938880c0010ded18d51022`. The focused
+resolver command passed all eight tests in 4.85 seconds; the exact documented
+local command above exited 0 again. See `round-3-dev-check.log` and
+`round-3-readback.json` for the checked time, commands and commit. Existing
+mutation/restoration receipts remain unchanged. No dependency pins were edited.
+
+A fresh read of canonical sync-core round `20261108T133016Z` again identifies
+#2006 as delivered, with zero mismatches and no dependency-pin finding in its
+reasons or handoffs. The workflow report artifact path was independently
+rechecked in Maint 68 at the owning commit.
+
+T1, T3 and T4 remain incomplete because each requires writing the actual
+`.agents/issue-2007-ledger.yml`, which this execution seat explicitly makes
+read-only. A2 likewise remains incomplete despite the passing command. The
+existing reconciliation patch is still an unapplied proposal. An authorized
+writer with access to the ledger must apply and verify it; changing the path
+or bypassing the restriction would not resolve the access boundary.
