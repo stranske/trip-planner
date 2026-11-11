@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 import yaml
+from packaging.specifiers import SpecifierSet
+from packaging.version import Version
 
 from scripts import ledger_validate
 
@@ -161,6 +163,59 @@ def test_mutation_record_preserves_owning_commit_and_results(proposed_ledger: di
         assert receipt["wall_seconds"] < 120
     assert "ResolutionImpossible" in (EVIDENCE / "mutation.log").read_text(encoding="utf-8")
     assert "Restored original bytes" in notes
+
+
+def test_supported_runtime_receipt_binds_source_interpreter_and_mutation():
+    """A passing fallback run alone cannot establish supported-runtime evidence."""
+    receipt = read_receipt("supported-runtime.json")
+    acceptance = read_receipt("acceptance.json")
+    assert receipt["source_repository"] == acceptance["owning_repository"]
+    assert receipt["source_commit"] == acceptance["owning_commit"]
+    # Focused snapshot verification does not establish full-checkout CI.
+    assert receipt["validation_kind"] == "local-source-snapshot"
+    assert receipt["ci_verified"] is False
+    runtime = receipt["runtime"]
+    assert Version(runtime["version"]) in SpecifierSet(receipt["requires_python"])
+    assert receipt["requires_python"] == ">=3.13"
+    assert receipt["command"] == [
+        runtime["executable"],
+        "-m",
+        "pytest",
+        "tests/test_dependency_resolution.py",
+        "-m",
+        "not slow",
+    ]
+    sources = {item["path"]: item for item in receipt["source_files"]}
+    for path in (
+        "pyproject.toml",
+        "tests/conftest.py",
+        "tests/test_dependency_resolution.py",
+        "scripts/sync_dev_dependencies.py",
+        ".github/workflows/autofix-versions.env",
+        "tests/fixtures/dependency_resolution/editable_backend.py",
+    ):
+        assert path in sources
+    for source in sources.values():
+        assert re.fullmatch(r"[0-9a-f]{40}", source["source_blob"])
+        assert source["verified_blob"] == source["source_blob"]
+    phases = receipt["phases"]
+    assert [(phase["phase"], phase["exit_code"]) for phase in phases] == [
+        ("baseline", 0),
+        ("mutation", 1),
+        ("restored", 0),
+    ]
+    fixture = "tests/fixtures/dependency_resolution/successful/travel-plan-permission.toml"
+    assert phases[0]["fixture_blob"] == phases[2]["fixture_blob"] == sources[fixture]["source_blob"]
+    assert phases[1]["fixture_blob"] != sources[fixture]["source_blob"]
+    assert receipt["source_restored"] is True
+    for phase in phases:
+        assert 0 < phase["wall_seconds"] < 120
+        log = (EVIDENCE / phase["log"]).read_text(encoding="utf-8")
+        assert f"Python {runtime['version']}" in log
+        assert f"pytest-{runtime['packages']['pytest']}" in log
+        assert f"rootdir: {receipt['cwd']}" in log
+        assert "configfile: pyproject.toml" in log and "collected 8 items" in log
+        assert "ResolutionImpossible" in log if phase["exit_code"] else "8 passed" in log
 
 
 def test_sync_classification_matches_merged_head(proposed_ledger: dict):

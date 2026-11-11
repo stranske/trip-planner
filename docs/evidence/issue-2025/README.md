@@ -212,3 +212,49 @@ explicitly makes `.agents` read-only. T1, T3, T4 and A2 remain incomplete:
 the verified proposal has not been applied to the required actual ledger.
 No alternate path or remote write was used to bypass that access boundary.
 Workflows main integration and supported-runtime CI remain unverified.
+
+## Supported-runtime local verification
+
+On 2026-11-11, a focused source snapshot at owning commit
+`f1ae1a4b8f704bf147938880c0010ded18d51022` passed on Python 3.13.18:
+
+```sh
+cd /tmp/issue-2025-supported-runtime
+/tmp/issue-2025-python313/bin/python -m pytest tests/test_dependency_resolution.py -m 'not slow'
+```
+
+All eight tests passed in 3.943 seconds of wall time. Changing the successful
+TPP fixture's Ruff pin from 0.17.3 to 0.17.2 failed with `ResolutionImpossible`
+in 2.871 seconds; exact restoration passed in 3.929 seconds. The JSON receipt
+and `python313-*.txt` logs preserve the command, interpreter, source blob hashes
+and phase results. The reconciliation test now checks this supported-runtime
+evidence alongside the earlier fallback receipts.
+
+Git clone and both historical `gh run view ... --log` commands could not reach
+GitHub from this seat. The GitHub connector supplied the focused source files
+and their Git blob hashes at the owning commit. Every hash was verified before
+execution and after restoration, including the original pytest configuration,
+conftest and production sync script. The pre-existing canonical pin file has
+the identical blob hash and was read through a directory link. No protected
+workflow file was changed or created.
+
+The runner's shared Python 3.14 environment failed collection because its
+AnyIO plugin imports pytest's deprecated `CallSpec2` under the owning warning
+policy. The isolated Python 3.13 venv uses already-installed pure-Python pytest
+and supporting distributions; no warning filter or test was disabled.
+
+This is local verification of a source snapshot, not a complete owning checkout
+or a CI result. The connector returned no workflow runs for the owning commit.
+Supported-runtime CI, source integration and the actual ledger write remain
+incomplete; no task checkbox was marked complete.
+
+The updated consumer checks pass all 23 targeted tests, and Ruff, whitespace
+and ledger patch checks pass. Staging the source test and receipts failed with
+`index.lock: Read-only file system`, so this seat could not commit the changes.
+Automatic approval review also rejected the blocker comment and `needs-human`
+label because GitHub writes require approval and this run's policy is `never`.
+All 530 files passed individual Black checks; the required repository-wide
+Black command then exited 0 with 530 files unchanged. Its initial batch attempt
+had stalled and a bounded retry timed out. Final PR #2028 readback confirmed
+`state=open`, `draft=false`, at unchanged head
+`7fe8ce7c414385750c0242ae1cc58b7a7e4f5f42`.

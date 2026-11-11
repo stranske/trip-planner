@@ -1,0 +1,122 @@
+{
+  "source_repository": "stranske/Workflows",
+  "source_commit": "f1ae1a4b8f704bf147938880c0010ded18d51022",
+  "validation_kind": "local-source-snapshot",
+  "ci_verified": false,
+  "requires_python": ">=3.13",
+  "source_files": [
+    {
+      "path": "tests/test_dependency_resolution.py",
+      "source_blob": "ac9793df987be18ac1df0fdf397692058a469b6b",
+      "verified_blob": "ac9793df987be18ac1df0fdf397692058a469b6b"
+    },
+    {
+      "path": "pyproject.toml",
+      "source_blob": "4d4cd8282099d5451df0762a75e2d0add1d5fb70",
+      "verified_blob": "4d4cd8282099d5451df0762a75e2d0add1d5fb70"
+    },
+    {
+      "path": "tests/conftest.py",
+      "source_blob": "5a57260b0929d4f773ab92a4c156c27753f1a59f",
+      "verified_blob": "5a57260b0929d4f773ab92a4c156c27753f1a59f"
+    },
+    {
+      "path": "tests/__init__.py",
+      "source_blob": "cff7db5d8c5c33d791ea11a27d33ee5d7c917332",
+      "verified_blob": "cff7db5d8c5c33d791ea11a27d33ee5d7c917332"
+    },
+    {
+      "path": "tests/_autofix_diag.py",
+      "source_blob": "d031f2f4405927e7c128a2a85ece24b4446d4eb8",
+      "verified_blob": "d031f2f4405927e7c128a2a85ece24b4446d4eb8"
+    },
+    {
+      "path": "scripts/sync_dev_dependencies.py",
+      "source_blob": "adaa9d1937bc852a812d2eff2716caab993b8cbf",
+      "verified_blob": "adaa9d1937bc852a812d2eff2716caab993b8cbf"
+    },
+    {
+      "path": "sitecustomize.py",
+      "source_blob": "d1254f63fb69a20498f656826d6b09969f7c680e",
+      "verified_blob": "d1254f63fb69a20498f656826d6b09969f7c680e"
+    },
+    {
+      "path": "tests/fixtures/dependency_resolution/editable_backend.py",
+      "source_blob": "12d893251040ee274b776039620b41b4fc7e7399",
+      "verified_blob": "12d893251040ee274b776039620b41b4fc7e7399"
+    },
+    {
+      "path": "tests/fixtures/dependency_resolution/failed/travel-plan-permission.toml",
+      "source_blob": "431b6ec74995b96e9dac42194b97b3d5b6771021",
+      "verified_blob": "431b6ec74995b96e9dac42194b97b3d5b6771021"
+    },
+    {
+      "path": "tests/fixtures/dependency_resolution/failed/trip-planner.toml",
+      "source_blob": "354d7bd75468bc3555feebfa5e873bd3b2dac8d6",
+      "verified_blob": "354d7bd75468bc3555feebfa5e873bd3b2dac8d6"
+    },
+    {
+      "path": "tests/fixtures/dependency_resolution/successful/travel-plan-permission.toml",
+      "source_blob": "fa5b39a52fbe553c138517dcbb3b4da5f09fbc06",
+      "verified_blob": "fa5b39a52fbe553c138517dcbb3b4da5f09fbc06"
+    },
+    {
+      "path": "tests/fixtures/dependency_resolution/successful/trip-planner.toml",
+      "source_blob": "ebb74c113108918b3769d84f5b589d7e9646d3cc",
+      "verified_blob": "ebb74c113108918b3769d84f5b589d7e9646d3cc"
+    },
+    {
+      "path": ".github/workflows/autofix-versions.env",
+      "source_blob": "71e9fc3e4d3f204b80afcc15f14cc041017b4197",
+      "verified_blob": "71e9fc3e4d3f204b80afcc15f14cc041017b4197"
+    }
+  ],
+  "environment_setup": "Created a venv with /opt/hostedtoolcache/Python/3.13.18/x64/bin/python -m venv /tmp/issue-2025-python313. Copied the installed pure-Python pytest, packaging, pluggy, iniconfig and pygments distributions into that venv. No warning filters or tests were disabled.",
+  "source_setup": "Fetched the named files at the owning commit via the GitHub connector; verified every file against its returned Git blob SHA. The .github directory links to the pre-existing Workflows checkout, whose canonical pin file has the identical blob SHA. This is a focused source snapshot, not a complete Git checkout or CI run.",
+  "runtime": {
+    "executable": "/tmp/issue-2025-python313/bin/python",
+    "version": "3.13.18",
+    "packages": {
+      "pip": "26.2.2",
+      "pytest": "9.2.0",
+      "packaging": "26.2",
+      "pluggy": "1.7.0",
+      "iniconfig": "2.3.1",
+      "pygments": "2.21.0"
+    }
+  },
+  "checked_at": "2026-11-11T01:59:01.719049+00:00",
+  "cwd": "/tmp/issue-2025-supported-runtime",
+  "command": [
+    "/tmp/issue-2025-python313/bin/python",
+    "-m",
+    "pytest",
+    "tests/test_dependency_resolution.py",
+    "-m",
+    "not slow"
+  ],
+  "phases": [
+    {
+      "phase": "baseline",
+      "exit_code": 0,
+      "wall_seconds": 3.943,
+      "log": "python313-baseline.txt",
+      "fixture_blob": "fa5b39a52fbe553c138517dcbb3b4da5f09fbc06"
+    },
+    {
+      "phase": "mutation",
+      "exit_code": 1,
+      "wall_seconds": 2.871,
+      "log": "python313-mutation.txt",
+      "fixture_blob": "98fb3dbcf65027c78900a64e0ba08d451378693b"
+    },
+    {
+      "phase": "restored",
+      "exit_code": 0,
+      "wall_seconds": 3.929,
+      "log": "python313-restored.txt",
+      "fixture_blob": "fa5b39a52fbe553c138517dcbb3b4da5f09fbc06"
+    }
+  ],
+  "source_restored": true
+}
