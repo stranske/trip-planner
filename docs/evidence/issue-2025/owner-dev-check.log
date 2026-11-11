@@ -1,7 +1,38 @@
+Checked: 2026-11-11T00:19:36+00:00
+Commit: f1ae1a4b8f704bf147938880c0010ded18d51022
+Command: TMPDIR=/private/tmp npm_config_cache=/private/tmp/trip-2028-npm-cache PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:/tmp/trip-2025-workflows/.venv/bin:$PATH" /opt/homebrew/bin/bash ./scripts/dev_check.sh --verbose
+Exit: 0
+
 === Ultra-Fast Development Check ===
 Installing ruff==0.17.4 to match CI
 WARNING: The directory '/Users/teacher/Library/Caches/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
 Installing mypy==2.4.1 to match CI
 WARNING: The directory '/Users/teacher/Library/Caches/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
 1. Syntax check...
-mktemp: mkstemp failed on /var/folders/qm/w0dtc0j132gd6ymf1hxtd2p00000gp/T/devcheck_Syntax_check.XXXX.RIzIQdXTXq: Operation not permitted
+Running: python -m compileall scripts/ -q
+✓ Syntax check
+2. Workflow validation...
+Running: /opt/homebrew/bin/actionlint -ignore property ".+" is not defined in object type {} -ignore property "(token_rotation_json|service_bot_pat|actions_bot_pat|owner_pr_pat|agents_automation_pat|workflows_app_id|workflows_app_private_key|keepalive_app_id|keepalive_app_private_key|gh_app_id|gh_app_private_key|app_1_id|app_1_private_key|app_2_id|app_2_private_key)" is not defined in object type .+ -ignore unknown permission scope "models" -ignore SC2129:style:.+: Consider using { cmd1; cmd2; } >> file instead of individual redirects -ignore SC2086:info:.github/workflows/.+: Double quote to prevent globbing and word splitting -ignore SC2153:info:.+: Possible misspelling: PYTEST_WORKERS may not be assigned -ignore constant expression "false" in condition -ignore ^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$ -ignore ^maximum number of inputs for "workflow_dispatch" event is 10 but (1[1-9]|2[0-5]) inputs are provided\. see https://docs\.github\.com/en/actions/using-workflows/events-that-trigger-workflows#providing-inputs$
+✓ Workflow YAML validation
+Running: /opt/homebrew/bin/actionlint -ignore property ".+" is not defined in object type {} -ignore property "(token_rotation_json|service_bot_pat|actions_bot_pat|owner_pr_pat|agents_automation_pat|workflows_app_id|workflows_app_private_key|keepalive_app_id|keepalive_app_private_key|gh_app_id|gh_app_private_key|app_1_id|app_1_private_key|app_2_id|app_2_private_key)" is not defined in object type .+ -ignore unknown permission scope "models" -ignore SC2129:style:.+: Consider using { cmd1; cmd2; } >> file instead of individual redirects -ignore SC2086:info:.github/workflows/.+: Double quote to prevent globbing and word splitting -ignore SC2153:info:.+: Possible misspelling: PYTEST_WORKERS may not be assigned -ignore constant expression "false" in condition -ignore ^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$ -ignore ^maximum number of inputs for "workflow_dispatch" event is 10 but (1[1-9]|2[0-5]) inputs are provided\. see https://docs\.github\.com/en/actions/using-workflows/events-that-trigger-workflows#providing-inputs$
+✓ Workflow YAML validation (templates)
+3. Formatting...
+Running: black --check scripts .github
+✓ Black formatting
+4. Critical linting...
+Running: flake8 scripts/ --select=E9,F --statistics
+✓ Critical lint errors
+5. Type check...
+Running: mypy scripts/ --ignore-missing-imports --explicit-package-bases --no-error-summary 2>/dev/null || true
+✓ Type check
+6. Keepalive harness tests...
+Running: node --test .github/scripts/__tests__/keepalive*.test.js 2>/dev/null || true
+✓ Keepalive JS tests
+7. Renovate configuration...
+Running: npx --yes --package renovate@43.285.3 -- renovate-config-validator --no-global renovate.json renovate-presets/fleet.json templates/consumer-repo/.github/renovate.json
+✓ Renovate configuration
+
+=== Quick Check Complete ===
+For comprehensive validation, run: ./scripts/check_branch.sh
+For auto-fixes, run with: --fix
+For changed files only: --changed

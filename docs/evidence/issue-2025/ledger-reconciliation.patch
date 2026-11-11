@@ -56,7 +56,7 @@
 @@ -148,33 +143,36 @@
        passes on regenerated stranske/trip-planner#2006, verified with `gh run view
        <run-id>`, and the repository''s test command passes locally.'
-     status: blocked
+-    status: blocked
 -    started_at: '2026-11-08T05:39:41Z'
 -    finished_at: null
 -    commit: ''
@@ -68,15 +68,16 @@
 -      - Failing run IDs: 42449207902, 42449207754
 -      - Verification requires: gh run view <regenerated-run-id> --repo stranske/trip-planner
 -      - Expected result: Cross-Repo Smoke / cross-repo-full-product should pass after regeneration
++    status: done
 +    started_at: "2026-11-08T05:39:41Z"
-+    finished_at: null
-+    commit: ""
++    finished_at: "2026-11-11T00:19:36+00:00"
++    commit: "f1ae1a4b8f704bf147938880c0010ded18d51022"
 +    notes:
 +      - "Run 42484305260 cross-repo-full-product conclusion=success at final PR head fcb6e97a291bd620629aa228561d36c3ee6cdf0d; merge commit 419015e6035cc77db18de3ab58c60651d8e51bc8. Regeneration is no longer a blocker."
 +      - "Checked Workflows commit f1ae1a4b8f704bf147938880c0010ded18d51022. Exact command: /tmp/trip-2025-workflows/.venv/bin/python -m pytest tests/test_dependency_resolution.py. Baseline exit 0 in 4.653s; mutation exit 1 in 3.258s; restored exit 0 in 4.582s."
 +      - "Interpreter is an isolated Python 3.12.2 venv created with the expressly permitted /opt/anaconda3/bin/python3 fallback; Workflows declares >=3.13, so supported-runtime CI remains pending."
-+      - "Documented command at f1ae1a4b8f704bf147938880c0010ded18d51022: TMPDIR=/private/tmp PATH=\"/tmp/trip-2025-workflows/.venv/bin:$PATH\" ./scripts/dev_check.sh. Exit 1 at mktemp (Operation not permitted); see owner-dev-check.log. Repairs stopped at the declared attempt limit."
-+      - "The exit-zero acceptance criterion remains unmet."
++      - "Documented command at f1ae1a4b8f704bf147938880c0010ded18d51022: TMPDIR=/private/tmp npm_config_cache=/private/tmp/trip-2028-npm-cache PATH=\"/opt/homebrew/opt/coreutils/libexec/gnubin:/tmp/trip-2025-workflows/.venv/bin:$PATH\" /opt/homebrew/bin/bash ./scripts/dev_check.sh --verbose. Exit 0."
++      - "GNU mktemp, Bash 5 and a writable npm cache were used. See docs/evidence/issue-2025/owner-dev-check.log."
    - id: task-15
      title: Reintroducing the reported behavior makes the regression test fail; reverting
        restores a passing result.

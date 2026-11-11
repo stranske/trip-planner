@@ -1,7 +1,7 @@
 # Issue 2025 acceptance evidence
 
-Checked 2026-11-11T00:09:25.637118+00:00. Three of four acceptance criteria have positive
-local evidence. **The documented local command fails. This is incomplete.**
+Checked 2026-11-11T00:19:36+00:00. All four acceptance checks have evidence. The ledger
+reconciliation and Workflows main integration are still open.
 
 The owning regression is published in [Workflows commit
 f1ae1a4b8f704bf147938880c0010ded18d51022](https://github.com/stranske/Workflows/commit/f1ae1a4b8f704bf147938880c0010ded18d51022),
@@ -69,26 +69,35 @@ Maint 68's `consumer-sync-run-report` artifact path; native template-sync
 artifacts do not themselves classify the Maint 52 dev-pin PR. The canonical
 sync-core result supplies the acceptance criterion's superseding classification.
 
-## Incomplete acceptance and ledger reconciliation
+## Documented local check and ledger reconciliation
 
 At the linked Workflows commit:
 
 ```sh
-TMPDIR=/private/tmp PATH="/tmp/trip-2025-workflows/.venv/bin:$PATH" ./scripts/dev_check.sh
+TMPDIR=/private/tmp npm_config_cache=/private/tmp/trip-2028-npm-cache PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:/tmp/trip-2025-workflows/.venv/bin:$PATH" /opt/homebrew/bin/bash ./scripts/dev_check.sh --verbose
 ```
 
-Exit 1. The first broken step is `mktemp` for the syntax check: it still tries
-the protected macOS default temporary directory and reports `Operation not
-permitted`. Earlier environment attempts exposed an unrelated plugin and a
-missing PyYAML dependency. The declared stop rule was three repair attempts or
-60 minutes; repairs stopped at the attempt limit. `owner-dev-check.log` is the
-final output. No comprehensive local suite was run.
+Exit 0 at the linked Workflows commit. GNU mktemp honors the writable
+`TMPDIR`, Bash 5 supplies `mapfile`, and npm uses a writable cache for the
+Renovate validator. The script's mypy and keepalive JS steps suppress their
+own exit codes, so this receipt establishes the script's exit status.
+See `owner-dev-check.log`.
+
+At the same commit, the focused rerun passed in 4.914 seconds. The Ruff
+fixture mutation failed with `ResolutionImpossible` in 3.342 seconds, and
+exact restoration passed in 4.421 seconds. The owning checkout had no diff
+against HEAD after restoration.
+
+GitHub marked both Autofix jobs flagged in round 2 as canceled with no
+executed steps ([run 42929978596](https://github.com/stranske/trip-planner/actions/runs/42929978596)).
+The later run at the same head succeeded, with Resolve Context passing and
+dispatch completion skipped ([run 42929979836](https://github.com/stranske/trip-planner/actions/runs/42929979836)).
 
 This seat has read-only access to `.agents`. `ledger-reconciliation.patch` is
 an **unapplied proposal**, not current ledger state. It reconciles tasks 05 and
 14, records the owning commit and exact commands/outcomes, documents regression
 coverage and mutation evidence, and records the subsequent sync classification.
 Task 05 is deferred because the proposed pin/publication fix was superseded;
-task 14 remains blocked by the failed documented command. Other historical
-ledger entries are preserved. Source integration into Workflows main, the
-actual ledger write and successful documented validation remain outstanding.
+the proposed task 14 records the passing smoke and documented local check.
+Source integration into Workflows main and the actual ledger write remain
+outstanding.
