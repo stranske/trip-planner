@@ -1,0 +1,40 @@
+[
+  {
+    "fixture": "failed/travel-plan-permission.toml",
+    "source_url": "https://github.com/stranske/Travel-Plan-Permission/blob/acc4aeddee5f4ffefbdc73fcb07505cd3d198197/pyproject.toml",
+    "git_blob": "d34416935f17cecd6aa17563e9acfd6c7f19ad51",
+    "omitted_unselected_extras": [
+      "ocr",
+      "orchestration",
+      "postgres"
+    ],
+    "runtime_dependencies_match": true,
+    "dev_extra_matches": true
+  },
+  {
+    "fixture": "failed/trip-planner.toml",
+    "source_url": "https://github.com/stranske/trip-planner/blob/4ea6a28d050bbcf2233b725de13ade495f132002/pyproject.toml",
+    "git_blob": "9721fb639a0389d6ab8527f04dda6d4641668e66",
+    "runtime_dependencies_match": true,
+    "dev_extra_matches": true
+  },
+  {
+    "fixture": "successful/travel-plan-permission.toml",
+    "source_url": "https://github.com/stranske/Travel-Plan-Permission/blob/b56d92b389736c70370aa9134f379ac8cd1f3ad1/pyproject.toml",
+    "git_blob": "6a7dc688e302dca17002e0b120963ec1be33d50c",
+    "omitted_unselected_extras": [
+      "ocr",
+      "orchestration",
+      "postgres"
+    ],
+    "runtime_dependencies_match": true,
+    "dev_extra_matches": true
+  },
+  {
+    "fixture": "successful/trip-planner.toml",
+    "source_url": "https://github.com/stranske/trip-planner/blob/fcb6e97a291bd620629aa228561d36c3ee6cdf0d/pyproject.toml",
+    "git_blob": "7cad20c161e71d32e29276e8af65c8f8726cfabc",
+    "runtime_dependencies_match": true,
+    "dev_extra_matches": true
+  }
+]

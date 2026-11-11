@@ -1,0 +1,31 @@
+{
+  "checked_at": "2026-11-11T00:30:00+00:00",
+  "owning_repository": "stranske/Workflows",
+  "owning_base": "a54f412a4aea3a49241b502abf415bf769e08dea",
+  "owning_commit": "f1ae1a4b8f704bf147938880c0010ded18d51022",
+  "owning_commit_url": "https://github.com/stranske/Workflows/commit/f1ae1a4b8f704bf147938880c0010ded18d51022",
+  "owning_branch": "codex/issue-2025",
+  "owning_integration": "Workflows commit f1ae1a4b8f704bf147938880c0010ded18d51022 contains the locally verified resolver regression tests. On 2026-11-11, GitHub reported that the commit had diverged from Workflows main at c1f27d82180b10b7213aea099f8feec30c3e15b1, where tests/test_dependency_resolution.py was absent. The regression evidence applies to the published source commit. Durable coverage remains pending integration into Workflows main.",
+  "recovered_from": "https://github.com/stranske/trip-planner/tree/salvage/pr-2026-d9273628/docs/evidence/issue-2025/workflows",
+  "test_command": "/tmp/trip-2025-workflows/.venv/bin/python -m pytest tests/test_dependency_resolution.py",
+  "interpreter": "/tmp/trip-2025-workflows/.venv/bin/python (Python 3.12.2 venv created with /opt/anaconda3/bin/python3)",
+  "runtime_limit": "This is the explicitly allowed fallback runtime; Workflows declares Python >=3.13. A supported-runtime CI result is still pending.",
+  "documented_local_command": "TMPDIR=/private/tmp npm_config_cache=/private/tmp/trip-2028-npm-cache PATH=\"/opt/homebrew/opt/coreutils/libexec/gnubin:/tmp/trip-2025-workflows/.venv/bin:$PATH\" /opt/homebrew/bin/bash ./scripts/dev_check.sh --verbose",
+  "documented_local_command_commit": "f1ae1a4b8f704bf147938880c0010ded18d51022",
+  "documented_local_command_exit_code": 0,
+  "ledger": ".agents/issue-2007-ledger.yml is applied and current; ledger-reconciliation.patch has been applied to the working branch.",
+  "acceptance": {
+    "bounded_resolver_and_mutation": true,
+    "documented_local_command_exit_zero": true,
+    "final_head_smoke": true,
+    "subsequent_sync_core_classification": true,
+    "A2_command_and_actual_ledger_record": true
+  },
+  "remaining_task_status": {
+    "T1": "complete: ledger applied via ledger-reconciliation.patch",
+    "T3": "complete: ledger applied via ledger-reconciliation.patch",
+    "T4": "complete: ledger applied via ledger-reconciliation.patch"
+  },
+  "latest_readback": "round-3-readback.json",
+  "supported_runtime_readback": "supported-runtime.json"
+}

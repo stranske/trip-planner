@@ -1,0 +1,53 @@
+{
+  "checked_at": "2026-11-11T02:42:37Z",
+  "repository": "stranske/trip-planner",
+  "pr": 2028,
+  "head": "6be78cf5b656b65320261c4eecd4c20aa38c9132",
+  "latest_pr_update": "2026-11-11T02:35:12Z",
+  "elapsed_since_latest_pr_update_seconds": 445,
+  "workflow_runs": [
+    {
+      "id": 42946867464,
+      "name": "Claude Code Review (Opt-in)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 42946867423,
+      "name": "Health 45 Agents Guard",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 42946867996,
+      "name": "Agents PR Event Hub",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 42946867436,
+      "name": "Cross-Repo Smoke",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 42946867992,
+      "name": "CI",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 42946867966,
+      "name": "Gate",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "active_review_findings": [
+    "Integrate the owning Workflows regression on main.",
+    "Apply the actual ledger reconciliation through an authorized writer."
+  ],
+  "outdated_review_finding": "The old shallow-checkout fixture dependency was replaced by committed fixtures; current focused checks do not fetch history.",
+  "supported_runtime_ci": "No workflow runs returned for the owning Workflows commit; consumer CI does not establish owning-repository CI.",
+  "task_reconciliation": "No newly completed acceptance tasks from the prior commits. The post-push observation is complete, but the two active findings remain blocked."
+}

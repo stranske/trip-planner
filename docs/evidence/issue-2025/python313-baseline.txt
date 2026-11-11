@@ -1,0 +1,9 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.18, pytest-9.2.0, pluggy-1.7.0
+rootdir: /tmp/issue-2025-supported-runtime
+configfile: pyproject.toml
+collected 8 items
+
+tests/test_dependency_resolution.py ........                             [100%]
+
+============================== 8 passed in 3.72s ===============================

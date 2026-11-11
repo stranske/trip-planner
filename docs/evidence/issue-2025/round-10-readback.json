@@ -1,0 +1,57 @@
+{
+  "checked_at": "2026-11-11T02:33:06.620415+00:00",
+  "consumer_checked_head": "21bac5a711cda14fd1f16a3170b2d2737f94ad7e",
+  "owning_commit": "f1ae1a4b8f704bf147938880c0010ded18d51022",
+  "owning_checkout": "/tmp/trip-2025-workflows",
+  "resolver": {
+    "command": "/tmp/trip-2025-workflows/.venv/bin/python -m pytest tests/test_dependency_resolution.py",
+    "exit_code": 0,
+    "passed": 8,
+    "pytest_seconds": 5.1
+  },
+  "documented_local_check": {
+    "command": "TMPDIR=/private/tmp npm_config_cache=/private/tmp/trip-2028-npm-cache PATH=\"/opt/homebrew/opt/coreutils/libexec/gnubin:/tmp/trip-2025-workflows/.venv/bin:$PATH\" /opt/homebrew/bin/bash ./scripts/dev_check.sh --verbose",
+    "exit_code": 0,
+    "log": "round-10-dev-check.log",
+    "limitation": "Script suppresses its mypy and keepalive JavaScript exit codes."
+  },
+  "smoke": {
+    "run": 42484305260,
+    "conclusion": "success",
+    "head": "fcb6e97a291bd620629aa228561d36c3ee6cdf0d",
+    "job": "cross-repo-full-product",
+    "job_conclusion": "success",
+    "pr_state": "MERGED",
+    "merge_commit": "419015e6035cc77db18de3ab58c60651d8e51bc8"
+  },
+  "historical_logs": {
+    "commands": [
+      "gh run view 42484305260 --repo stranske/trip-planner --log",
+      "gh run view 42449207754 --repo stranske/trip-planner --log"
+    ],
+    "exit_codes": [
+      0,
+      0
+    ],
+    "install": "TPP .venv/bin/python -m pip install -e \".[dev]\" -e \"../trip-planner[dev]\"",
+    "failed_tpp": "acc4aeddee5f4ffefbdc73fcb07505cd3d198197",
+    "successful_tpp": "b56d92b389736c70370aa9134f379ac8cd1f3ad1"
+  },
+  "sync_core": {
+    "round": "20261108T133016Z",
+    "timestamp": "2026-11-08T13:30:21Z",
+    "target": "stranske/trip-planner#2006",
+    "disposition": "delivered",
+    "reasons": [
+      "merged 2026-11-08T13:23:04Z; 1 files, 0 mismatches"
+    ],
+    "handoffs": [],
+    "dependency_pin_finding": "absent in reasons and handoffs",
+    "workflow_report_artifact": "consumer-sync-run-report",
+    "workflow_report_path": "artifacts/consumer-sync-run-report.json"
+  },
+  "ledger_patch_check_exit_code": 0,
+  "blocking": "Actual .agents ledger is explicitly read-only in this seat. T1, T3, T4 and A2 are incomplete.",
+  "drainable": "Publish refreshed receipts on existing PR branch; authorized ledger writer must apply and verify the existing proposal.",
+  "source_integration": "Owning source integration and supported-runtime CI remain unverified."
+}
