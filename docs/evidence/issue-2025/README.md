@@ -316,3 +316,29 @@ Blocking: `.agents` is explicitly read-only for this execution seat. T1, T3,
 T4 and A2 still require actual ledger records; a proposal cannot satisfy them.
 Drainable: publish these receipts on the existing branch for the authorized
 ledger writer. Source integration and supported-runtime CI remain unverified.
+
+## Failed-checkout metadata and post-push review
+
+The task-05 check now verifies the complete failed TPP `pyproject.toml` against
+its original Git blob `d34416935f17cecd6aa17563e9acfd6c7f19ad51`, then derives
+the Ruff, mypy and pytest requirements from that source. An incorrect mypy
+diagnosis in a temporary proposed ledger fails; restoring the note passes.
+All 25 targeted consumer tests and Ruff pass. The actual ledger is untouched.
+
+At `2026-11-11T02:42:37Z`, post-push review of unchanged head `6be78cf5`
+confirmed successful CI, Gate and Cross-Repo Smoke, more than seven minutes
+after the latest PR update. See `post-push-review.json`. The active Workflows
+integration and actual-ledger findings remain unresolved. The older shallow
+checkout finding is superseded by committed fixtures. These results concern
+the existing pushed head; they do not establish owning Workflows CI or review
+of the current local follow-up. Reviewing the recent commits found no other
+newly completed task. Automatic approval review rejected the PR-body update
+and `needs-human` label because GitHub writes require approval and this run's
+policy is `never`; remote task checkboxes remain unchanged.
+
+The full repository Black gate passed with all 530 files unchanged after
+verifying files individually and saving their verified results in a writable
+cache. Whitespace and ledger patch checks pass. Staging the focused test,
+original producer fixture and review receipt failed at `.git/index.lock` with
+`Read-only file system`, so no commit or push was made. Final PR readback
+confirmed open, `draft=false`, at unchanged head `6be78cf5`.

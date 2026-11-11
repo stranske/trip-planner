@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -152,6 +153,33 @@ def test_checkout_fix_matches_preserved_tpp_metadata(proposed_ledger: dict):
     assert "ResolutionImpossible" not in successful
     assert "Trip-planner commit 29c6aa01 changes TPP_PINNED_REF" in notes
     assert "adds a dev-pin check before the joint install" in notes
+
+
+def test_failed_checkout_diagnosis_matches_original_metadata(proposed_ledger: dict):
+    """Keep all three original conflicts grounded in the failed editable source."""
+    provenance = read_receipt("fixture-provenance.json")
+    source = next(
+        item for item in provenance if item["fixture"] == "failed/travel-plan-permission.toml"
+    )
+    checkout = source["source_url"].split("/blob/")[1].split("/")[0]
+    snapshot = ROOT / "tests/fixtures/tpp_dev_pins" / checkout / "pyproject.toml"
+    original = snapshot.read_bytes()
+    # This is the complete original blob, rather than an edited metadata excerpt.
+    blob = b"blob " + str(len(original)).encode("ascii") + b"\0" + original
+    assert hashlib.sha1(blob).hexdigest() == source["git_blob"]
+    metadata = tomllib.loads(original.decode("utf-8"))
+    requirements = {
+        requirement.name: requirement
+        for raw in metadata["project"]["optional-dependencies"]["dev"]
+        if (requirement := Requirement(raw)).name in {"ruff", "mypy", "pytest"}
+    }
+    assert requirements.keys() == {"ruff", "mypy", "pytest"}
+    pins = ", ".join(str(requirements[tool]) for tool in ("ruff", "mypy", "pytest"))
+    assert f"Failed TPP checkout {checkout} has {pins}." in task_notes(proposed_ledger, "task-05")
+    failed_log = (EVIDENCE / "failed-install-excerpts.log").read_text(encoding="utf-8")
+    assert f"Collecting {requirements['ruff']} (from travel-plan-permission==0.1.0)" in failed_log
+    assert f"TPP_PINNED_REF: {checkout}" in failed_log
+    assert "ResolutionImpossible" in failed_log
 
 
 def test_smoke_and_local_command_records_match_receipts(proposed_ledger: dict):
