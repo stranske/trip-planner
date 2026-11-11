@@ -1,5 +1,35 @@
 # Issue 2025 acceptance evidence
 
+## Historical resolver cases — 2026-11-11
+
+Reviewed commits through `445cf579`: no additional acceptance task is complete.
+The consumer's offline pip regression now reads both historical planner/TPP
+metadata pairs directly. The failed-run pair produces `ResolutionImpossible`;
+the successful-run pair resolves the original Ruff, mypy and pytest versions.
+These cases isolate the reported dev-tool constraints with metadata-only wheels;
+they do not establish a complete editable installation or owning Workflows CI.
+Changing only the successful TPP snapshot's Ruff pin to `0.17.2` fails its new
+case with `ResolutionImpossible`; byte-for-byte restoration passes. The focused
+consumer command below now reports **54 passed, 2 skipped** in 2.85 seconds.
+
+At 03:36 UTC, pushed head `445cf579` still has successful CI (`42952597783`),
+Gate (`42952598033`) and Cross-Repo Smoke (`42952596996`). Its CI run was
+created at 03:24:54 UTC, over seven minutes before this review. The two active
+review findings remain valid: actual ledger reconciliation and Workflows
+integration. Workflows main still has no `tests/test_dependency_resolution.py`,
+and the owning regression commit has no returned pull-request workflow runs.
+The actual ledger remains read-only; the existing patch passes application
+checks. PR-body reconciliation, the blocker comment and `needs-human` label
+were rejected because GitHub writes require approval under this run's `never`
+policy. No remote checkbox changed. Both exact historical `gh run view --log`
+commands failed to connect; connector job logs confirmed the retained inputs.
+
+Ruff and whitespace checks pass. After individually verifying all Python files
+to populate a writable cache, the required full Black gate exits 0 with all
+530 files unchanged. Staging the test and these notes failed creating
+`.git/index.lock` with `Read-only file system`; no commit or push was possible.
+Both changes remain in the worktree for an authorized writer.
+
 ## Resolved checkout evidence — 2026-11-11T03:23Z
 
 Reviewed recent commits through `f58b0067`: no additional task is complete.
