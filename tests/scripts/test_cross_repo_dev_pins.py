@@ -492,11 +492,13 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
     if restored_tool is not None or historical_phase == "failed":
         assert result.returncode != 0, diagnostics
         assert "ResolutionImpossible" in diagnostics
-        tool = (
-            "ruff"
-            if restored_tool in ("all", "ruff-2017") or historical_phase == "failed"
-            else restored_tool
-        )
+        if restored_tool in ("all", "ruff-2017") or historical_phase == "failed":
+            tool = "ruff"
+        else:
+            # The enclosing condition means this branch is reachable only for
+            # a named restored tool, but mypy cannot infer that relationship.
+            assert restored_tool is not None
+            tool = restored_tool
         producer_requirement = (
             str(projects["tpp"][tool][0])
             if historical_phase is not None or restored_tool == "ruff-2017"
