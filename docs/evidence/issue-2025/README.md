@@ -258,3 +258,25 @@ Black command then exited 0 with 530 files unchanged. Its initial batch attempt
 had stalled and a bounded retry timed out. Final PR #2028 readback confirmed
 `state=open`, `draft=false`, at unchanged head
 `7fe8ce7c414385750c0242ae1cc58b7a7e4f5f42`.
+
+## Keepalive round 9 readback
+
+On 2026-11-11 UTC (2026-11-10 in Chicago), both requested logs were available.
+The failed and successful jobs ran the same joint editable install. The
+[trip-planner fix](https://github.com/stranske/trip-planner/commit/29c6aa01)
+changed `TPP_PINNED_REF` and added a dev-pin check before that install. The
+new check passed all 38 cases in the successful job. The final PR head adds
+the generated lockfile change on top of that fix. The failed-to-successful
+head diff has no change to `.github/workflows/autofix-versions.env`.
+
+At clean Workflows commit `f1ae1a4b8f704bf147938880c0010ded18d51022`, the
+documented `dev_check.sh` invocation above exited 0 again. The focused
+resolver command above passed all eight cases in 5.34 seconds using the
+owning checkout's Python 3.12.2 virtual environment. A fresh sync-core
+read confirmed `2026-11-08T13:30:21Z`, `delivered`, zero mismatches, no
+dependency-pin finding, and the same final #2006 head in target state.
+
+Opening the actual ledger for writing returned `Operation not permitted`.
+The reconciliation proposal records these results for an authorized ledger
+writer. T1, T3, T4 and A2 still require that writer to apply and verify the
+records in `.agents/issue-2007-ledger.yml`.

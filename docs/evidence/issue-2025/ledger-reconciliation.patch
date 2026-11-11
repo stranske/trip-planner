@@ -110,7 +110,7 @@
 +    commit: ""
 +    notes:
 +      - "Checked 2026-11-11T00:09:25Z: PR #2006 merged 2026-11-08T13:23:04Z at final head fcb6e97a291bd620629aa228561d36c3ee6cdf0d."
-+      - "Both logs install local editable dev extras; the PyPI-publication diagnosis in task-03 and the proposed source pin change are superseded. No source pin edit was required or performed."
++      - "Both logs install local editable dev extras; the PyPI-publication diagnosis in task-03 and the proposed source pin change are superseded. No source pin edit was required or performed. Trip-planner commit 29c6aa01 changes TPP_PINNED_REF in .github/workflows/cross-repo-smoke.yml and adds a dev-pin check before the joint install."
 +      - "Failed TPP checkout acc4aeddee5f4ffefbdc73fcb07505cd3d198197 has ruff==0.17.2, mypy==2.4.0, pytest==9.1.1. Successful checkout b56d92b389736c70370aa9134f379ac8cd1f3ad1 has ruff==0.17.3, mypy==2.4.1, pytest==9.2.0, matching planner dev pins."
 +      - "Historical task start retained here: 2026-11-08T05:39:41Z. See docs/evidence/issue-2025/*-install-excerpts.log."
    - id: task-06
@@ -165,7 +165,7 @@
 +      - "Checked Workflows commit f1ae1a4b8f704bf147938880c0010ded18d51022. Exact command: /tmp/trip-2025-workflows/.venv/bin/python -m pytest tests/test_dependency_resolution.py. Baseline exit 0 in 4.653s; mutation exit 1 in 3.258s; restored exit 0 in 4.582s."
 +      - "Interpreter is an isolated Python 3.12.2 venv created with the expressly permitted /opt/anaconda3/bin/python3 fallback; Workflows declares >=3.13, so supported-runtime CI remains pending."
 +      - "Documented command at f1ae1a4b8f704bf147938880c0010ded18d51022: TMPDIR=/private/tmp npm_config_cache=/private/tmp/trip-2028-npm-cache PATH=\"/opt/homebrew/opt/coreutils/libexec/gnubin:/tmp/trip-2025-workflows/.venv/bin:$PATH\" /opt/homebrew/bin/bash ./scripts/dev_check.sh --verbose. Exit 0."
-+      - "GNU mktemp, Bash 5 and a writable npm cache were used. See docs/evidence/issue-2025/owner-dev-check.log."
++      - "Rerun on 2026-11-11 UTC at the same clean Workflows commit: the documented command exited 0 and the focused resolver suite passed all 8 cases in 5.34 seconds. GNU mktemp, Bash 5 and a writable npm cache were used. See docs/evidence/issue-2025/README.md."
    - id: task-15
      title: Reintroducing the reported behavior makes the regression test fail; reverting
        restores a passing result.
