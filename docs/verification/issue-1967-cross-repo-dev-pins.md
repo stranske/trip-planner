@@ -187,3 +187,41 @@ Committing this follow-up is also blocked: `git add` fails to create
 changes are saved in `/tmp/issue1967-exact-restoration.patch`; apply and commit
 them on the existing PR branch from a writable checkout. No branch, PR or
 workflow change was made.
+
+## Keepalive follow-up: automated diagnostic sensitivity
+
+Reviewed commits `9539a3bd`, `1fabd3cc`, `a5226e57` and `00f8bce2` before
+continuing. Tasks 3 and 4 remain verified; tasks 1 and 2 remain blocked for
+literal revalidation in this sandbox, as documented above. The reconciled PR
+checklist is saved in `/tmp/issue1967-pr-body.md`. The GitHub connector rejected
+the PR-body update and `needs-human` label because those mutations require
+approval and this run's approval policy is `never`.
+
+Added four parameterized sensitivity checks to the focused module. Each removes
+the version details for Ruff, mypy, pytest or all three while preserving conflict
+detection. The actual historical regression must then fail. Exiting the isolated
+monkeypatch context restores the original conflict function, and the same
+historical regression must pass with unchanged metadata. The checks use temporary
+checkouts and never modify a repository workflow or dependency pin.
+
+- [ ] Literal owner command: the requested interpreter and live TPP checkout
+  remain absent; no zero-skip result is inferred from metadata fixtures.
+- [ ] Literal workflow mutation: protected workflow edits remain unauthorized.
+- [x] Diagnostic removal and restoration: all four automated cases pass.
+- [x] Focused validation only: the module passes **48 tests, 2 skipped** under
+  Python 3.14.10 with `-m "not slow"`. The two skips require the live checkout.
+  Python 3.12.2 remains the owner-directed fallback; supported-runtime application
+  validation relies on hosted checks.
+
+Focused Ruff and mypy pass. No downstream delivery or classification acceptance
+is inferred from these results.
+
+The required repository-wide Black command passes with **530 files left
+unchanged** using `BLACK_CACHE_DIR=/tmp/issue1967-diagnostics-black-cache` and
+`BLACK_NUM_WORKERS=1` after individual checks populated the cache. `git add`
+fails creating `.git/index.lock` because `.git` is read-only, so no commit was
+created. The changes are saved in `/tmp/issue1967-diagnostic-sensitivity.patch`
+for commit on the existing PR branch from a writable checkout.
+The required blocker comment was also rejected by the GitHub connector under
+the same approval policy. Fresh readback confirms #2029 is open and ready for
+review (`draft=false`).

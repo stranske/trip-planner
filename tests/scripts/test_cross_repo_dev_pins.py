@@ -457,6 +457,38 @@ def test_smoke_pin_guard_with_historical_editable_checkouts(
         test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
 
 
+@pytest.mark.parametrize("tool", ["ruff", "mypy", "pytest", "all"])
+def test_historical_regression_rejects_missing_version_diagnostics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tool: str
+) -> None:
+    """Keep conflict detection intact while proving version loss fails the regression."""
+    original_find_pin_conflicts = find_pin_conflicts
+
+    def without_versions(planner: Path, producer: Path) -> list[str]:
+        conflicts = original_find_pin_conflicts(planner, producer)
+        for index, conflict in enumerate(conflicts):
+            name = conflict.split(":", 1)[0]
+            if tool in (name, "all"):
+                conflicts[index] = f"{name}: trip-planner vs TPP"
+        return conflicts
+
+    for phase in ("broken", "restored"):
+        checkout = tmp_path / phase
+        checkout.mkdir()
+        with monkeypatch.context() as isolated:
+            if phase == "broken":
+                isolated.setattr(f"{__name__}.find_pin_conflicts", without_versions)
+                with pytest.raises(AssertionError):
+                    test_smoke_pin_guard_with_historical_editable_checkouts(
+                        checkout, isolated, "failed", "failed", True
+                    )
+            else:
+                assert find_pin_conflicts is original_find_pin_conflicts
+                test_smoke_pin_guard_with_historical_editable_checkouts(
+                    checkout, isolated, "failed", "failed", True
+                )
+
+
 @pytest.mark.parametrize(
     ("restored_tool", "historical_phase"),
     [
