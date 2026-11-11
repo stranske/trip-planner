@@ -317,6 +317,25 @@ T4 and A2 still require actual ledger records; a proposal cannot satisfy them.
 Drainable: publish these receipts on the existing branch for the authorized
 ledger writer. Source integration and supported-runtime CI remain unverified.
 
+## Keepalive round 11 readback
+
+Checked 2026-11-11 UTC (November 10 in Chicago). Both historical logs and the
+final-head smoke receipt were retrieved again. The proposed task-03 notes now
+identify the editable checkout as the conflict source and distinguish smoke
+fix `29c6aa01` from the lockfile-only final PR commit. The documented Workflows
+check exited 0 at clean commit `f1ae1a4b8f704bf147938880c0010ded18d51022`, and
+its focused resolver suite passed 8 cases in 4.12 seconds.
+
+Both Maint 68 artifacts were downloaded again. The first was generated at
+`2026-11-08T13:36:35.802Z` and has no trip-planner result. The second reports
+template PR #2014. The first post-merge sync-core record for #2006 remains
+`20261108T133016Z` at `2026-11-08T13:30:21Z`. It records delivery with zero
+mismatches and no dependency-pin finding. Live target state matches the merged
+PR's final head.
+
+The actual ledger is read-only in this worktree. The revised proposal awaits
+application and verification by a writer with access to the ledger.
+
 ## Failed-checkout metadata and post-push review
 
 The task-05 check now verifies the complete failed TPP `pyproject.toml` against

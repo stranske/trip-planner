@@ -51,9 +51,9 @@
 +      - "Confirmed: version pins produce ResolutionImpossible error"
 +      - "Source pin file in sync source repository: stranske/Workflows/.github/workflows/autofix-versions.env"
 +      - "Current pins in Workflows: RUFF_VERSION=0.17.3, BLACK_VERSION=26.10.1, ISORT_VERSION=9.0.2, MYPY_VERSION=2.4.1"
-+      - "Pins in trip-planner before sync: RUFF_VERSION=0.17.2 (in autofix-versions.env), ruff==0.17.2 (in pyproject.toml)"
-+      - "PR #2006 updates trip-planner pins to match Workflows (RUFF_VERSION=0.17.3)"
-+      - "Published package conflict: travel-plan-permission 0.1.0 on PyPI has ruff==0.17.2, trip-planner 0.1.0 on PyPI has ruff==0.17.3"
++      - "Failed run 42449207754 already resolved the trip-planner editable dev extra against Ruff 0.17.3, mypy 2.4.1 and pytest 9.2.0."
++      - "Trip-planner dev-tool pins in autofix-versions.env are identical at failed head 4ea6a28d and final head fcb6e97a. The final PR commit adds only a generated lockfile change on top of smoke fix 29c6aa01."
++      - "The conflicting Ruff 0.17.2 requirement came from editable Travel-Plan-Permission checkout acc4aed, selected via TPP_PINNED_REF in the failed workflow."
    - id: task-04
      title: 'Identify the source file in the sync source repository that defines the
        conflicting dev-tool pins (verify: confirm completion in repo)'
@@ -110,7 +110,7 @@
 +    commit: ""
 +    notes:
 +      - "Checked 2026-11-11T00:09:25Z: PR #2006 merged 2026-11-08T13:23:04Z at final head fcb6e97a291bd620629aa228561d36c3ee6cdf0d."
-+      - "Both logs install local editable dev extras; the PyPI-publication diagnosis in task-03 and the proposed source pin change are superseded. No source pin edit was required or performed. Trip-planner commit 29c6aa01 changes TPP_PINNED_REF in .github/workflows/cross-repo-smoke.yml and adds a dev-pin check before the joint install."
++      - "Both logs install local editable dev extras; the PyPI-publication diagnosis in task-03 and the proposed source pin change are superseded. No source pin edit was required or performed for this reconciliation. Trip-planner commit 29c6aa01 changes TPP_PINNED_REF in .github/workflows/cross-repo-smoke.yml and adds a dev-pin check before the joint install."
 +      - "Failed TPP checkout acc4aeddee5f4ffefbdc73fcb07505cd3d198197 has ruff==0.17.2, mypy==2.4.0, pytest==9.1.1. Successful checkout b56d92b389736c70370aa9134f379ac8cd1f3ad1 has ruff==0.17.3, mypy==2.4.1, pytest==9.2.0, matching planner dev pins."
 +      - "Historical task start retained here: 2026-11-08T05:39:41Z. See docs/evidence/issue-2025/*-install-excerpts.log."
    - id: task-06
@@ -165,7 +165,7 @@
 +      - "Checked Workflows commit f1ae1a4b8f704bf147938880c0010ded18d51022. Exact command: /tmp/trip-2025-workflows/.venv/bin/python -m pytest tests/test_dependency_resolution.py. Baseline exit 0 in 4.653s; mutation exit 1 in 3.258s; restored exit 0 in 4.582s."
 +      - "Interpreter is an isolated Python 3.12.2 venv created with the expressly permitted /opt/anaconda3/bin/python3 fallback; Workflows declares >=3.13, so supported-runtime CI remains pending."
 +      - "Documented command at f1ae1a4b8f704bf147938880c0010ded18d51022: TMPDIR=/private/tmp npm_config_cache=/private/tmp/trip-2028-npm-cache PATH=\"/opt/homebrew/opt/coreutils/libexec/gnubin:/tmp/trip-2025-workflows/.venv/bin:$PATH\" /opt/homebrew/bin/bash ./scripts/dev_check.sh --verbose. Exit 0."
-+      - "Rerun on 2026-11-11 UTC at the same clean Workflows commit: the documented command exited 0 and the focused resolver suite passed all 8 cases in 5.34 seconds. GNU mktemp, Bash 5 and a writable npm cache were used. See docs/evidence/issue-2025/README.md."
++      - "Rerun on 2026-11-11 UTC in keepalive round 11 at the same clean Workflows commit: the documented command exited 0 and the focused resolver suite passed all 8 cases in 4.12 seconds. GNU mktemp, Bash 5 and a writable npm cache were used. See docs/evidence/issue-2025/README.md."
    - id: task-15
      title: Reintroducing the reported behavior makes the regression test fail; reverting
        restores a passing result.
@@ -196,7 +196,7 @@
 +    notes:
 +      - "Live read of canonical rounds.jsonl on 2026-11-11T00:09:25Z: round 20261108T133016Z, timestamp 2026-11-08T13:30:21Z; target stranske/trip-planner#2006 disposition=delivered and terminal=delivered."
 +      - "Reason is merged 2026-11-08T13:23:04Z; 1 files, 0 mismatches. No dependency-pin finding in reasons/handoffs; error=null. Canonical target state binds last_round to final head fcb6e97a291bd620629aa228561d36c3ee6cdf0d."
-+      - "Reporting path for maint-68 is consumer-sync-run-report artifact at artifacts/consumer-sync-run-report.json; that template-sync report is not the dev-pin classifier. Subsequent sync-core evidence supplies the superseding merged classification. See sync-core-report.json."
++      - "Reporting path for maint-68 is consumer-sync-run-report artifact at artifacts/consumer-sync-run-report.json; the first post-merge artifact (run 42485644055, generated 2026-11-08T13:36:35.802Z) has no trip-planner result. The next (run 42499084007, generated 2026-11-08T16:19:22.356Z) reports template PR #2014. The earlier post-merge sync-core round supplies the superseding classification for #2006. See sync-core-report.json."
    - id: task-17
      title: Fix the failure named in the title (`Dev-tool pin update breaks Cross-Repo
        Smoke / cross-repo-full-product`) at its source; the failing check's log is
