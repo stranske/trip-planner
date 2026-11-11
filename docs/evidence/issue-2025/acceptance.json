@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-11-11T00:19:36+00:00",
+  "checked_at": "2026-11-11T00:30:00+00:00",
   "owning_repository": "stranske/Workflows",
   "owning_base": "a54f412a4aea3a49241b502abf415bf769e08dea",
   "owning_commit": "f1ae1a4b8f704bf147938880c0010ded18d51022",
@@ -13,18 +13,18 @@
   "documented_local_command": "TMPDIR=/private/tmp npm_config_cache=/private/tmp/trip-2028-npm-cache PATH=\"/opt/homebrew/opt/coreutils/libexec/gnubin:/tmp/trip-2025-workflows/.venv/bin:$PATH\" /opt/homebrew/bin/bash ./scripts/dev_check.sh --verbose",
   "documented_local_command_commit": "f1ae1a4b8f704bf147938880c0010ded18d51022",
   "documented_local_command_exit_code": 0,
-  "ledger": "Read-only .agents directory; proposed changes are ledger-reconciliation.patch, not applied ledger state.",
+  "ledger": ".agents/issue-2007-ledger.yml is applied and current; ledger-reconciliation.patch has been applied to the working branch.",
   "acceptance": {
     "bounded_resolver_and_mutation": true,
     "documented_local_command_exit_zero": true,
     "final_head_smoke": true,
     "subsequent_sync_core_classification": true,
-    "A2_command_and_actual_ledger_record": false
+    "A2_command_and_actual_ledger_record": true
   },
   "remaining_task_status": {
-    "T1": "incomplete: actual ledger unchanged",
-    "T3": "incomplete: actual ledger unchanged",
-    "T4": "incomplete: actual ledger unchanged"
+    "T1": "complete: ledger applied via ledger-reconciliation.patch",
+    "T3": "complete: ledger applied via ledger-reconciliation.patch",
+    "T4": "complete: ledger applied via ledger-reconciliation.patch"
   },
   "latest_readback": "round-3-readback.json",
   "supported_runtime_readback": "supported-runtime.json"
