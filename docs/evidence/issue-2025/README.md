@@ -135,12 +135,12 @@ or bypassing the restriction would not resolve the access boundary.
 The reconciliation proposal now also repairs malformed YAML notes, normalizes
 schema timestamps, supplies local evidence commits for completed records, and
 keeps task 07 blocked pending owning-source integration. Previously, applying
-the patch cleanly still produced invalid YAML. Five regression tests in
+the patch cleanly still produced invalid YAML. Six regression cases in
 `tests/test_issue_2025_ledger_reconciliation.py` apply the proposal only to a
 temporary copy of the ledger at `6f2bbe03c8b1c36c3feadf4cc56b0965c927cf5f`,
 validate the entire result with the existing ledger validator (strict commit
 checking), and cross-check its records against the saved install, smoke,
-mutation and sync receipts. On Python 3.14.10, this command passes all 21 tests:
+mutation and sync receipts. On Python 3.14.10, this command passes all 22 tests:
 
 ```sh
 python -m pytest tests/test_issue_2025_ledger_reconciliation.py tests/test_dependency_version_alignment.py tests/scripts/test_validate_dependency_test_setup.py -m 'not slow' -q
@@ -166,3 +166,15 @@ Ruff, `git diff --check`, and `git apply --check` also passed. GitHub commit-tre
 creation was separately rejected by the same approval policy, so no commit or
 push was made. PR #2028 was verified open with `draft=false` at its unchanged
 head `dc166cc9e14e0551b6d4c8ba5fac7718c22f809f`.
+
+The latest reconciliation checks require the logged `TPP_PINNED_REF` selection
+to match fixture provenance, require all three historical tool pins in the
+proposal, and require the resolver, editable install and product-check steps to
+complete successfully before #2006 merged. An in-memory mutation marking only
+the resolver step skipped makes the smoke-record check fail; the unchanged
+receipts pass. Timestamp comparisons now parse the recorded UTC offsets.
+These checks strengthen the handoff for T1; they do not apply the ledger patch.
+A fresh GitHub comparison still reports the owning source commit as diverged
+from Workflows main, and no pull-request CI runs exist at that commit. The
+exact `gh run view ... --log` commands could not reach GitHub from this runner;
+the GitHub connector independently confirmed both historical jobs and steps.

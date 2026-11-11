@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -81,38 +82,64 @@ def test_reconciled_tasks_pass_existing_ledger_validator(
     assert ledger_validate.validate_ledger(path) == []
 
 
-def test_pin_reconciliation_matches_historical_editable_installs(proposed_ledger: dict):
+@pytest.mark.parametrize(
+    ("phase", "diagnostic", "tool_pins"),
+    [
+        ("failed", "ResolutionImpossible", ("0.17.2", "2.4.0", "9.1.1")),
+        ("successful", "No broken requirements found.", ("0.17.3", "2.4.1", "9.2.0")),
+    ],
+)
+def test_pin_reconciliation_matches_historical_editable_installs(
+    proposed_ledger: dict, phase: str, diagnostic: str, tool_pins: tuple[str, str, str]
+):
+    """Bind each diagnosis to the selected editable checkout and its tool pins."""
     notes = task_notes(proposed_ledger, "task-05")
     tasks = {task["id"]: task for task in proposed_ledger["tasks"]}
     assert tasks["task-05"]["status"] == "deferred"
     provenance = read_receipt("fixture-provenance.json")
-    for phase, diagnostic in (
-        ("failed", "ResolutionImpossible"),
-        ("successful", "No broken requirements found."),
-    ):
-        log = (EVIDENCE / f"{phase}-install-excerpts.log").read_text(encoding="utf-8")
-        fixture = next(
-            item for item in provenance if item["fixture"] == f"{phase}/travel-plan-permission.toml"
-        )
-        checkout = fixture["source_url"].split("/blob/")[1].split("/")[0]
-        assert checkout in log and checkout in notes
-        assert 'pip install -e ".[dev]" -e "../trip-planner[dev]"' in log
-        assert diagnostic in log
+    log = (EVIDENCE / f"{phase}-install-excerpts.log").read_text(encoding="utf-8")
+    fixture = next(
+        item for item in provenance if item["fixture"] == f"{phase}/travel-plan-permission.toml"
+    )
+    checkout = fixture["source_url"].split("/blob/")[1].split("/")[0]
+    # A SHA appearing elsewhere in the log is insufficient: it must be the
+    # actual TPP checkout input, with no conflicting selection in that run.
+    assert set(re.findall(r"\bTPP_PINNED_REF: ([0-9a-f]{40})\b", log)) == {checkout}
+    pins = ", ".join(
+        f"{tool}=={version}" for tool, version in zip(("ruff", "mypy", "pytest"), tool_pins)
+    )
+    assert f"checkout {checkout} has {pins}" in notes
+    assert f"Collecting ruff=={tool_pins[0]} (from travel-plan-permission==0.1.0)" in log
+    assert 'pip install -e ".[dev]" -e "../trip-planner[dev]"' in log
+    assert diagnostic in log
     assert "PyPI-publication diagnosis" in notes and "superseded" in notes
     assert "No source pin edit was required or performed" in notes
 
 
 def test_smoke_and_local_command_records_match_receipts(proposed_ledger: dict):
+    """Require successful resolver and install steps at the head that merged."""
     notes = task_notes(proposed_ledger, "task-14")
     smoke = read_receipt("smoke-run.json")
     merged = read_receipt("merged-pr.json")
     acceptance = read_receipt("acceptance.json")
     assert smoke["headSha"] == merged["headRefOid"]
     assert smoke["conclusion"] == "success"
-    assert any(
-        job["name"] == "cross-repo-full-product" and job["conclusion"] == "success"
-        for job in smoke["jobs"]
+    assert merged["state"] == "MERGED"
+    job = next(job for job in smoke["jobs"] if job["name"] == "cross-repo-full-product")
+    assert job["status"] == "completed" and job["conclusion"] == "success"
+    steps = {step["name"]: step for step in job["steps"]}
+    required_steps = (
+        "Check dev pins co-resolve with pinned TPP",
+        "Install Travel-Plan-Permission dependencies",
+        "Run full-product-check against sibling TPP checkout",
     )
+    for name in required_steps:
+        assert steps[name]["status"] == "completed"
+        assert steps[name]["conclusion"] == "success"
+    assert [steps[name]["number"] for name in required_steps] == sorted(
+        steps[name]["number"] for name in required_steps
+    )
+    assert datetime.fromisoformat(job["completedAt"]) < datetime.fromisoformat(merged["mergedAt"])
     assert smoke["headSha"] in notes
     assert merged["mergeCommit"]["oid"] in notes
     assert acceptance["documented_local_command"] in notes
@@ -140,7 +167,7 @@ def test_sync_classification_matches_merged_head(proposed_ledger: dict):
     notes = task_notes(proposed_ledger, "task-16")
     report = read_receipt("sync-core-report.json")
     merged = read_receipt("merged-pr.json")
-    assert report["timestamp"] > merged["mergedAt"]
+    assert datetime.fromisoformat(report["timestamp"]) > datetime.fromisoformat(merged["mergedAt"])
     assert report["item"]["target"] == "stranske/trip-planner#2006"
     assert report["item"]["disposition"] == "delivered"
     assert report["item"]["error"] is None and report["item"]["handoffs"] == []
