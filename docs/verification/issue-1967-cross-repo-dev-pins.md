@@ -252,3 +252,37 @@ confirms #2029 remains open with `draft=false`. `git add` again fails to create
 `.git/index.lock` because `.git` is read-only, so committing requires the owning
 automation lane. The source and note patch is saved in
 `/tmp/issue1967-side-diagnostics.patch`.
+
+## Keepalive follow-up: committed producer metadata
+
+Reviewed recent commits through `74194e4c`. Tasks 3 and 4 remain verified;
+tasks 1 and 2 remain unchecked for fresh validation because the owner interpreter
+and real TPP checkout are absent and repository workflow edits are prohibited.
+The PR-body reconciliation, `needs-human` label and blocker comment were rejected
+because the connector requires approval while this run's policy is `never`.
+The reconciled body is saved in `/tmp/issue1967-pr-body.md`.
+
+The live checkout guard now reads `pyproject.toml` from the verified commit as
+well as the working tree and compares both sets of runtime and dev dependencies
+with the reviewed snapshot. A locally changed file matching the snapshot can no
+longer conceal different committed dependencies. Four new regression cases
+cover committed runtime/dev mismatches with and without inherited Git locations.
+All four failed against the previous guard because it accepted those inputs.
+
+After the guard change, the focused command
+`python -m pytest tests/scripts/test_cross_repo_dev_pins.py -q -m "not slow"`
+passes **60 tests, 2 skipped** under Python 3.14.10. The two live-checkout skips
+remain; this does not reproduce the historical owner's 45-test, zero-skip run.
+Focused Ruff and mypy pass. No application tests, workflow edits or dependency
+pin changes were made. Supported-runtime application validation still relies
+on hosted checks; Python 3.12.2 remains the owner-directed fallback.
+
+The required repository-wide Black command passes with **530 files left
+unchanged** after serial checks populated `BLACK_CACHE_DIR=/tmp/issue1967-committed-black-cache`;
+the final command used that cache and `BLACK_NUM_WORKERS=1`.
+
+The commit attempt failed because `git add` cannot create `.git/index.lock`
+on the read-only Git directory. The source and note changes are saved in
+`/tmp/issue1967-committed-metadata.patch` for commit on the existing PR branch
+from a writable checkout. Fresh readback confirms #2029 is open and ready for
+review (`draft=false`). No branch or pull request was created.

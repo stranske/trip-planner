@@ -208,18 +208,33 @@ def test_live_tpp_checkout_matches_workflow_snapshot() -> None:
     )
     snapshot = REPO_ROOT / "tests" / "fixtures" / "tpp_dev_pins" / pinned_ref / "pyproject.toml"
     producer = tomllib.loads((checkout / "pyproject.toml").read_text())["project"]
-    reviewed = tomllib.loads(snapshot.read_text())["project"]
-    for section, actual, expected in (
-        ("runtime", producer["dependencies"], reviewed["dependencies"]),
-        ("dev", producer["optional-dependencies"]["dev"], reviewed["optional-dependencies"]["dev"]),
-    ):
-        assert sorted(actual) == sorted(expected), (
-            f"TPP {section} dependency snapshot differs from checkout {pinned_ref}; "
-            "refresh the snapshot from the pinned source before recording verification."
+    committed = tomllib.loads(
+        subprocess.check_output(
+            ["git", "-C", str(checkout), "show", f"{resolved}:pyproject.toml"],
+            text=True,
+            timeout=10,
+            env=_checkout_git_env(),
         )
+    )["project"]
+    reviewed = tomllib.loads(snapshot.read_text())["project"]
+    for source, project in (("working tree", producer), ("committed source", committed)):
+        for section, actual, expected in (
+            ("runtime", project["dependencies"], reviewed["dependencies"]),
+            (
+                "dev",
+                project["optional-dependencies"]["dev"],
+                reviewed["optional-dependencies"]["dev"],
+            ),
+        ):
+            assert sorted(actual) == sorted(expected), (
+                f"TPP {section} dependency snapshot differs from {source} at {pinned_ref}; "
+                "refresh the snapshot from the pinned source before recording verification."
+            )
 
 
-@pytest.mark.parametrize("mismatch", [None, "head", "runtime", "dev"])
+@pytest.mark.parametrize(
+    "mismatch", [None, "head", "runtime", "dev", "committed-runtime", "committed-dev"]
+)
 @pytest.mark.parametrize("inherit_git_locations", [False, True])
 def test_live_snapshot_guard_rejects_unverified_producer_metadata(
     tmp_path: Path,
@@ -247,7 +262,12 @@ def test_live_snapshot_guard_rejects_unverified_producer_metadata(
         '[project]\ndependencies = ["httpx>=0.28.1"]\n'
         '[project.optional-dependencies]\ndev = ["ruff==0.17.3"]\n'
     )
-    pyproject.write_text(metadata, encoding="utf-8")
+    committed_metadata = metadata
+    if mismatch == "committed-runtime":
+        committed_metadata = metadata.replace("httpx>=0.28.1", "httpx>=0.29")
+    elif mismatch == "committed-dev":
+        committed_metadata = metadata.replace("ruff==0.17.3", "ruff==0.17.2")
+    pyproject.write_text(committed_metadata, encoding="utf-8")
     for command in (
         ["init", "--quiet"],
         ["add", "pyproject.toml"],
@@ -270,6 +290,8 @@ def test_live_snapshot_guard_rejects_unverified_producer_metadata(
             timeout=10,
             env=_checkout_git_env(),
         )
+    # A matching working copy must not conceal different dependencies at HEAD.
+    pyproject.write_text(metadata, encoding="utf-8")
     pinned_ref = subprocess.check_output(
         ["git", "-C", str(checkout), "rev-parse", "HEAD"],
         text=True,
