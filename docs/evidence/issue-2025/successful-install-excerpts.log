@@ -17,7 +17,10 @@ cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:18:57.7338898Z   TPP_REPO_PAT
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:19:02.2826929Z 38 passed, 14 warnings in 2.30s
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:19:02.5852825Z   TPP_PINNED_REF: b56d92b389736c70370aa9134f379ac8cd1f3ad1
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:19:03.7287587Z ^[[36;1m.venv/bin/python -m pip install -e ".[dev]" -e "../trip-planner[dev]"^[[0m
+cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:19:03.7287964Z ^[[36;1m.venv/bin/python -m pip check^[[0m
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:19:03.7344312Z   TPP_PINNED_REF: b56d92b389736c70370aa9134f379ac8cd1f3ad1
+cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:19:06.3309144Z Obtaining file:///home/runner/work/trip-planner/trip-planner/Travel-Plan-Permission
+cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:19:06.5050838Z Obtaining file:///home/runner/work/trip-planner/trip-planner/trip-planner
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:19:08.4620245Z Collecting pytest==9.2.0 (from travel-plan-permission==0.1.0)
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:19:08.8414703Z Collecting ruff==0.17.3 (from travel-plan-permission==0.1.0)
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:19:08.9343466Z Collecting mypy==2.4.1 (from travel-plan-permission==0.1.0)

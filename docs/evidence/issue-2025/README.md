@@ -1,5 +1,26 @@
 # Issue 2025 acceptance evidence
 
+## Joint editable install evidence — 2026-11-11
+
+At consumer head `f9f8406927fe3e36e9d8a0fc3eaa3bb796a0ae33`, the connector
+reread jobs `128634593803` and `128742727094`. Six additional verbatim lines
+preserve pip's reads of both local editable sources and the TPP venv
+`pip check` command. Two new regression cases bind those reads to the joint
+install outcome and the successful smoke step's recorded time window.
+Wrong-source, different-interpreter and out-of-step-outcome mutations all fail;
+restoring the original bytes passes.
+
+`python -m pytest tests/test_issue_2025_ledger_reconciliation.py tests/scripts/test_cross_repo_dev_pins.py -m 'not slow' -q`
+passes **60 tests, 2 skipped** in 3.38 seconds on Python 3.14.10. Both skips
+require a sibling checkout. Ruff, whitespace, ledger patch application checks
+and the required full Black gate pass (530 files unchanged). Both exact
+historical `gh run view --log` commands failed to connect. The actual ledger
+remains read-only; no checkbox changed. Staging failed creating
+`.git/index.lock` on the read-only filesystem, so these changes remain
+uncommitted. An authorized writer must commit them and apply the ledger patch.
+Automatic approval review rejected the `needs-human` label and blocker comment
+because GitHub writes require approval under this run's `never` policy.
+
 ## Historical smoke guard regression — 2026-11-11
 
 Reviewed recent commits through `875e26e3`; no additional ledger or source

@@ -155,6 +155,57 @@ def test_install_logs_bind_resolved_checkouts_to_historical_metadata(phase: str)
         assert checkouts["trip-planner"] == read_receipt("merged-pr.json")["headRefOid"]
 
 
+@pytest.mark.parametrize(
+    ("phase", "diagnostic"),
+    [("failed", "ERROR: ResolutionImpossible:"), ("successful", "No broken requirements found.")],
+)
+def test_joint_install_resolves_both_local_sources_before_recorded_outcome(
+    phase: str, diagnostic: str
+):
+    """Do not mistake a planner-only install or an unrelated pip check for the joint install."""
+    log = (EVIDENCE / f"{phase}-install-excerpts.log").read_text(encoding="utf-8")
+    events = []
+    for line in log.splitlines():
+        job, _, event = line.split("\t", 2)
+        assert job == "cross-repo-full-product"
+        timestamp, message = event.split(" ", 1)
+        events.append((datetime.fromisoformat(timestamp), message.strip()))
+    assert [timestamp for timestamp, _ in events] == sorted(timestamp for timestamp, _ in events)
+
+    command = '.venv/bin/python -m pip install -e ".[dev]" -e "../trip-planner[dev]"'
+    (install_start,) = [
+        index for index, (_, message) in enumerate(events) if message == f"^[[36;1m{command}^[[0m"
+    ]
+    (outcome,) = [index for index, (_, message) in enumerate(events) if diagnostic in message]
+    assert install_start < outcome
+    install = events[install_start : outcome + 1]
+    messages = [message for _, message in install]
+    assert "^[[36;1m.venv/bin/python -m pip check^[[0m" in messages
+    # These are pip's actual source reads after the joint command, not checkout
+    # settings or the earlier successful planner-only installation.
+    assert [message for message in messages if message.startswith("Obtaining file:")] == [
+        "Obtaining file:///home/runner/work/trip-planner/trip-planner/Travel-Plan-Permission",
+        "Obtaining file:///home/runner/work/trip-planner/trip-planner/trip-planner",
+    ]
+    assert sum("ResolutionImpossible" in message for _, message in events) == (phase == "failed")
+    assert sum(message == "No broken requirements found." for _, message in events) == (
+        phase == "successful"
+    )
+    if phase == "successful":
+        smoke = read_receipt("smoke-run.json")
+        job = next(job for job in smoke["jobs"] if job["name"] == "cross-repo-full-product")
+        step = next(
+            step
+            for step in job["steps"]
+            if step["name"] == "Install Travel-Plan-Permission dependencies"
+        )
+        started = datetime.fromisoformat(step["startedAt"])
+        finished = datetime.fromisoformat(step["completedAt"])
+        assert all(
+            started <= timestamp.replace(microsecond=0) <= finished for timestamp, _ in install
+        )
+
+
 def test_checkout_fix_matches_preserved_tpp_metadata(proposed_ledger: dict):
     """Check the claimed resolution against the selected producer's real metadata."""
     notes = task_notes(proposed_ledger, "task-05")
