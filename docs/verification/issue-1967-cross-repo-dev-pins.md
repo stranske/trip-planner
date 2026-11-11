@@ -225,3 +225,30 @@ for commit on the existing PR branch from a writable checkout.
 The required blocker comment was also rejected by the GitHub connector under
 the same approval policy. Fresh readback confirms #2029 is open and ready for
 review (`draft=false`).
+
+## Keepalive follow-up: version loss from either project
+
+Reviewed commits `9539a3bd` through `7ae2b727`. Tasks 3 and 4 remain verified;
+tasks 1 and 2 remain blocked by the absent owner interpreter/live checkout and
+the prohibition on repository workflow edits. The owner's recorded 45-test
+result predates the expanded suite and is not a fresh sandbox result.
+
+The diagnostic sensitivity test now removes version details from planner, TPP
+or both, independently for each tool and all three tools. All 12 cases require
+the historical regression to fail, then pass after restoring the original
+function. The focused module passes **56 tests, 2 skipped** under Python
+3.14.10 with `-m "not slow"`; both skips need the live producer checkout.
+Focused Ruff and mypy pass. No application suite was run.
+
+The required repository-wide Black check passes with **530 files left
+unchanged**, using `BLACK_CACHE_DIR=/tmp/issue1967-side-diagnostics-black-cache`
+and `BLACK_NUM_WORKERS=1` after individual checks populated the cache with the
+repository's Python 3.13/3.14 target versions.
+
+PR-body reconciliation, `needs-human` and the blocker comment were rejected
+because the connector requires approval and this run's policy is `never`.
+The reconciled body is saved in `/tmp/issue1967-pr-body.md`. Fresh readback
+confirms #2029 remains open with `draft=false`. `git add` again fails to create
+`.git/index.lock` because `.git` is read-only, so committing requires the owning
+automation lane. The source and note patch is saved in
+`/tmp/issue1967-side-diagnostics.patch`.

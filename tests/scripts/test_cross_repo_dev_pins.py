@@ -458,10 +458,11 @@ def test_smoke_pin_guard_with_historical_editable_checkouts(
 
 
 @pytest.mark.parametrize("tool", ["ruff", "mypy", "pytest", "all"])
+@pytest.mark.parametrize("missing_from", ["planner", "producer", "both"])
 def test_historical_regression_rejects_missing_version_diagnostics(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tool: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tool: str, missing_from: str
 ) -> None:
-    """Keep conflict detection intact while proving version loss fails the regression."""
+    """Losing either project's versions must fail the historical regression."""
     original_find_pin_conflicts = find_pin_conflicts
 
     def without_versions(planner: Path, producer: Path) -> list[str]:
@@ -469,7 +470,12 @@ def test_historical_regression_rejects_missing_version_diagnostics(
         for index, conflict in enumerate(conflicts):
             name = conflict.split(":", 1)[0]
             if tool in (name, "all"):
-                conflicts[index] = f"{name}: trip-planner vs TPP"
+                planner_diagnostic, producer_diagnostic = conflict.split(" vs TPP ", 1)
+                if missing_from in ("planner", "both"):
+                    planner_diagnostic = f"{name}: trip-planner"
+                if missing_from in ("producer", "both"):
+                    producer_diagnostic = ""
+                conflicts[index] = f"{planner_diagnostic} vs TPP {producer_diagnostic}".rstrip()
         return conflicts
 
     for phase in ("broken", "restored"):
