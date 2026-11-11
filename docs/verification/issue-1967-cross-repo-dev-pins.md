@@ -286,3 +286,29 @@ on the read-only Git directory. The source and note changes are saved in
 `/tmp/issue1967-committed-metadata.patch` for commit on the existing PR branch
 from a writable checkout. Fresh readback confirms #2029 is open and ready for
 review (`draft=false`). No branch or pull request was created.
+
+## Keepalive follow-up: producer repository root
+
+Reviewed recent commits through `9899bbba`. Tasks 3 and 4 remain verified;
+tasks 1 and 2 remain unchecked because the literal owner interpreter and live
+checkout are absent, Git cannot resolve GitHub, and workflow edits are prohibited.
+PR-body reconciliation, `needs-human` and the blocker comment were rejected
+because those connector writes require approval under policy `never`.
+The reconciled checklist is saved at `/tmp/issue1967-pr-body.md`.
+
+The live guard now requires `TPP_REPO_PATH` to identify the producer repository
+root. Previously a nested directory with copied metadata could pass using its
+ancestor's HEAD and committed metadata. Both new regression cases, with and
+without inherited Git locations, failed against the previous guard. With the
+root check they pass, and the focused module reports **62 passed, 2 skipped**
+under Python 3.14.10 with `-m "not slow"`. The skips still require a real TPP
+checkout. Focused Ruff and mypy pass; no application suite ran. This advances
+the live-checkout guard without claiming literal owner-command acceptance.
+
+The required repository-wide Black command passes with **530 files left
+unchanged**, using `BLACK_CACHE_DIR=/tmp/issue1967-root-serial-cache` and
+`BLACK_NUM_WORKERS=1` after individual serial checks populated the cache.
+Staging fails because `.git/index.lock` cannot be created on the read-only Git
+directory, so no commit was created. The validated changes are saved at
+`/tmp/issue1967-producer-root.patch`. Fresh readback confirms #2029 remains
+open and ready for review (`draft=false`).

@@ -194,14 +194,18 @@ def test_live_tpp_checkout_matches_workflow_snapshot() -> None:
         (REPO_ROOT / ".github" / "workflows" / "cross-repo-smoke.yml").read_text()
     )
     pinned_ref = workflow["env"]["TPP_PINNED_REF"]
-    resolved = subprocess.run(
-        ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+    repository_root, resolved = subprocess.run(
+        ["git", "-C", str(checkout), "rev-parse", "--show-toplevel", "HEAD"],
         capture_output=True,
         text=True,
         timeout=10,
         check=True,
         env=_checkout_git_env(),
-    ).stdout.strip()
+    ).stdout.splitlines()
+    assert Path(repository_root).resolve() == checkout, (
+        f"TPP_REPO_PATH must point to the TPP repository root {repository_root}, "
+        f"but points to {checkout}. Ancestor Git metadata cannot verify this checkout."
+    )
     assert resolved == pinned_ref, (
         f"TPP checkout HEAD {resolved} does not match TPP_PINNED_REF {pinned_ref}. "
         "Check out the workflow's pinned revision before recording live verification."
@@ -233,7 +237,8 @@ def test_live_tpp_checkout_matches_workflow_snapshot() -> None:
 
 
 @pytest.mark.parametrize(
-    "mismatch", [None, "head", "runtime", "dev", "committed-runtime", "committed-dev"]
+    "mismatch",
+    [None, "head", "runtime", "dev", "committed-runtime", "committed-dev", "nested-checkout"],
 )
 @pytest.mark.parametrize("inherit_git_locations", [False, True])
 def test_live_snapshot_guard_rejects_unverified_producer_metadata(
@@ -313,11 +318,23 @@ def test_live_snapshot_guard_rejects_unverified_producer_metadata(
         pyproject.write_text(metadata.replace("ruff==0.17.3", "ruff==0.17.2"), encoding="utf-8")
     monkeypatch.setattr(f"{__name__}.REPO_ROOT", tmp_path)
     monkeypatch.setenv("TPP_REPO_PATH", "tpp")
+    if mismatch == "nested-checkout":
+        # Git otherwise walks up to tpp/.git and accepts the ancestor's HEAD
+        # and committed metadata as provenance for this untracked directory.
+        nested = checkout / "nested"
+        nested.mkdir()
+        (nested / "pyproject.toml").write_text(metadata, encoding="utf-8")
+        monkeypatch.setenv("TPP_REPO_PATH", "tpp/nested")
 
     if mismatch is None:
         test_live_tpp_checkout_matches_workflow_snapshot()
     else:
-        message = "does not match TPP_PINNED_REF" if mismatch == "head" else "snapshot differs"
+        if mismatch == "head":
+            message = "does not match TPP_PINNED_REF"
+        elif mismatch == "nested-checkout":
+            message = "must point to the TPP repository root"
+        else:
+            message = "snapshot differs"
         with pytest.raises(AssertionError, match=message):
             test_live_tpp_checkout_matches_workflow_snapshot()
 
