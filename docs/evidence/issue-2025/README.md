@@ -1,5 +1,35 @@
 # Issue 2025 acceptance evidence
 
+## Historical smoke guard regression — 2026-11-11
+
+Reviewed recent commits through `875e26e3`; no additional ledger or source
+integration task is complete. The consumer guard now runs against the complete
+historical metadata from both editable checkouts. The original pair raises
+diagnostics for Ruff, mypy and pytest; replacing only the TPP metadata with
+the successful checkout passes, as does the final merged pair. These cases
+exercise the smoke job's guard entry point without a live sibling checkout.
+They do not establish owning Workflows integration or CI.
+
+The focused consumer command below passes **58 tests, 2 skipped** on Python
+3.14.10 in 4.28 seconds. An in-memory mutation suppressing conflict detection
+makes the new original-input case fail; repository files remain unchanged by
+the mutation. Ruff and whitespace checks pass, and the ledger proposal still
+passes `git apply --check`.
+
+Both exact historical `gh run view --log` commands cannot connect from this
+seat. Connector logs independently confirm the local editable installs and
+TPP checkout replacement. Workflows main still excludes the source commit
+and is six commits past its base. The actual ledger remains read-only.
+PR-body reconciliation, the blocker comment and `needs-human` label were
+rejected because GitHub writes require approval under policy `never`.
+No task checkbox changed.
+
+The required full Black gate exits 0 with all 530 Python files unchanged
+after individual checks populated a writable cache. The initial uncached
+invocation timed out. Staging the test and these notes failed creating
+`.git/index.lock` with `Read-only file system`, so this seat could not commit
+or push. Final PR readback confirmed open, `draft=false`, at `875e26e3`.
+
 ## Hosted keepalive: live pin-guard evidence — 2026-11-11
 
 The GitHub connector reread both historical jobs. Successful job `128742727094`

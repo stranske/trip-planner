@@ -372,6 +372,50 @@ def test_offline_workflow_guard_rejects_original_producer_pins(
 
 
 @pytest.mark.parametrize(
+    ("planner_phase", "producer_phase", "conflicting"),
+    [
+        pytest.param("failed", "failed", True, id="original-install-inputs"),
+        pytest.param("failed", "successful", False, id="change-only-tpp-checkout"),
+        pytest.param("successful", "successful", False, id="merged-install-inputs"),
+    ],
+)
+def test_smoke_pin_guard_with_historical_editable_checkouts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    planner_phase: str,
+    producer_phase: str,
+    conflicting: bool,
+) -> None:
+    """The actual smoke guard must detect the old checkout and accept its replacement."""
+    planner_source = (
+        REPO_ROOT / "tests/fixtures/issue_2025_ledger" / f"{planner_phase}-trip-planner.toml"
+    )
+    producer_ref = {
+        "failed": "acc4aeddee5f4ffefbdc73fcb07505cd3d198197",
+        "successful": "b56d92b389736c70370aa9134f379ac8cd1f3ad1",
+    }[producer_phase]
+    producer_source = REPO_ROOT / "tests/fixtures/tpp_dev_pins" / producer_ref / "pyproject.toml"
+    # Preserve both complete original metadata files, including runtime and dev
+    # requirements. The middle case changes only the selected producer source.
+    (tmp_path / "pyproject.toml").write_bytes(planner_source.read_bytes())
+    checkout = tmp_path / "tpp"
+    checkout.mkdir()
+    (checkout / "pyproject.toml").write_bytes(producer_source.read_bytes())
+    monkeypatch.setattr(f"{__name__}.REPO_ROOT", tmp_path)
+    monkeypatch.setenv("TPP_REPO_PATH", "tpp")
+
+    if conflicting:
+        with pytest.raises(AssertionError, match="cannot be installed together") as failure:
+            test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
+        diagnostics = str(failure.value)
+        for tool in ("ruff", "mypy", "pytest"):
+            assert f"{tool}: trip-planner" in diagnostics
+        assert "Move TPP_PINNED_REF" in diagnostics
+    else:
+        test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
+
+
+@pytest.mark.parametrize(
     ("restored_tool", "historical_phase"),
     [
         *((tool, None) for tool in ("all", "ruff", "mypy", "pytest", None)),
