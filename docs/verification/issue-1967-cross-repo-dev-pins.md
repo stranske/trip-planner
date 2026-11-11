@@ -141,3 +141,49 @@ Adding `needs-human` and posting the blocker comment through the GitHub
 connector were denied because those tools require approval and this run's
 approval policy is `never`. Fresh PR readback shows #2029 open and ready for
 review; no PR or branch was created by this run.
+
+## Keepalive follow-up: exact workflow fixture restoration
+
+Reviewed commits `9539a3bd`, `1fabd3cc` and `a5226e57` before proceeding.
+The diagnostic-removal and focused-validation tasks are verified by the prior
+iteration and remain checked above. The literal owner-command and protected
+workflow-mutation tasks remain unchecked. Updating the PR body, adding
+`needs-human` and posting the blocker comment were each denied by the GitHub
+connector: the tools require approval, while this run's approval policy is
+`never`. The proposed reconciled PR body is saved in
+`/tmp/issue1967-pr-body.md` for the owning automation lane.
+
+The offline break/restoration regression now copies the complete current
+workflow bytes into its temporary fixture and establishes a passing baseline.
+It replaces only the pinned SHA for the original-producer case, verifies the
+named compatibility check rejects the selected producer, and restores both
+workflow and producer metadata in a `finally` block. It checks exact restored
+bytes and requires the same compatibility check to pass again. It also verifies
+the repository workflow bytes are unchanged. All four cases, including the
+three isolated tool conflicts, use this sequence.
+
+`python -m pytest tests/scripts/test_cross_repo_dev_pins.py -q -m "not slow"`
+passes **44 tests with 2 skips** before and after this change. The current
+module collects 46 tests; the earlier 43-pass note does not describe this
+checkout. Both skipped checks still require the unavailable live TPP checkout.
+Python is 3.14.10 here; the owner's Python 3.12.2 fallback remains unavailable.
+Only the focused dependency-metadata module ran; supported-runtime application
+validation still relies on hosted checks.
+
+Sensitivity checks deliberately broke the revised temporary-fixture regression
+in two ways: leaving the current ref selected caused the expected missing-error
+failure, and restoring an environment-only YAML document failed the exact-byte
+assertion. Both mutations failed the `all` case as intended. The exact test-module
+bytes were restored in a `finally` block afterward.
+
+Final focused run: **44 passed, 2 skipped**. Focused Ruff and mypy pass.
+The required repository-wide Black command passes with **530 files left
+unchanged** after serial verification populated its cache; uncached worker
+runs stalled in this sandbox. Fresh GitHub readback confirms #2029 is open
+with `draft=false`.
+
+Committing this follow-up is also blocked: `git add` fails to create
+`.git/index.lock` because `.git` is read-only. The validated source and note
+changes are saved in `/tmp/issue1967-exact-restoration.patch`; apply and commit
+them on the existing PR branch from a writable checkout. No branch, PR or
+workflow change was made.

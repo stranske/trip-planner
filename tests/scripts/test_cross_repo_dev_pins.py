@@ -330,12 +330,13 @@ def test_offline_workflow_guard_rejects_original_producer_pins(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, restored_tool: str
 ) -> None:
     """The actual offline gate must catch an unpaired sync without a live checkout."""
-    workflow = yaml.safe_load(
-        (REPO_ROOT / ".github" / "workflows" / "cross-repo-smoke.yml").read_text()
-    )
+    source_workflow = REPO_ROOT / ".github" / "workflows" / "cross-repo-smoke.yml"
+    workflow_bytes = source_workflow.read_bytes()
+    workflow = yaml.safe_load(workflow_bytes)
     pinned_ref = workflow["env"]["TPP_PINNED_REF"]
     producer = REPO_ROOT / "tests" / "fixtures" / "tpp_dev_pins" / pinned_ref / "pyproject.toml"
-    metadata = producer.read_text(encoding="utf-8")
+    producer_bytes = producer.read_bytes()
+    metadata = producer_bytes.decode("utf-8")
     requirements = _requirements(REPO_ROOT / "pyproject.toml")
     old_versions = {"ruff": "0.17.2", "mypy": "2.4.0", "pytest": "9.1.1"}
     restored = (
@@ -363,31 +364,43 @@ def test_offline_workflow_guard_rejects_original_producer_pins(
     workflow_directory = tmp_path / ".github" / "workflows"
     workflow_directory.mkdir(parents=True)
     workflow_path = workflow_directory / "cross-repo-smoke.yml"
-    workflow_path.write_text(
-        yaml.safe_dump({"env": {"TPP_PINNED_REF": selected_ref}}), encoding="utf-8"
-    )
+    workflow_path.write_bytes(workflow_bytes)
+    current_snapshot = tmp_path / "tests" / "fixtures" / "tpp_dev_pins" / pinned_ref
+    current_snapshot.mkdir(parents=True)
+    current_metadata = current_snapshot / "pyproject.toml"
+    current_metadata.write_bytes(producer_bytes)
     snapshot = tmp_path / "tests" / "fixtures" / "tpp_dev_pins" / selected_ref
-    snapshot.mkdir(parents=True)
-    (snapshot / "pyproject.toml").write_text(metadata, encoding="utf-8")
+    snapshot.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(f"{__name__}.REPO_ROOT", tmp_path)
     monkeypatch.delenv("TPP_REPO_PATH", raising=False)
 
-    with pytest.raises(AssertionError, match="cannot be installed together") as failure:
-        test_workflow_tpp_pin_resolves_with_planner_dev_pins(monkeypatch)
-
-    for tool, version in restored.items():
-        assert f"{tool}: trip-planner '{requirements[tool][0]}' vs TPP '{tool}=={version}'" in str(
-            failure.value
+    # Establish a passing baseline with the complete current workflow and
+    # metadata, then change only the selected ref or one producer tool pin.
+    test_workflow_tpp_pin_resolves_with_planner_dev_pins(monkeypatch)
+    assert workflow_bytes.count(pinned_ref.encode("ascii")) == 1
+    try:
+        workflow_path.write_bytes(
+            workflow_bytes.replace(pinned_ref.encode("ascii"), selected_ref.encode("ascii"))
         )
+        (snapshot / "pyproject.toml").write_text(metadata, encoding="utf-8")
 
-    # Restore the actual paired workflow selection and exact producer metadata,
-    # then require the same named check to pass after every deliberate break.
-    current_snapshot = tmp_path / "tests" / "fixtures" / "tpp_dev_pins" / pinned_ref
-    current_snapshot.mkdir(parents=True, exist_ok=True)
-    (current_snapshot / "pyproject.toml").write_bytes(producer.read_bytes())
-    workflow_path.write_text(
-        yaml.safe_dump({"env": {"TPP_PINNED_REF": pinned_ref}}), encoding="utf-8"
-    )
+        with pytest.raises(AssertionError, match="cannot be installed together") as failure:
+            test_workflow_tpp_pin_resolves_with_planner_dev_pins(monkeypatch)
+
+        for tool, version in restored.items():
+            assert (
+                f"{tool}: trip-planner '{requirements[tool][0]}' vs TPP '{tool}=={version}'"
+                in str(failure.value)
+            )
+    finally:
+        current_metadata.write_bytes(producer_bytes)
+        workflow_path.write_bytes(workflow_bytes)
+
+    # Verify byte-for-byte restoration, including the rest of the real workflow,
+    # before requiring the same named check to pass again.
+    assert workflow_path.read_bytes() == workflow_bytes
+    assert current_metadata.read_bytes() == producer_bytes
+    assert source_workflow.read_bytes() == workflow_bytes
     test_workflow_tpp_pin_resolves_with_planner_dev_pins(monkeypatch)
 
 
