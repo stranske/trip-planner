@@ -1,16 +1,22 @@
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:01.3837430Z   TPP_PINNED_REF: acc4aeddee5f4ffefbdc73fcb07505cd3d198197
+cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:02.5996154Z HEAD is now at 175cf38 Merge 4ea6a28d050bbcf2233b725de13ade495f132002 into 8acf877090693cb762a72489f351279f2cdfecdd
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:02.6348440Z   TPP_PINNED_REF: acc4aeddee5f4ffefbdc73fcb07505cd3d198197
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:03.6408701Z   TPP_PINNED_REF: acc4aeddee5f4ffefbdc73fcb07505cd3d198197
+cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:03.6486479Z TPP_RESOLVED_SHA=acc4aeddee5f4ffefbdc73fcb07505cd3d198197
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:03.6554282Z   TPP_PINNED_REF: acc4aeddee5f4ffefbdc73fcb07505cd3d198197
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:03.7592905Z   TPP_PINNED_REF: acc4aeddee5f4ffefbdc73fcb07505cd3d198197
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:05.2552515Z ##[group]Run python -m pip install -e ".[dev]"
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:05.2552718Z ^[[36;1mpython -m pip install -e ".[dev]"^[[0m
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:05.2640802Z   TPP_PINNED_REF: acc4aeddee5f4ffefbdc73fcb07505cd3d198197
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:09.2905333Z Collecting ruff==0.17.3 (from trip-planner==0.1.0)
+cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:09.3621498Z Collecting mypy==2.4.1 (from trip-planner==0.1.0)
+cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:09.3977211Z Collecting pytest==9.2.0 (from trip-planner==0.1.0)
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:32.5711305Z   TPP_PINNED_REF: acc4aeddee5f4ffefbdc73fcb07505cd3d198197
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:33.4979309Z ^[[36;1m.venv/bin/python -m pip install -e ".[dev]" -e "../trip-planner[dev]"^[[0m
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:33.5020318Z   TPP_PINNED_REF: acc4aeddee5f4ffefbdc73fcb07505cd3d198197
+cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:37.4316246Z Collecting pytest==9.1.1 (from travel-plan-permission==0.1.0)
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:37.7285743Z Collecting ruff==0.17.2 (from travel-plan-permission==0.1.0)
+cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:37.8114015Z Collecting mypy==2.4.0 (from travel-plan-permission==0.1.0)
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:38.3298162Z     travel-plan-permission[dev] 0.1.0 depends on ruff==0.17.2; extra == "dev"
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:38.3298536Z     trip-planner[dev] 0.1.0 depends on ruff==0.17.3; extra == "dev"
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T05:03:38.3304320Z ERROR: ResolutionImpossible: for help visit https://pip.pypa.io/en/latest/topics/dependency-resolution/#dealing-with-dependency-conflicts

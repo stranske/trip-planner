@@ -1,5 +1,51 @@
 # Issue 2025 acceptance evidence
 
+## Resolved checkout evidence — 2026-11-11T03:23Z
+
+Reviewed recent commits through `f58b0067`: no additional task is complete.
+The actual ledger remains unchanged, and the Workflows regression remains
+outside main. This seat mounts both `.agents` and `.git` read-only, so it
+cannot apply the ledger proposal or commit this follow-up. GitHub rejected
+the PR-body reconciliation, blocker comment and `needs-human` label because
+those writes require approval and this run's approval policy is `never`.
+
+The exact `gh run view 42484305260 --repo stranske/trip-planner --log` command
+could not connect. The GitHub connector reread successful job `128742727094`
+and failed job `128634593803`. Added verbatim excerpt lines record the actual
+resolved TPP SHA, the planner head in each checkout's merge, and the mypy/pytest
+requirements collected from each editable project. The successful TPP fixture
+now preserves the complete original metadata blob `6a7dc688e302dca17002e0b120963ec1be33d50c`.
+Two new cases bind those resolved checkouts and all three tool requirements
+to the original metadata blobs and bind the successful planner head to #2006's
+merged head. These checks validate the consumer evidence handoff.
+
+On Python 3.14.10:
+
+```sh
+python -m pytest tests/test_issue_2025_ledger_reconciliation.py tests/scripts/test_cross_repo_dev_pins.py -m 'not slow' -q
+```
+
+Result: 52 passed, 2 skipped in 2.71 seconds. The existing skips require a
+sibling checkout. Changing only the successful excerpt's `TPP_RESOLVED_SHA`
+to the failed checkout makes the two new cases report 1 failed, 1 passed;
+restoring the original bytes gives 2 passed. The configured ref remains
+unchanged during that mutation, demonstrating that the new assertion checks
+the resolved checkout. The ledger proposal still passes `git apply --check`.
+Black formatted the changed test, and the required repository-wide check
+passed with all 530 files unchanged using a writable cache and one worker:
+
+```sh
+BLACK_NUM_WORKERS=1 BLACK_CACHE_DIR=/tmp/issue-2025-black-cache black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+The first uncached invocation timed out after reporting 530 unchanged files;
+the cached rerun exited 0 in 0.34 seconds.
+Final focused validation passed again: 52 passed, 2 skipped in 2.66 seconds;
+whitespace and ledger patch checks passed. The subsequent `git add` failed
+creating `.git/index.lock` with `Read-only file system`, so no commit or push
+was possible. The test, fixture and evidence changes remain in the worktree.
+PR #2028 remains open and ready for review at unchanged head `f58b0067`.
+
 ## Planner diagnosis regression check — 2026-11-11T03:06Z
 
 The consumer ledger tests now verify the complete planner metadata blobs from

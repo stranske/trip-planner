@@ -121,6 +121,40 @@ def test_pin_reconciliation_matches_historical_editable_installs(
     assert "No source pin edit was required or performed" in notes
 
 
+@pytest.mark.parametrize("phase", ["failed", "successful"])
+def test_install_logs_bind_resolved_checkouts_to_historical_metadata(phase: str):
+    """Configured refs alone do not prove which source pip actually installed."""
+    log = (EVIDENCE / f"{phase}-install-excerpts.log").read_text(encoding="utf-8")
+    provenance = read_receipt("fixture-provenance.json")
+    checkouts = {}
+    for project in ("travel-plan-permission", "trip-planner"):
+        source = next(item for item in provenance if item["fixture"] == f"{phase}/{project}.toml")
+        checkout = source["source_url"].split("/blob/")[1].split("/")[0]
+        checkouts[project] = checkout
+        snapshot = (
+            ROOT / "tests/fixtures/tpp_dev_pins" / checkout / "pyproject.toml"
+            if project == "travel-plan-permission"
+            else FIXTURES / f"{phase}-trip-planner.toml"
+        )
+        original = snapshot.read_bytes()
+        blob = b"blob " + str(len(original)).encode("ascii") + b"\0" + original
+        assert hashlib.sha1(blob).hexdigest() == source["git_blob"]
+        metadata = tomllib.loads(original.decode("utf-8"))
+        for raw in metadata["project"]["optional-dependencies"]["dev"]:
+            requirement = Requirement(raw)
+            if requirement.name in {"ruff", "mypy", "pytest"}:
+                assert f"Collecting {requirement} (from {project}==0.1.0)" in log
+
+    assert set(re.findall(r"\bTPP_RESOLVED_SHA=([0-9a-f]{40})\b", log)) == {
+        checkouts["travel-plan-permission"]
+    }
+    assert set(re.findall(r"HEAD is now at \w+ Merge ([0-9a-f]{40}) into", log)) == {
+        checkouts["trip-planner"]
+    }
+    if phase == "successful":
+        assert checkouts["trip-planner"] == read_receipt("merged-pr.json")["headRefOid"]
+
+
 def test_checkout_fix_matches_preserved_tpp_metadata(proposed_ledger: dict):
     """Check the claimed resolution against the selected producer's real metadata."""
     notes = task_notes(proposed_ledger, "task-05")
