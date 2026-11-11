@@ -11,7 +11,10 @@ cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:18:23.1213001Z   TPP_PINNED_R
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:18:28.3275147Z Collecting ruff==0.17.3 (from trip-planner==0.1.0)
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:18:28.4149898Z Collecting mypy==2.4.1 (from trip-planner==0.1.0)
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:18:28.4553906Z Collecting pytest==9.2.0 (from trip-planner==0.1.0)
+cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:18:57.7293274Z ##[group]Run python -m pytest tests/scripts/test_cross_repo_dev_pins.py -q
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:18:57.7337254Z   TPP_PINNED_REF: b56d92b389736c70370aa9134f379ac8cd1f3ad1
+cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:18:57.7338898Z   TPP_REPO_PATH: ../Travel-Plan-Permission
+cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:19:02.2826929Z 38 passed, 14 warnings in 2.30s
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:19:02.5852825Z   TPP_PINNED_REF: b56d92b389736c70370aa9134f379ac8cd1f3ad1
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:19:03.7287587Z ^[[36;1m.venv/bin/python -m pip install -e ".[dev]" -e "../trip-planner[dev]"^[[0m
 cross-repo-full-product	UNKNOWN STEP	2026-11-08T13:19:03.7344312Z   TPP_PINNED_REF: b56d92b389736c70370aa9134f379ac8cd1f3ad1

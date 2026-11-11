@@ -1,5 +1,31 @@
 # Issue 2025 acceptance evidence
 
+## Hosted keepalive: live pin-guard evidence — 2026-11-11
+
+The GitHub connector reread both historical jobs. Successful job `128742727094`
+ran the sibling-checkout pin guard with `TPP_REPO_PATH=../Travel-Plan-Permission`
+and the selected TPP ref, reporting 38 passed before the joint editable install.
+The retained excerpt now includes that command, environment and complete result.
+The new handoff test checks those inputs, rejects skipped live checks, and binds
+the result timestamp to the smoke receipt's guard step before the install.
+
+On Python 3.14.10, the focused consumer command below passes **55 tests, 2
+skipped** in 2.92 seconds. Both skips require a local sibling checkout. Mutating
+the retained summary to include two skips fails the new test; moving its result
+timestamp after the install also fails. Exact restoration passes. Ruff,
+whitespace and ledger patch checks pass. All 530 Python files pass the required
+full Black gate with a writable cache after individual file verification; its
+initial uncached invocation timed out despite reporting unchanged files.
+
+Both exact historical `gh run view --log` commands failed to connect. Workflows
+main still excludes source commit `f1ae1a4b8f704bf147938880c0010ded18d51022`
+and is six commits beyond its base. Actual ledger records remain blocked by
+read-only `.agents`; no checkbox changed. Staging failed at `.git/index.lock`
+with `Read-only file system`, so this round could not commit or push. The
+GitHub connector rejected the blocker comment and `needs-human` label because
+they require approval under this run's `never` policy. PR #2028 was read back
+open and ready at unchanged head `58aa41db`.
+
 ## Historical resolver cases — 2026-11-11
 
 Reviewed commits through `445cf579`: no additional acceptance task is complete.

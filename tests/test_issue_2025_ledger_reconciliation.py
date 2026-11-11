@@ -298,6 +298,46 @@ def test_smoke_and_local_command_records_match_receipts(proposed_ledger: dict):
     assert "Exit 0" in notes
 
 
+def test_successful_smoke_executed_live_pin_guard_before_joint_install():
+    """A green step alone does not prove the live checkout checks actually ran."""
+    log = (EVIDENCE / "successful-install-excerpts.log").read_text(encoding="utf-8")
+    events = [line.split("\t", 2)[2].split(" ", 1) for line in log.splitlines()]
+    command = "##[group]Run python -m pytest tests/scripts/test_cross_repo_dev_pins.py -q"
+    guard_start = next(index for index, (_, message) in enumerate(events) if message == command)
+    install_start = next(
+        index
+        for index, (_, message) in enumerate(events)
+        if 'pip install -e ".[dev]" -e "../trip-planner[dev]"' in message
+    )
+    guard_events = events[guard_start:install_start]
+    messages = [message.strip() for _, message in guard_events]
+    resolved = next(
+        message.removeprefix("TPP_RESOLVED_SHA=")
+        for _, message in events
+        if message.startswith("TPP_RESOLVED_SHA=")
+    )
+    assert f"TPP_PINNED_REF: {resolved}" in messages
+    assert "TPP_REPO_PATH: ../Travel-Plan-Permission" in messages
+    # Match the entire pytest summary: a partial pass with skipped live checks
+    # must not count as evidence that both editable checkouts were inspected.
+    (result_time,) = (
+        timestamp
+        for timestamp, message in guard_events
+        if re.fullmatch(r"[1-9]\d* passed(?:, \d+ warnings)? in \d+(?:\.\d+)?s", message)
+    )
+    smoke = read_receipt("smoke-run.json")
+    job = next(job for job in smoke["jobs"] if job["name"] == "cross-repo-full-product")
+    guard = next(
+        step for step in job["steps"] if step["name"] == "Check dev pins co-resolve with pinned TPP"
+    )
+    # The API records whole seconds while job-log timestamps include fractions.
+    started = datetime.fromisoformat(events[guard_start][0]).replace(microsecond=0)
+    finished = datetime.fromisoformat(result_time).replace(microsecond=0)
+    assert datetime.fromisoformat(guard["startedAt"]) <= started <= finished
+    assert finished <= datetime.fromisoformat(guard["completedAt"])
+    assert datetime.fromisoformat(result_time) < datetime.fromisoformat(events[install_start][0])
+
+
 def test_mutation_record_preserves_owning_commit_and_results(proposed_ledger: dict):
     notes = task_notes(proposed_ledger, "task-15")
     receipts = read_receipt("receipts.json")
