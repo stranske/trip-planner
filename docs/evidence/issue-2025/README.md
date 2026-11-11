@@ -70,6 +70,14 @@ Maint 68's `consumer-sync-run-report` artifact path; native template-sync
 artifacts do not themselves classify the Maint 52 dev-pin PR. The canonical
 sync-core result supplies the acceptance criterion's superseding classification.
 
+The first Maint 68 run after the merge, [42485644055](https://github.com/stranske/Workflows/actions/runs/42485644055),
+listed trip-planner in its registry inputs and had no result row for it. The
+next run, [42499084007](https://github.com/stranske/Workflows/actions/runs/42499084007),
+generated its report at `2026-11-08T16:19:22.356Z`. Its trip-planner result
+was `created_pr` for template-sync PR #2014, with no #2006 entry. The
+sync-core `delivered` record at 13:30:21Z is the post-merge disposition for
+#2006 and carries no dependency-pin finding.
+
 ## Documented local check and ledger reconciliation
 
 At the linked Workflows commit:
