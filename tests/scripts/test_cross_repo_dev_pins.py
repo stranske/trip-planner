@@ -374,7 +374,7 @@ def test_offline_workflow_guard_rejects_original_producer_pins(
 @pytest.mark.parametrize(
     ("planner_phase", "producer_phase", "conflicting"),
     [
-        pytest.param("failed", "failed", True, id="original-install-inputs"),
+        pytest.param("failed", "failed", True, id="issue-1967-original-install-inputs"),
         pytest.param("failed", "successful", False, id="change-only-tpp-checkout"),
         pytest.param("successful", "successful", False, id="merged-install-inputs"),
     ],
@@ -386,7 +386,7 @@ def test_smoke_pin_guard_with_historical_editable_checkouts(
     producer_phase: str,
     conflicting: bool,
 ) -> None:
-    """The actual smoke guard must detect the old checkout and accept its replacement."""
+    """The actual smoke guard must detect #1967's inputs and accept their replacement."""
     planner_source = (
         REPO_ROOT / "tests/fixtures/issue_2025_ledger" / f"{planner_phase}-trip-planner.toml"
     )
@@ -408,8 +408,12 @@ def test_smoke_pin_guard_with_historical_editable_checkouts(
         with pytest.raises(AssertionError, match="cannot be installed together") as failure:
             test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
         diagnostics = str(failure.value)
-        for tool in ("ruff", "mypy", "pytest"):
-            assert f"{tool}: trip-planner" in diagnostics
+        for conflict in (
+            "ruff: trip-planner 'ruff==0.17.3' vs TPP 'ruff==0.17.2'",
+            "mypy: trip-planner 'mypy==2.4.1' vs TPP 'mypy==2.4.0'",
+            "pytest: trip-planner 'pytest==9.2.0' vs TPP 'pytest==9.1.1'",
+        ):
+            assert conflict in diagnostics
         assert "Move TPP_PINNED_REF" in diagnostics
     else:
         test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
