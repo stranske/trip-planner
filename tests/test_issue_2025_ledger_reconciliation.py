@@ -25,11 +25,13 @@ FIXTURES = ROOT / "tests/fixtures/issue_2025_ledger"
 
 
 def read_receipt(name: str):
+    """Read the named JSON evidence receipt."""
     return json.loads((EVIDENCE / name).read_text(encoding="utf-8"))
 
 
 @pytest.fixture
 def original_ledger() -> str:
+    """Read the pinned ledger snapshot used as the proposal's base."""
     # Pin the input so these tests remain valid after an authorized writer
     # applies the proposal to the actual ledger.
     return (FIXTURES / "original.yml").read_text(encoding="utf-8")
@@ -57,12 +59,14 @@ def proposed_ledger(tmp_path: Path, original_ledger: str) -> dict:
 
 
 def task_notes(ledger: dict, task_id: str) -> str:
+    """Join the note entries for the requested ledger task."""
     return "\n".join(next(task for task in ledger["tasks"] if task["id"] == task_id)["notes"])
 
 
 def test_reconciled_tasks_pass_existing_ledger_validator(
     proposed_ledger: dict, original_ledger: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
+    """Check the proposal with the strict validator and recorded commit metadata."""
     # The original ledger has malformed YAML notes. Preserve its task inventory
     # and unrelated statuses while validating the complete proposed document.
     before = dict(
@@ -78,6 +82,8 @@ def test_reconciled_tasks_pass_existing_ledger_validator(
         "task-15",
         "task-16",
     }
+    # Populate the validator's cache with recorded changed paths so strict
+    # validation works in shallow checkouts without git fetch.
     commit_files = json.loads((FIXTURES / "commit-files.json").read_text(encoding="utf-8"))
     monkeypatch.setattr(ledger_validate, "_COMMIT_FILES_CACHE", commit_files)
     monkeypatch.chdir(ROOT)
@@ -390,6 +396,7 @@ def test_successful_smoke_executed_live_pin_guard_before_joint_install():
 
 
 def test_mutation_record_preserves_owning_commit_and_results(proposed_ledger: dict):
+    """Match the proposal's resolver mutation notes to the recorded outcomes."""
     notes = task_notes(proposed_ledger, "task-15")
     receipts = read_receipt("receipts.json")
     assert [(item["phase"], item["exit_code"]) for item in receipts] == [
@@ -458,6 +465,7 @@ def test_supported_runtime_receipt_binds_source_interpreter_and_mutation():
 
 
 def test_sync_classification_matches_merged_head(proposed_ledger: dict):
+    """Bind the delivered sync classification to the merged pull request head."""
     notes = task_notes(proposed_ledger, "task-16")
     report = read_receipt("sync-core-report.json")
     merged = read_receipt("merged-pr.json")
