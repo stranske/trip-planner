@@ -425,6 +425,7 @@ def test_smoke_pin_guard_with_historical_editable_checkouts(
         *((tool, None) for tool in ("all", "ruff", "mypy", "pytest", None)),
         pytest.param("ruff-2017", None, id="issue-2017-producer"),
         pytest.param(None, "failed", id="issue-2006-failed-install"),
+        pytest.param(None, "producer-only", id="issue-1967-change-only-tpp-checkout"),
         pytest.param(None, "successful", id="issue-2006-successful-install"),
     ],
 )
@@ -440,6 +441,7 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
     installation in the workflow rather than supplying tools as root requirements.
     Historical #2006 cases read both original source snapshots from the failed
     and successful runs, independent of subsequent planner and workflow updates.
+    The #1967 repair case keeps the original planner snapshot and changes only TPP.
     This verifies resolution only, not a complete cross-repo installation.
     """
     workflow = yaml.safe_load(
@@ -448,15 +450,17 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
     snapshot = REPO_ROOT / "tests" / "fixtures" / "tpp_dev_pins" / workflow["env"]["TPP_PINNED_REF"]
     planner = REPO_ROOT / "pyproject.toml"
     if historical_phase is not None:
-        # These are the actual editable checkouts in runs 42449207754 and
-        # 42484305260, not current requirements with selected pins overwritten.
+        # #1966's failed run 41674233862 used the same dependency metadata
+        # as #2006's failed run 42449207754.
+        planner_phase = "failed" if historical_phase == "producer-only" else historical_phase
+        producer_phase = "successful" if historical_phase == "producer-only" else historical_phase
         producer_ref = {
             "failed": "acc4aeddee5f4ffefbdc73fcb07505cd3d198197",
             "successful": "b56d92b389736c70370aa9134f379ac8cd1f3ad1",
-        }[historical_phase]
+        }[producer_phase]
         snapshot = REPO_ROOT / "tests/fixtures/tpp_dev_pins" / producer_ref
         planner = (
-            REPO_ROOT / "tests/fixtures/issue_2025_ledger" / f"{historical_phase}-trip-planner.toml"
+            REPO_ROOT / "tests/fixtures/issue_2025_ledger" / f"{planner_phase}-trip-planner.toml"
         )
     if restored_tool == "ruff-2017":
         # This is the actual producer from failed run 42542025018, whose mypy
