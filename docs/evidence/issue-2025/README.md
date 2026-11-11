@@ -1,5 +1,35 @@
 # Issue 2025 acceptance evidence
 
+## Planner diagnosis regression check — 2026-11-11T03:06Z
+
+The consumer ledger tests now verify the complete planner metadata blobs from
+both historical heads against `fixture-provenance.json`. All three planner
+tool pins already match the successful TPP checkout; the new checks reject
+task-03 notes that restore the old planner-pin diagnosis. Mutating only that
+sentence produces three failures; restoring the exact proposal bytes passes.
+On Python 3.14.10, the existing focused command below passes 28 tests in 1.85s.
+These are consumer evidence checks, not owning Workflows CI.
+
+Both exact `gh run view ... --log` commands fail to connect from this seat.
+The GitHub connector successfully reread jobs `128634593803` (failed) and
+`128742727094` (successful); their checkout inputs and Ruff diagnostics match
+the retained excerpts. PR #2006 is still merged at the recorded final head.
+Workflows main remains five commits ahead of the regression's base and does
+not include its source commit. The actual ledger is still read-only, so no
+task checkbox is newly complete.
+
+This seat also mounts `.git` read-only: staging fails when creating
+`.git/index.lock`, so the test changes remain uncommitted. Attempts to add
+`needs-human` and a blocker comment to #2028 were refused because connector
+approval is required and this run's approval policy is `never`. An authorized
+writer must commit these changes and apply the ledger proposal.
+
+Black formats and checks the changed Python file successfully. The required
+repository-wide command fails when starting multiprocessing in this sandbox.
+With `BLACK_NUM_WORKERS=1` and a writable `BLACK_CACHE_DIR`, it reports 530 files
+unchanged when interrupted, but the bounded invocation exits 124; this is not
+a passing formatting gate. No commit or push was attempted past that gate.
+
 Checked 2026-11-11T00:19:36+00:00. The executable acceptance checks have evidence. A2 and tasks T1, T3 and T4
 still require records in the actual ledger; the proposed patch does not satisfy
 that requirement. Workflows main integration is also still open.

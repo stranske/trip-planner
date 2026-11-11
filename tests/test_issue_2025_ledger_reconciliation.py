@@ -182,6 +182,56 @@ def test_failed_checkout_diagnosis_matches_original_metadata(proposed_ledger: di
     assert "ResolutionImpossible" in failed_log
 
 
+@pytest.mark.parametrize("tool", ["ruff", "mypy", "pytest"])
+def test_planner_pins_already_match_successful_producer(proposed_ledger: dict, tool: str):
+    """The passing smoke changed the producer checkout, not the planner's tool pins."""
+    provenance = read_receipt("fixture-provenance.json")
+    planner_pins = {}
+    heads = {}
+    for phase in ("failed", "successful"):
+        source = next(
+            item for item in provenance if item["fixture"] == f"{phase}/trip-planner.toml"
+        )
+        heads[phase] = source["source_url"].split("/blob/")[1].split("/")[0]
+        original = (FIXTURES / f"{phase}-trip-planner.toml").read_bytes()
+        blob = b"blob " + str(len(original)).encode("ascii") + b"\0" + original
+        assert hashlib.sha1(blob).hexdigest() == source["git_blob"]
+        metadata = tomllib.loads(original.decode("utf-8"))
+        planner_pins[phase] = next(
+            str(requirement)
+            for raw in metadata["project"]["optional-dependencies"]["dev"]
+            if (requirement := Requirement(raw)).name == tool
+        )
+
+    producer_source = next(
+        item for item in provenance if item["fixture"] == "successful/travel-plan-permission.toml"
+    )
+    producer_head = producer_source["source_url"].split("/blob/")[1].split("/")[0]
+    producer = tomllib.loads(
+        (ROOT / "tests/fixtures/tpp_dev_pins" / producer_head / "pyproject.toml").read_text(
+            encoding="utf-8"
+        )
+    )
+    producer_pin = next(
+        str(requirement)
+        for raw in producer["project"]["optional-dependencies"]["dev"]
+        if (requirement := Requirement(raw)).name == tool
+    )
+    assert planner_pins["failed"] == planner_pins["successful"] == producer_pin
+    assert heads["successful"] == read_receipt("smoke-run.json")["headSha"]
+
+    # A note saying the planner used old pins would misidentify the actual
+    # successful mechanism even though the existing producer checks still pass.
+    notes = task_notes(proposed_ledger, "task-03")
+    version = str(Requirement(producer_pin).specifier).removeprefix("==")
+    assert f"{tool} {version}" in notes.casefold()
+    assert f"failed head {heads['failed'][:8]}" in notes
+    assert f"final head {heads['successful'][:8]}" in notes
+    assert "already resolved the trip-planner editable dev extra" in notes
+    assert "lockfile change on top of smoke fix 29c6aa01" in notes
+    assert "Published package conflict" not in notes
+
+
 def test_smoke_and_local_command_records_match_receipts(proposed_ledger: dict):
     """Require successful resolver and install steps at the head that merged."""
     notes = task_notes(proposed_ledger, "task-14")
