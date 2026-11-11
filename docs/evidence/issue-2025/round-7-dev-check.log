@@ -1,0 +1,33 @@
+[0;36m=== Ultra-Fast Development Check ===[0m
+[1;33mInstalling ruff==0.17.4 to match CI[0m
+WARNING: The directory '/Users/teacher/Library/Caches/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+[1;33mInstalling mypy==2.4.1 to match CI[0m
+WARNING: The directory '/Users/teacher/Library/Caches/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+[0;34m1. Syntax check...[0m
+[0;34mRunning: python -m compileall scripts/ -q[0m
+[0;32m✓ Syntax check[0m
+[0;34m2. Workflow validation...[0m
+[0;34mRunning: /opt/homebrew/bin/actionlint -ignore property ".+" is not defined in object type {} -ignore property "(token_rotation_json|service_bot_pat|actions_bot_pat|owner_pr_pat|agents_automation_pat|workflows_app_id|workflows_app_private_key|keepalive_app_id|keepalive_app_private_key|gh_app_id|gh_app_private_key|app_1_id|app_1_private_key|app_2_id|app_2_private_key)" is not defined in object type .+ -ignore unknown permission scope "models" -ignore SC2129:style:.+: Consider using { cmd1; cmd2; } >> file instead of individual redirects -ignore SC2086:info:.github/workflows/.+: Double quote to prevent globbing and word splitting -ignore SC2153:info:.+: Possible misspelling: PYTEST_WORKERS may not be assigned -ignore constant expression "false" in condition -ignore ^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$ -ignore ^maximum number of inputs for "workflow_dispatch" event is 10 but (1[1-9]|2[0-5]) inputs are provided\. see https://docs\.github\.com/en/actions/using-workflows/events-that-trigger-workflows#providing-inputs$[0m
+[0;32m✓ Workflow YAML validation[0m
+[0;34mRunning: /opt/homebrew/bin/actionlint -ignore property ".+" is not defined in object type {} -ignore property "(token_rotation_json|service_bot_pat|actions_bot_pat|owner_pr_pat|agents_automation_pat|workflows_app_id|workflows_app_private_key|keepalive_app_id|keepalive_app_private_key|gh_app_id|gh_app_private_key|app_1_id|app_1_private_key|app_2_id|app_2_private_key)" is not defined in object type .+ -ignore unknown permission scope "models" -ignore SC2129:style:.+: Consider using { cmd1; cmd2; } >> file instead of individual redirects -ignore SC2086:info:.github/workflows/.+: Double quote to prevent globbing and word splitting -ignore SC2153:info:.+: Possible misspelling: PYTEST_WORKERS may not be assigned -ignore constant expression "false" in condition -ignore ^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$ -ignore ^maximum number of inputs for "workflow_dispatch" event is 10 but (1[1-9]|2[0-5]) inputs are provided\. see https://docs\.github\.com/en/actions/using-workflows/events-that-trigger-workflows#providing-inputs$[0m
+[0;32m✓ Workflow YAML validation (templates)[0m
+[0;34m3. Formatting...[0m
+[0;34mRunning: black --check scripts .github[0m
+[0;32m✓ Black formatting[0m
+[0;34m4. Critical linting...[0m
+[0;34mRunning: flake8 scripts/ --select=E9,F --statistics[0m
+[0;32m✓ Critical lint errors[0m
+[0;34m5. Type check...[0m
+[0;34mRunning: mypy scripts/ --ignore-missing-imports --explicit-package-bases --no-error-summary 2>/dev/null || true[0m
+[0;32m✓ Type check[0m
+[0;34m6. Keepalive harness tests...[0m
+[0;34mRunning: node --test .github/scripts/__tests__/keepalive*.test.js 2>/dev/null || true[0m
+[0;32m✓ Keepalive JS tests[0m
+[0;34m7. Renovate configuration...[0m
+[0;34mRunning: npx --yes --package renovate@43.285.3 -- renovate-config-validator --no-global renovate.json renovate-presets/fleet.json templates/consumer-repo/.github/renovate.json[0m
+[0;32m✓ Renovate configuration[0m
+
+[0;36m=== Quick Check Complete ===[0m
+[0;34mFor comprehensive validation, run: ./scripts/check_branch.sh[0m
+[0;34mFor auto-fixes, run with: --fix[0m
+[0;34mFor changed files only: --changed[0m

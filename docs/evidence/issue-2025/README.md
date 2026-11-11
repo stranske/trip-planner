@@ -178,3 +178,37 @@ A fresh GitHub comparison still reports the owning source commit as diverged
 from Workflows main, and no pull-request CI runs exist at that commit. The
 exact `gh run view ... --log` commands could not reach GitHub from this runner;
 the GitHub connector independently confirmed both historical jobs and steps.
+
+
+## Keepalive round 7 readback
+
+Checked 2026-11-11T01:47:38Z (2026-11-10 America/Chicago). Both exact
+`gh run view 42484305260 --repo stranske/trip-planner --log` and
+`gh run view 42449207754 --repo stranske/trip-planner --log` now succeed.
+Their editable install commands and TPP checkout inputs confirm the diagnosis
+above. Fresh smoke JSON and PR metadata confirm success at final head
+`fcb6e97a291bd620629aa228561d36c3ee6cdf0d` and merge commit
+`419015e6035cc77db18de3ab58c60651d8e51bc8`.
+
+At owning Workflows commit `f1ae1a4b8f704bf147938880c0010ded18d51022`,
+`/tmp/trip-2025-workflows/.venv/bin/python -m pytest tests/test_dependency_resolution.py`
+exited 0: eight cases passed in 4.45 seconds. The exact documented local
+command in the preceding section also exited 0; see `round-7-dev-check.log`.
+The owning checkout remained clean. Existing mutation/restoration receipts
+were retained; no dependency pins were edited.
+
+A fresh canonical `rounds.jsonl` read confirms round `20261108T133016Z`,
+timestamp `2026-11-08T13:30:21Z`, explicitly identifies #2006 as delivered,
+with zero mismatches, no error and no handoffs. No dependency-pin finding
+appears in its reasons or handoffs. Maint 68 at the checked owning commit
+still uploads `consumer-sync-run-report` from
+`artifacts/consumer-sync-run-report.json`. This remains the evidence-backed
+superseding classification, rather than a claim that the template report
+classifies the dev-pin PR.
+
+`git apply --check docs/evidence/issue-2025/ledger-reconciliation.patch`
+exited 0 against the actual current ledger. However, the current seat still
+explicitly makes `.agents` read-only. T1, T3, T4 and A2 remain incomplete:
+the verified proposal has not been applied to the required actual ledger.
+No alternate path or remote write was used to bypass that access boundary.
+Workflows main integration and supported-runtime CI remain unverified.
