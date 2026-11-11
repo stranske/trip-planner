@@ -87,3 +87,57 @@ regenerate it through the actual dev-tool producer, verify its exact-head
 cross-repo gate and capture the subsequent canonical classification. This is
 an unresolved acceptance dependency, not a new gate or a claim of completion.
 No automatic merge is enabled by this repair.
+
+## Keepalive follow-up: offline break and restoration
+
+Check date: 2026-11-11 UTC. This sandbox uses Python 3.14.10, Black 26.10.1,
+Ruff 0.17.4 and mypy 2.4.1. The earlier Python 3.12.2 fallback results above
+describe the owner's environment; that interpreter is not available here.
+
+The `all` case of
+`test_offline_workflow_guard_rejects_original_producer_pins` now selects the
+actual original producer `acc4aeddee5f4ffefbdc73fcb07505cd3d198197` and its
+complete reviewed metadata. It calls the named
+`test_workflow_tpp_pin_resolves_with_planner_dev_pins` check and verifies all
+three conflicts. Each case then restores the current workflow selection and
+the current producer's exact metadata and requires that same check to pass.
+All workflow changes take place in temporary test fixtures. The repository's
+protected workflow and dependency pins remain unchanged.
+
+The historical regression now requires the complete ordered diagnostic lines,
+including all three exact version pairs and the full repair guidance. Pytest's
+added assertion indentation and expression trace are excluded from this comparison.
+
+- [ ] Reproduce the literal owner command with **45 passed, zero skips**.
+  `/opt/anaconda3/bin/python3` and `/private/tmp/issue2017-tpp` are absent.
+  `python -m pytest tests/scripts/test_cross_repo_dev_pins.py -q -m "not slow"`
+  passes **43 tests with 2 skips**; both skips require a live producer checkout.
+  Git cannot resolve `github.com` to obtain that checkout. Reviewed metadata
+  fixtures are not a substitute for live-checkout acceptance.
+- [ ] Repeat the literal workflow-file break and restoration. Protected workflow
+  edits are not authorized in this run. The isolated original-ref regression
+  and all three single-tool break/restoration cases pass instead.
+- [x] Remove version diagnostics: extended regression fails; exact restoration
+  passes. Removing Ruff, mypy and pytest diagnostics separately produces an
+  expected failure in the historical regression on each of the three runs.
+  Restoring the exact test-module bytes returns that regression to **1 passed**.
+- [x] Only focused pytest checks ran locally. Python 3.12.2 remains the
+  owner-directed fallback; supported-runtime application validation relies on
+  hosted checks. This sandbox instead used Python 3.14.10 for the focused
+  module, with `-m "not slow"`; no application suite ran.
+
+Focused Ruff and mypy checks pass. The required repository-wide command
+`black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .`
+passes with **530 files left unchanged**. Individual checks populated
+`BLACK_CACHE_DIR=/tmp/issue1967-black-cache` first; the global check then ran
+with that cache and `BLACK_NUM_WORKERS=1` because uncached multi-file checks
+do not finish in this sandbox. No downstream regeneration or classification
+criterion is inferred from these offline test results.
+
+Commit handoff is blocked: `git add` cannot create `.git/index.lock` because
+the repository's Git directory is mounted read-only. The patch is saved at
+`/tmp/issue1967-keepalive.patch` for application from a writable checkout.
+Adding `needs-human` and posting the blocker comment through the GitHub
+connector were denied because those tools require approval and this run's
+approval policy is `never`. Fresh PR readback shows #2029 open and ready for
+review; no PR or branch was created by this run.

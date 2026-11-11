@@ -336,27 +336,37 @@ def test_offline_workflow_guard_rejects_original_producer_pins(
     pinned_ref = workflow["env"]["TPP_PINNED_REF"]
     producer = REPO_ROOT / "tests" / "fixtures" / "tpp_dev_pins" / pinned_ref / "pyproject.toml"
     metadata = producer.read_text(encoding="utf-8")
-    requirements = _requirements(producer)
+    requirements = _requirements(REPO_ROOT / "pyproject.toml")
     old_versions = {"ruff": "0.17.2", "mypy": "2.4.0", "pytest": "9.1.1"}
     restored = (
         old_versions if restored_tool == "all" else {restored_tool: old_versions[restored_tool]}
     )
-    for tool, version in restored.items():
-        current = str(requirements[tool][0])
-        assert current in metadata
-        metadata = metadata.replace(current, f"{tool}=={version}")
+    if restored_tool == "all":
+        # Reproduce the original workflow selection using its complete reviewed
+        # metadata, rather than approximating that checkout with three old pins.
+        selected_ref = "acc4aeddee5f4ffefbdc73fcb07505cd3d198197"
+        metadata = (
+            REPO_ROOT / "tests" / "fixtures" / "tpp_dev_pins" / selected_ref / "pyproject.toml"
+        ).read_text(encoding="utf-8")
+    else:
+        selected_ref = pinned_ref
+        for tool, version in restored.items():
+            current = str(requirements[tool][0])
+            assert current in metadata
+            metadata = metadata.replace(current, f"{tool}=={version}")
 
-    # Preserve real planner requirements and the workflow's snapshot selection;
-    # change only the producer pins that caused the reported installation failure.
+    # Exercise the named compatibility check in an isolated repository fixture;
+    # the checked-out repository's protected workflow is never modified.
     (tmp_path / "pyproject.toml").write_text(
         (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"), encoding="utf-8"
     )
     workflow_directory = tmp_path / ".github" / "workflows"
     workflow_directory.mkdir(parents=True)
-    (workflow_directory / "cross-repo-smoke.yml").write_text(
-        yaml.safe_dump({"env": {"TPP_PINNED_REF": pinned_ref}}), encoding="utf-8"
+    workflow_path = workflow_directory / "cross-repo-smoke.yml"
+    workflow_path.write_text(
+        yaml.safe_dump({"env": {"TPP_PINNED_REF": selected_ref}}), encoding="utf-8"
     )
-    snapshot = tmp_path / "tests" / "fixtures" / "tpp_dev_pins" / pinned_ref
+    snapshot = tmp_path / "tests" / "fixtures" / "tpp_dev_pins" / selected_ref
     snapshot.mkdir(parents=True)
     (snapshot / "pyproject.toml").write_text(metadata, encoding="utf-8")
     monkeypatch.setattr(f"{__name__}.REPO_ROOT", tmp_path)
@@ -369,6 +379,16 @@ def test_offline_workflow_guard_rejects_original_producer_pins(
         assert f"{tool}: trip-planner '{requirements[tool][0]}' vs TPP '{tool}=={version}'" in str(
             failure.value
         )
+
+    # Restore the actual paired workflow selection and exact producer metadata,
+    # then require the same named check to pass after every deliberate break.
+    current_snapshot = tmp_path / "tests" / "fixtures" / "tpp_dev_pins" / pinned_ref
+    current_snapshot.mkdir(parents=True, exist_ok=True)
+    (current_snapshot / "pyproject.toml").write_bytes(producer.read_bytes())
+    workflow_path.write_text(
+        yaml.safe_dump({"env": {"TPP_PINNED_REF": pinned_ref}}), encoding="utf-8"
+    )
+    test_workflow_tpp_pin_resolves_with_planner_dev_pins(monkeypatch)
 
 
 @pytest.mark.parametrize(
@@ -407,14 +427,19 @@ def test_smoke_pin_guard_with_historical_editable_checkouts(
     if conflicting:
         with pytest.raises(AssertionError, match="cannot be installed together") as failure:
             test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
-        diagnostics = str(failure.value)
-        for conflict in (
-            "ruff: trip-planner 'ruff==0.17.3' vs TPP 'ruff==0.17.2'",
+        # Pytest's assertion rewriting adds indentation and an expression trace.
+        # Check the complete user-facing lines independently of that formatting.
+        diagnostic_lines = [line.strip() for line in str(failure.value).splitlines()]
+        assert diagnostic_lines[:5] == [
+            "trip-planner and the pinned TPP revision cannot be installed together:",
             "mypy: trip-planner 'mypy==2.4.1' vs TPP 'mypy==2.4.0'",
             "pytest: trip-planner 'pytest==9.2.0' vs TPP 'pytest==9.1.1'",
-        ):
-            assert conflict in diagnostics
-        assert "Move TPP_PINNED_REF" in diagnostics
+            "ruff: trip-planner 'ruff==0.17.3' vs TPP 'ruff==0.17.2'",
+            (
+                "Move TPP_PINNED_REF in .github/workflows/cross-repo-smoke.yml to a TPP "
+                "revision with matching pins, in the same PR as the pin update."
+            ),
+        ]
     else:
         test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
 
