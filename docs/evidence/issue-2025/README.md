@@ -297,3 +297,22 @@ The required repository-wide Black gate passes with all 530 files unchanged
 after individually checking the same files to populate its cache. Ruff,
 whitespace and ledger-patch application checks also pass. PR #2028 remains open,
 with `draft=false`, at `21bac5a711cda14fd1f16a3170b2d2737f94ad7e`.
+
+## Keepalive round 10 readback
+
+Both exact historical log commands and the final-head smoke JSON succeeded
+again. The editable sibling checkout inputs confirm the existing diagnosis.
+At clean owning commit `f1ae1a4b8f704bf147938880c0010ded18d51022`, the named
+resolver command passed eight cases in 5.10 seconds; the documented local
+check exited 0, including Renovate validation. Exact commands and results are
+in `round-10-readback.json`; terminal local-check output is retained alongside it.
+
+The canonical subsequent sync-core record still explicitly classifies #2006
+as delivered at `2026-11-08T13:30:21Z`, with zero mismatches and no handoffs.
+Maint 68's report artifact path was rechecked. The existing ledger proposal
+still passes `git apply --check`. No dependency pins were changed.
+
+Blocking: `.agents` is explicitly read-only for this execution seat. T1, T3,
+T4 and A2 still require actual ledger records; a proposal cannot satisfy them.
+Drainable: publish these receipts on the existing branch for the authorized
+ledger writer. Source integration and supported-runtime CI remain unverified.
