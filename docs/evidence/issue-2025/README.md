@@ -361,3 +361,30 @@ cache. Whitespace and ledger patch checks pass. Staging the focused test,
 original producer fixture and review receipt failed at `.git/index.lock` with
 `Read-only file system`, so no commit or push was made. Final PR readback
 confirmed open, `draft=false`, at unchanged head `6be78cf5`.
+
+## Keepalive round 12 readback
+
+Both exact historical log commands and the requested smoke JSON command exited
+0. The successful run confirms the joint editable install with TPP checkout
+`b56d92b389736c70370aa9134f379ac8cd1f3ad1`, replacing failing checkout
+`acc4aeddee5f4ffefbdc73fcb07505cd3d198197`; no PyPI republication was needed.
+PR #2006 remains merged at final head
+`fcb6e97a291bd620629aa228561d36c3ee6cdf0d`.
+
+At clean owning Workflows commit `f1ae1a4b8f704bf147938880c0010ded18d51022`,
+the named resolver command passed eight cases in 4.92 seconds and the exact
+documented local command exited 0. See `round-12-readback.json` for the check
+time, commands and commits, and `round-12-dev-check.log` for terminal output.
+No source or pin changes were made. Existing mutation receipts remain unchanged.
+
+The canonical subsequent sync-core round `20261108T133016Z` was read again;
+its #2006 record remains delivered with zero mismatches, no error and no
+handoffs. Maint 68 still reports through `consumer-sync-run-report` at
+`artifacts/consumer-sync-run-report.json`. The existing patch passes
+`git apply --check`.
+
+Blocking: the execution profile explicitly grants read-only access to `.agents`.
+The actual ledger remains unchanged, so T1, T3, T4 and A2 remain incomplete.
+Drainable: publish these fresh receipts on this existing branch; a writer with
+ledger access must apply and verify the reconciliation proposal. Source
+integration into Workflows main and supported-runtime CI remain unverified.
