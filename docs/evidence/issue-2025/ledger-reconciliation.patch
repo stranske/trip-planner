@@ -1,6 +1,95 @@
 --- a/.agents/issue-2007-ledger.yml
 +++ b/.agents/issue-2007-ledger.yml
-@@ -66,17 +66,15 @@
+@@ -11,72 +11,70 @@
+     finished_at: null
+     commit: ''
+     notes:
+-      - PR lifecycle receipts recorded via gh pr view commands on 2026-11-08:
+-      - PR #2008: state=MERGED, mergedAt=2026-11-08T06:04:38Z, mergeCommit=79e8cbf4fa867e597b9d54120c318d02158f198d, headRefOid=37b81b467dd39a1a32f7e7fbd24d6279dcae72b9
+-      - PR #2010: state=OPEN, mergedAt=null, mergeCommit=null, headRefOid=3487bad75a49932b1a5e77ee270e994462324246
+-      - PR #2006: state=OPEN, title="deps: sync dev tool versions", headRefOid=4ea6a28d050bbcf2233b725de13ade495f132002
++      - "PR lifecycle receipts recorded via gh pr view commands on 2026-11-08:"
++      - "PR #2008: state=MERGED, mergedAt=2026-11-08T06:04:38Z, mergeCommit=79e8cbf4fa867e597b9d54120c318d02158f198d, headRefOid=37b81b467dd39a1a32f7e7fbd24d6279dcae72b9"
++      - "PR #2010: state=OPEN, mergedAt=null, mergeCommit=null, headRefOid=3487bad75a49932b1a5e77ee270e994462324246"
++      - "PR #2006: state=OPEN, title=\"deps: sync dev tool versions\", headRefOid=4ea6a28d050bbcf2233b725de13ade495f132002"
+   - id: task-02
+     title: 'Inspect the linked failing job logs to identify which packages (verify:
+       confirm completion in repo)'
+     status: done
+     started_at: '2026-11-08T05:39:41Z'
+     finished_at: '2026-11-08T05:45:00Z'
+-    commit: ''
+-    notes:
+-      - Identified conflicting packages via gh pr checks 2006 and gh run view 42449207754 --log-failed:
+-      - Conflicting packages: ruff==0.17.2 (from travel-plan-permission[dev] 0.1.0) vs ruff==0.17.3 (from trip-planner[dev] 0.1.0)
+-      - Error: ResolutionImpossible: Cannot install travel-plan-permission[dev]==0.1.0 and trip-planner[dev]==0.1.0 because these package versions have conflicting dependencies
+-      - Failing check: Cross-Repo Smoke / cross-repo-full-product
+-      - Failing run IDs: 42449207902, 42449207754
++    commit: "516862e5d9286d62226458834881f8c4eda8026d"
++    notes:
++      - "Identified conflicting packages via gh pr checks 2006 and gh run view 42449207754 --log-failed:"
++      - "Conflicting packages: ruff==0.17.2 (from travel-plan-permission[dev] 0.1.0) vs ruff==0.17.3 (from trip-planner[dev] 0.1.0)"
++      - "Error: ResolutionImpossible: Cannot install travel-plan-permission[dev]==0.1.0 and trip-planner[dev]==0.1.0 because these package versions have conflicting dependencies"
++      - "Failing check: Cross-Repo Smoke / cross-repo-full-product"
++      - "Failing run IDs: 42449207902, 42449207754"
+   - id: task-03
+     title: 'version pins produce the ResolutionImpossible error (verify: confirm completion
+       in repo)'
+     status: done
+     started_at: '2026-11-08T05:39:41Z'
+     finished_at: '2026-11-08T05:45:00Z'
+-    commit: ''
+-    notes:
+-      - Confirmed: version pins produce ResolutionImpossible error
+-      - Source pin file in sync source repository: stranske/Workflows/.github/workflows/autofix-versions.env
+-      - Current pins in Workflows: RUFF_VERSION=0.17.3, BLACK_VERSION=26.10.1, ISORT_VERSION=9.0.2, MYPY_VERSION=2.4.1
+-      - Pins in trip-planner before sync: RUFF_VERSION=0.17.2 (in autofix-versions.env), ruff==0.17.2 (in pyproject.toml)
+-      - PR #2006 updates trip-planner pins to match Workflows (RUFF_VERSION=0.17.3)
+-      - Published package conflict: travel-plan-permission 0.1.0 on PyPI has ruff==0.17.2, trip-planner 0.1.0 on PyPI has ruff==0.17.3
++    commit: "516862e5d9286d62226458834881f8c4eda8026d"
++    notes:
++      - "Confirmed: version pins produce ResolutionImpossible error"
++      - "Source pin file in sync source repository: stranske/Workflows/.github/workflows/autofix-versions.env"
++      - "Current pins in Workflows: RUFF_VERSION=0.17.3, BLACK_VERSION=26.10.1, ISORT_VERSION=9.0.2, MYPY_VERSION=2.4.1"
++      - "Pins in trip-planner before sync: RUFF_VERSION=0.17.2 (in autofix-versions.env), ruff==0.17.2 (in pyproject.toml)"
++      - "PR #2006 updates trip-planner pins to match Workflows (RUFF_VERSION=0.17.3)"
++      - "Published package conflict: travel-plan-permission 0.1.0 on PyPI has ruff==0.17.2, trip-planner 0.1.0 on PyPI has ruff==0.17.3"
+   - id: task-04
+     title: 'Identify the source file in the sync source repository that defines the
+       conflicting dev-tool pins (verify: confirm completion in repo)'
+     status: done
+     started_at: '2026-11-08T05:39:41Z'
+     finished_at: '2026-11-08T05:45:00Z'
+-    commit: ''
+-    notes:
+-      - Owning source repository: stranske/Workflows
+-      - Owning source file: .github/workflows/autofix-versions.env
+-      - Exact path: stranske/Workflows/.github/workflows/autofix-versions.env
+-      - Pins in owning source file:
+-        - BLACK_VERSION=26.10.1
+-        - RUFF_VERSION=0.17.3
+-        - ISORT_VERSION=9.0.2
+-        - DOCFORMATTER_VERSION=1.7.8
+-        - MYPY_VERSION=2.4.1
+-        - PYTEST_VERSION=9.2.0
+-        - PYTEST_COV_VERSION=7.1.0
+-        - PYTEST_XDIST_VERSION=3.8.0
+-        - COVERAGE_VERSION=7.17.2
++    commit: "516862e5d9286d62226458834881f8c4eda8026d"
++    notes:
++      - "Owning source repository: stranske/Workflows"
++      - "Owning source file: .github/workflows/autofix-versions.env"
++      - "Exact path: stranske/Workflows/.github/workflows/autofix-versions.env"
++      - "Pins in owning source file:"
++      - "BLACK_VERSION=26.10.1"
++      - "RUFF_VERSION=0.17.3"
++      - "ISORT_VERSION=9.0.2"
++      - "DOCFORMATTER_VERSION=1.7.8"
++      - "MYPY_VERSION=2.4.1"
++      - "PYTEST_VERSION=9.2.0"
++      - "PYTEST_COV_VERSION=7.1.0"
++      - "PYTEST_XDIST_VERSION=3.8.0"
++      - "COVERAGE_VERSION=7.17.2"
    - id: task-05
      title: 'Update the conflicting dev-tool pins in the source file so pip dependency
        resolution succeeds (verify: dependencies updated)'
@@ -20,18 +109,17 @@
 +    finished_at: null
 +    commit: ""
 +    notes:
-+      - "Checked 2026-11-11T00:09:25.637118+00:00: PR #2006 merged 2026-11-08T13:23:04Z at final head fcb6e97a291bd620629aa228561d36c3ee6cdf0d."
++      - "Checked 2026-11-11T00:09:25Z: PR #2006 merged 2026-11-08T13:23:04Z at final head fcb6e97a291bd620629aa228561d36c3ee6cdf0d."
 +      - "Both logs install local editable dev extras; the PyPI-publication diagnosis in task-03 and the proposed source pin change are superseded. No source pin edit was required or performed."
 +      - "Failed TPP checkout acc4aeddee5f4ffefbdc73fcb07505cd3d198197 has ruff==0.17.2, mypy==2.4.0, pytest==9.1.1. Successful checkout b56d92b389736c70370aa9134f379ac8cd1f3ad1 has ruff==0.17.3, mypy==2.4.1, pytest==9.2.0, matching planner dev pins."
 +      - "Historical task start retained here: 2026-11-08T05:39:41Z. See docs/evidence/issue-2025/*-install-excerpts.log."
    - id: task-06
      title: 'Run pip install against the updated pins locally to confirm that dependency
        resolution completes without conflicts (verify: dependencies updated)'
-@@ -88,17 +86,14 @@
-   - id: task-07
+@@ -89,16 +87,13 @@
      title: Add or extend a regression test reproducing the conflict and passing after
        the fix, using `pytest` or `node --test`, whichever the source uses.
--    status: blocked
+     status: blocked
 -    started_at: '2026-11-08T05:39:41Z'
 -    finished_at: null
 -    commit: ''
@@ -42,8 +130,7 @@
 -      - Test should fail with original pins (ruff==0.17.2) and pass with corrected pins (ruff==0.17.3)
 -      - Test location should be: stranske/Workflows/tests/ (or appropriate test directory)
 -      - Test command: pytest tests/test_dependency_resolution.py (or similar)
-+    status: doing
-+    started_at: "2026-11-11T00:09:25.637118+00:00"
++    started_at: "2026-11-11T00:09:25Z"
 +    finished_at: null
 +    commit: "f1ae1a4b8f704bf147938880c0010ded18d51022"
 +    notes:
@@ -53,7 +140,8 @@
    - id: task-08
      title: 'Determine whether the source repository uses pytest or node --test (verify:
        confirm completion in repo)'
-@@ -148,33 +143,36 @@
+@@ -147,34 +142,37 @@
+     title: '`Dev-tool pin update breaks Cross-Repo Smoke / cross-repo-full-product`
        passes on regenerated stranske/trip-planner#2006, verified with `gh run view
        <run-id>`, and the repository''s test command passes locally.'
 -    status: blocked
@@ -70,8 +158,8 @@
 -      - Expected result: Cross-Repo Smoke / cross-repo-full-product should pass after regeneration
 +    status: done
 +    started_at: "2026-11-08T05:39:41Z"
-+    finished_at: "2026-11-11T00:19:36+00:00"
-+    commit: "f1ae1a4b8f704bf147938880c0010ded18d51022"
++    finished_at: "2026-11-11T00:19:36Z"
++    commit: "6f2bbe03c8b1c36c3feadf4cc56b0965c927cf5f"
 +    notes:
 +      - "Run 42484305260 cross-repo-full-product conclusion=success at final PR head fcb6e97a291bd620629aa228561d36c3ee6cdf0d; merge commit 419015e6035cc77db18de3ab58c60651d8e51bc8. Regeneration is no longer a blocker."
 +      - "Checked Workflows commit f1ae1a4b8f704bf147938880c0010ded18d51022. Exact command: /tmp/trip-2025-workflows/.venv/bin/python -m pytest tests/test_dependency_resolution.py. Baseline exit 0 in 4.653s; mutation exit 1 in 3.258s; restored exit 0 in 4.582s."
@@ -88,8 +176,8 @@
 -    notes: []
 +    status: done
 +    started_at: null
-+    finished_at: "2026-11-11T00:09:25.637118+00:00"
-+    commit: "f1ae1a4b8f704bf147938880c0010ded18d51022"
++    finished_at: "2026-11-11T00:09:25Z"
++    commit: "516862e5d9286d62226458834881f8c4eda8026d"
 +    notes:
 +      - "At Workflows commit f1ae1a4b8f704bf147938880c0010ded18d51022, changed only successful TPP fixture ruff==0.17.3 to ruff==0.17.2; named suite exits 1 and successful wheels/editable cases report ResolutionImpossible."
 +      - "Restored original bytes; same named suite exits 0 in 4.582s. git diff --exit-code HEAD -- tests/test_dependency_resolution.py tests/fixtures/dependency_resolution exits 0. Receipts and terminal logs retained in docs/evidence/issue-2025/."
@@ -103,10 +191,10 @@
 -    notes: []
 +    status: done
 +    started_at: null
-+    finished_at: "2026-11-11T00:09:25.637118+00:00"
-+    commit: ""
++    finished_at: "2026-11-11T00:09:25Z"
++    commit: "516862e5d9286d62226458834881f8c4eda8026d"
 +    notes:
-+      - "Live read of canonical rounds.jsonl on 2026-11-11T00:09:25.637118+00:00: round 20261108T133016Z, timestamp 2026-11-08T13:30:21Z; target stranske/trip-planner#2006 disposition=delivered and terminal=delivered."
++      - "Live read of canonical rounds.jsonl on 2026-11-11T00:09:25Z: round 20261108T133016Z, timestamp 2026-11-08T13:30:21Z; target stranske/trip-planner#2006 disposition=delivered and terminal=delivered."
 +      - "Reason is merged 2026-11-08T13:23:04Z; 1 files, 0 mismatches. No dependency-pin finding in reasons/handoffs; error=null. Canonical target state binds last_round to final head fcb6e97a291bd620629aa228561d36c3ee6cdf0d."
 +      - "Reporting path for maint-68 is consumer-sync-run-report artifact at artifacts/consumer-sync-run-report.json; that template-sync report is not the dev-pin classifier. Subsequent sync-core evidence supplies the superseding merged classification. See sync-core-report.json."
    - id: task-17

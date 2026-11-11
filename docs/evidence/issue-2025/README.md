@@ -131,3 +131,38 @@ read-only. A2 likewise remains incomplete despite the passing command. The
 existing reconciliation patch is still an unapplied proposal. An authorized
 writer with access to the ledger must apply and verify it; changing the path
 or bypassing the restriction would not resolve the access boundary.
+
+The reconciliation proposal now also repairs malformed YAML notes, normalizes
+schema timestamps, supplies local evidence commits for completed records, and
+keeps task 07 blocked pending owning-source integration. Previously, applying
+the patch cleanly still produced invalid YAML. Five regression tests in
+`tests/test_issue_2025_ledger_reconciliation.py` apply the proposal only to a
+temporary copy of the ledger at `6f2bbe03c8b1c36c3feadf4cc56b0965c927cf5f`,
+validate the entire result with the existing ledger validator (strict commit
+checking), and cross-check its records against the saved install, smoke,
+mutation and sync receipts. On Python 3.14.10, this command passes all 21 tests:
+
+```sh
+python -m pytest tests/test_issue_2025_ledger_reconciliation.py tests/test_dependency_version_alignment.py tests/scripts/test_validate_dependency_test_setup.py -m 'not slow' -q
+```
+
+This verifies the handoff proposal, not an actual ledger write or supported-runtime
+CI for the owning Workflows regression. The ledger and the incomplete task
+checkboxes remain unchanged.
+
+This execution seat also makes `.git` read-only: staging fails while creating
+`index.lock`. The attempt to add `needs-human` to PR #2028 through the GitHub
+connector was rejected because it requires approval and the run's approval
+policy is `never`. An authorized writer is still needed to publish these
+changes and apply the ledger proposal.
+
+The repository-wide formatting gate exited 0 with 530 files unchanged:
+
+```sh
+BLACK_NUM_WORKERS=1 BLACK_CACHE_DIR=/tmp/issue-2025-black-cache black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+Ruff, `git diff --check`, and `git apply --check` also passed. GitHub commit-tree
+creation was separately rejected by the same approval policy, so no commit or
+push was made. PR #2028 was verified open with `draft=false` at its unchanged
+head `dc166cc9e14e0551b6d4c8ba5fac7718c22f809f`.
