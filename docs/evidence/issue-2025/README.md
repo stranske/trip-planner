@@ -280,3 +280,20 @@ Opening the actual ledger for writing returned `Operation not permitted`.
 The reconciliation proposal records these results for an authorized ledger
 writer. T1, T3, T4 and A2 still require that writer to apply and verify the
 records in `.agents/issue-2007-ledger.yml`.
+
+## Checkout-metadata reconciliation check
+
+The task-05 handoff now checks the successful checkout clause against the
+selected TPP revision's preserved Ruff, mypy and pytest requirements. This
+prevents a stale requirement from passing merely because it appears in the
+failed-checkout clause of the same note. Changing only the preserved successful
+TPP mypy requirement from 2.4.1 to 2.4.0 makes the new test fail (exit 1);
+restoring the exact bytes passes (exit 0). All 24 targeted consumer checks pass.
+The actual ledger and task checkboxes remain unchanged. Staging the Python test
+fails creating `.git/index.lock` because `.git` is read-only. Both the blocker
+comment and `needs-human` label were rejected because GitHub writes require
+approval and this run's approval policy is `never`.
+The required repository-wide Black gate passes with all 530 files unchanged
+after individually checking the same files to populate its cache. Ruff,
+whitespace and ledger-patch application checks also pass. PR #2028 remains open,
+with `draft=false`, at `21bac5a711cda14fd1f16a3170b2d2737f94ad7e`.
