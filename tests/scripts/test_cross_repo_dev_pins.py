@@ -448,6 +448,67 @@ def test_offline_workflow_guard_rejects_original_producer_pins(
     test_workflow_tpp_pin_resolves_with_planner_dev_pins(monkeypatch)
 
 
+def test_named_workflow_guard_break_and_restoration_via_pytest(tmp_path: Path) -> None:
+    """The named CLI check must fail for the original ref, then pass after restoration."""
+    workflow_relative = Path(".github/workflows/cross-repo-smoke.yml")
+    workflow_bytes = (REPO_ROOT / workflow_relative).read_bytes()
+    pinned_ref = yaml.safe_load(workflow_bytes)["env"]["TPP_PINNED_REF"]
+    original_ref = "acc4aeddee5f4ffefbdc73fcb07505cd3d198197"
+    module_relative = Path("tests/scripts/test_cross_repo_dev_pins.py")
+    files = [Path("pyproject.toml"), workflow_relative, module_relative]
+    files.extend(
+        Path("tests/fixtures/tpp_dev_pins") / ref / "pyproject.toml"
+        for ref in (pinned_ref, original_ref)
+    )
+    for relative in files:
+        destination = tmp_path / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes((REPO_ROOT / relative).read_bytes())
+
+    def run_named_check() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                f"{module_relative}::test_workflow_tpp_pin_resolves_with_planner_dev_pins",
+                "-q",
+                "-m",
+                "not slow",
+            ],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+
+    baseline = run_named_check()
+    assert baseline.returncode == 0, baseline.stdout + baseline.stderr
+    assert workflow_bytes.count(pinned_ref.encode("ascii")) == 1
+    workflow_path = tmp_path / workflow_relative
+    try:
+        workflow_path.write_bytes(
+            workflow_bytes.replace(pinned_ref.encode("ascii"), original_ref.encode("ascii"))
+        )
+        broken = run_named_check()
+        assert broken.returncode == 1, broken.stdout + broken.stderr
+        assert "cannot be installed together" in broken.stdout
+        requirements = _requirements(REPO_ROOT / "pyproject.toml")
+        for tool, version in (("mypy", "2.4.0"), ("pytest", "9.1.1"), ("ruff", "0.17.2")):
+            assert (
+                f"{tool}: trip-planner '{requirements[tool][0]}' vs TPP '{tool}=={version}'"
+                in broken.stdout
+            )
+    finally:
+        workflow_path.write_bytes(workflow_bytes)
+
+    assert workflow_path.read_bytes() == workflow_bytes
+    assert (REPO_ROOT / workflow_relative).read_bytes() == workflow_bytes
+    restored = run_named_check()
+    assert restored.returncode == 0, restored.stdout + restored.stderr
+
+
 @pytest.mark.parametrize(
     ("planner_phase", "producer_phase", "conflicting"),
     [

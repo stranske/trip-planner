@@ -1,5 +1,36 @@
 # Issue #1967: retained repair and exact-target acceptance
 
+## Keepalive follow-up: named pytest process — 2026-11-12 UTC
+
+Reviewed recent commits through `1c2a8595`. Tasks 3 and 4 remain verified;
+tasks 1 and 2 remain unchecked because the literal owner paths are absent and
+repository workflow edits are prohibited. The connector rejected PR checklist
+reconciliation, the `needs-human` label and the blocker comment because those
+writes require approval under policy `never`.
+
+The new subprocess regression copies the current workflow, planner metadata,
+test module and reviewed producer snapshots into a temporary repository. It
+invokes the named compatibility check through `python -m pytest` before changing
+only the temporary workflow's TPP ref to the original producer. The pytest
+process must exit 1 with all three exact conflict diagnostics. Byte-for-byte
+restoration must return the same command to exit 0. This supplements direct
+function tests without claiming protected-file acceptance.
+
+Focused validation reports **67 passed, 2 skipped** under Python 3.14.10 using
+`-m "not slow"`. Both skips require a live producer checkout. Focused Ruff and
+mypy pass. No application suite ran; Python 3.12.2 remains the owner-directed
+fallback, and supported-runtime application validation relies on hosted checks.
+
+The required repository-wide Black check passes with **530 files unchanged**,
+using `BLACK_CACHE_DIR=/tmp/issue1967-cli-black-cache` and `BLACK_NUM_WORKERS=1`
+after serial checks populated the cache. Fresh readback confirms #2029 is open
+with `draft=false`.
+
+Staging failed because Git cannot create `.git/index.lock` on the read-only Git
+directory. No commit was created. The validated changes are saved at
+`/tmp/issue1967-named-pytest.patch`, and the reconciled PR checklist is saved at
+`/tmp/issue1967-pr-body.md` for the owning lane.
+
 ## Keepalive reconciliation and exact conflict set — 2026-11-12 UTC
 
 Reviewed recent commits through `bee8bb08` before continuing. Tasks 3 and 4
