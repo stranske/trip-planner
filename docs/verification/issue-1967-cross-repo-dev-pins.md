@@ -1,5 +1,82 @@
 # Issue #1967: retained repair and exact-target acceptance
 
+## Current continuation readback — 2026-11-11 Central
+
+Recorded before acceptance execution at 2026-11-12T00:20Z: Outcome 1 is a
+zero-skip pass against the real workflow-pinned producer. Outcome command:
+
+```sh
+TPP_REPO_PATH=/private/tmp/issue2017-tpp /opt/anaconda3/bin/python3 -m pytest tests/scripts/test_cross_repo_dev_pins.py -q
+```
+
+Stop rule: one attempt per acceptance step, at most 30 minutes from 00:20 UTC;
+stop at the first unresolved failure. This supersedes earlier attempt windows
+for this continuation only. No diagnostic permutations or break/restoration
+work were repeated.
+
+`git worktree list --porcelain` showed this branch only at the current closer
+worktree, clean at `92e779d3feee5de8d768f6476cf177ea53c34c14`. No separate
+preserved/holder worktree for #2029 was registered. No holder was reset or
+cleaned. Existing regression work and dependency pins remain intact.
+
+- [x] Current-branch focused validation: **64 passed in 3.98s**, zero skips,
+  with no marker exclusions. The existing real producer checkout has origin
+  `https://github.com/stranske/Travel-Plan-Permission.git`, clean status and HEAD
+  `5c9ec6e15ac959023b9fc9cdd1099d70a6073396`, exactly matching workflow
+  `env.TPP_PINNED_REF`. No repository venv is present; the selected fallback
+  `/opt/anaconda3/bin/python3` reports Python 3.12.2. Pytest emitted an
+  `asyncio_default_fixture_loop_scope` deprecation warning. This is metadata
+  acceptance, not supported-runtime application acceptance.
+- [ ] Configured local command: Makefile `test` runs `python -m pytest`.
+  It was **not run**, because the continuation explicitly prohibits the full
+  local suite. Black or focused tests are not substituted for that result.
+- [x] Substantiate observed CI failures: inspected complete failed-job logs
+  and artifact inventory for [run 43094025285](https://github.com/stranske/trip-planner/actions/runs/43094025285),
+  whose head is the branch SHA above. Python 3.13 printed **2934 passed,
+  5 skipped, 800 warnings in 148.32s**; Python 3.14 printed **2934 passed,
+  5 skipped, 800 warnings in 174.04s**. Both report **91%** coverage,
+  `PYTEST_OUTCOME=success`, `COVERAGE_MIN_OUTCOME=success`, and `All checks passed!`.
+  Their jobs failed at `actions/upload-artifact@v4` with `Failed to CreateArtifact`
+  after five requests returned HTML instead of JSON. Product contract
+  observations printed `WORKS 4, PARTIAL 3, BROKEN 0, FABRICATED 0 of 7`, then
+  failed uploading `product-probe.json` with the same CreateArtifact error.
+  The run artifact inventory contains only `langsmith-fleet.ndjson` (ID
+  `13891345012`); the product-probe and Python test artifacts are absent.
+  Thus their contents cannot be independently inspected. Logs establish
+  artifact-service failures, not branch test regressions. No baseline rerun
+  was performed, so no broader baseline-health claim is made.
+- [ ] Explicit #1966 successor and regenerated exact-head Evidence: incomplete.
+  Fresh #1966 readback remains closed at
+  `164ed1a02b126e72ce407620829e40aa92925a53`, with empty predecessor/successor
+  arrays. Maint 52's current producer accepts `repos`, `dry_run`, and
+  `source_sha`; its generated delivery marker also initializes those arrays
+  empty. Successful #2006 evidence in the #1973 document does not establish
+  a native replacement edge from #1966. No producer was dispatched, obsolete
+  pins reopened, generated output edited, or Maint 68 substituted.
+- [ ] Subsequent canonical classification: incomplete. The supported scoped
+  readback attempt was:
+
+  ```sh
+  /opt/anaconda3/bin/python3 /Users/teacher/.codex/sync-core/sync_core.py run --targets stranske/trip-planner#1966 --no-judge
+  ```
+
+  It exited **1** before running a round:
+  `PermissionError: [Errno 1] Operation not permitted: '/Users/teacher/.codex/orchestrator/sync-core/round.lock'`.
+  Canonical sync-core state is outside this seat's writable roots. No lock
+  was bypassed, state redirected, or independent classification substituted.
+  The retained target still says `superseded`, last round
+  `20261105T054444Z`, at the original head. This is the first unresolved
+  acceptance step; the stop rule ended further acceptance execution.
+
+Blocking/drainable pair: canonical successor reconciliation and classification
+cannot execute from this restricted seat / retain this source PR and let the
+owning sync-core controller, with canonical-state access, explicitly reconcile
+#1966 to a Maint 52 successor, regenerate through that producer, capture
+`gh run view <successor-evidence-run-id> --repo stranske/trip-planner --json conclusion,headSha,status,url,jobs`
+with successful `cross-repo-full-product` at its exact head, and retain the
+subsequent canonical round without the finding. These boxes remain unchecked;
+the current branch's passing focused tests do not discharge them.
+
 Check date: 2026-11-11 (America/Chicago).
 
 Outcome 1: the real workflow-pinned TPP checkout and current planner requirements
