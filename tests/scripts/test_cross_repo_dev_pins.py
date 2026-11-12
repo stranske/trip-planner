@@ -32,6 +32,17 @@ from packaging.utils import canonicalize_name
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+def _run_focused_pytest(checkout: Path, nodeid: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "pytest", nodeid, "-q", "-m", "not slow"],
+        cwd=checkout,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+
 def _checkout_git_env() -> dict[str, str]:
     """Use the requested checkout while preserving unrelated Git configuration."""
     repository_variables = {
@@ -466,21 +477,9 @@ def test_named_workflow_guard_break_and_restoration_via_pytest(tmp_path: Path) -
         destination.write_bytes((REPO_ROOT / relative).read_bytes())
 
     def run_named_check() -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "pytest",
-                f"{module_relative}::test_workflow_tpp_pin_resolves_with_planner_dev_pins",
-                "-q",
-                "-m",
-                "not slow",
-            ],
-            cwd=tmp_path,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
+        return _run_focused_pytest(
+            tmp_path,
+            f"{module_relative}::test_workflow_tpp_pin_resolves_with_planner_dev_pins",
         )
 
     baseline = run_named_check()
@@ -506,6 +505,50 @@ def test_named_workflow_guard_break_and_restoration_via_pytest(tmp_path: Path) -
     assert workflow_path.read_bytes() == workflow_bytes
     assert (REPO_ROOT / workflow_relative).read_bytes() == workflow_bytes
     restored = run_named_check()
+    assert restored.returncode == 0, restored.stdout + restored.stderr
+
+
+def test_historical_diagnostic_break_and_restoration_via_pytest(tmp_path: Path) -> None:
+    """Removing versions must fail the named historical test in a real pytest process."""
+    module_relative = Path("tests/scripts/test_cross_repo_dev_pins.py")
+    producer_ref = "acc4aeddee5f4ffefbdc73fcb07505cd3d198197"
+    for relative in (
+        module_relative,
+        Path("tests/fixtures/issue_2025_ledger/failed-trip-planner.toml"),
+        Path("tests/fixtures/tpp_dev_pins") / producer_ref / "pyproject.toml",
+    ):
+        destination = tmp_path / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes((REPO_ROOT / relative).read_bytes())
+
+    nodeid = (
+        f"{module_relative}::test_smoke_pin_guard_with_historical_editable_checkouts"
+        "[issue-1967-original-install-inputs]"
+    )
+    baseline = _run_focused_pytest(tmp_path, nodeid)
+    assert baseline.returncode == 0, baseline.stdout + baseline.stderr
+    module = tmp_path / module_relative
+    original = module.read_bytes()
+    # Keep conflict detection intact, but print package names without versions.
+    broken_source = original.replace(
+        b"'{planner_req}' vs TPP '{tpp_req}'",
+        b"'{planner_req.name}' vs TPP '{tpp_req.name}'",
+        1,
+    )
+    assert broken_source != original
+    try:
+        module.write_bytes(broken_source)
+        broken = _run_focused_pytest(tmp_path, nodeid)
+        assert broken.returncode == 1, broken.stdout + broken.stderr
+        assert "assert diagnostic_lines[:5] ==" in broken.stdout
+        assert "mypy: trip-planner 'mypy' vs TPP 'mypy'" in broken.stdout
+        assert "1 failed" in broken.stdout
+    finally:
+        module.write_bytes(original)
+
+    assert module.read_bytes() == original
+    assert (REPO_ROOT / module_relative).read_bytes() == original
+    restored = _run_focused_pytest(tmp_path, nodeid)
     assert restored.returncode == 0, restored.stdout + restored.stderr
 
 

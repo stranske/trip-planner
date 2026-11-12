@@ -1,5 +1,40 @@
 # Issue #1967: retained repair and exact-target acceptance
 
+## Keepalive follow-up: historical pytest process — 2026-11-12 UTC
+
+Reviewed the current branch through `2b6abca6`. The new subprocess regression
+copies only the test module and the original planner/producer metadata into a
+temporary repository. The named historical case passes initially, then fails
+at its exact-diagnostic assertion when the copy prints package names without
+versions. Byte-for-byte source restoration makes the same pytest command pass.
+The repository test source and protected workflow are unchanged by that check.
+
+`python -m pytest tests/scripts/test_cross_repo_dev_pins.py -q -m "not slow"`
+reports **68 passed, 2 skipped** under Python 3.14.10. Both skips require the live
+producer checkout. Focused Ruff and mypy pass.
+
+- [ ] Task 1: the literal owner interpreter and producer checkout are absent;
+  the historical 45-test result is not a fresh result for this expanded suite.
+- [ ] Task 2: repository workflow mutation requires an approved high-privilege
+  run. Existing temporary-fixture checks do not discharge this restriction.
+- [x] Task 3: removing version diagnostics fails the named historical regression;
+  restoring the exact source bytes passes, verified through separate pytest processes.
+- [x] Task 4: only focused pytest checks ran. Python 3.12.2 remains the
+  owner-directed fallback; supported-runtime application validation relies on hosted checks.
+
+The connector rejected `needs-human` and the blocker comment because those
+writes require approval while this run's approval policy is `never`.
+The PR checklist update was rejected for the same reason; its proposed body is
+saved at `/tmp/issue1967-diagnostic-cli-pr-body.md`.
+
+The required repository-wide Black check passes with **530 files unchanged**
+using `BLACK_CACHE_DIR=/tmp/issue1967-diagnostic-cli-black-cache` and
+`BLACK_NUM_WORKERS=1` after serial checks populated the cache. Staging failed
+because `.git/index.lock` cannot be created on the read-only Git filesystem;
+no commit was created. The validated changes are saved at
+`/tmp/issue1967-diagnostic-cli.patch` for commit on the existing PR branch from
+a writable checkout. Fresh PR readback confirms #2029 is open with `draft=false`.
+
 ## Keepalive follow-up: named pytest process — 2026-11-12 UTC
 
 Reviewed recent commits through `1c2a8595`. Tasks 3 and 4 remain verified;
