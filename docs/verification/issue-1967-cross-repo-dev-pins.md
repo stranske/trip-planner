@@ -1,5 +1,29 @@
 # Issue #1967: retained repair and exact-target acceptance
 
+## Keepalive follow-up: each tool through pytest — 2026-11-12 UTC
+
+Reviewed commits through `97c2acaf`. Tasks 3 and 4 are verified; tasks 1 and 2
+remain unchecked because the owner interpreter/producer paths are absent and
+repository workflow edits require an approved high-privilege run.
+
+The subprocess regression now removes versions from mypy, pytest and Ruff
+independently, as well as together. Each named historical pytest invocation
+passes initially, fails with the selected incomplete diagnostic, then passes
+after byte-for-byte restoration. The focused module reports **75 passed,
+2 skipped** under Python 3.14.10 with `-m "not slow"`; the skips require the live
+producer checkout. After the final lint adjustment, all four subprocess cases
+pass again. Focused Ruff and mypy pass. The required repository-wide Black
+command passes with **530 files unchanged**, using a writable cache populated
+by serial checks. Only focused pytest checks ran; Python 3.12.2 remains the
+owner-directed fallback and supported-runtime application validation relies
+on hosted checks. No protected repository file or dependency pin changed.
+
+PR checklist reconciliation, `needs-human` and the blocker comment were rejected
+because connector writes require approval under policy `never`. The proposed
+body is saved at `/tmp/issue1967-pr-body.md`. Staging failed because `.git` is
+read-only; the validated diff is saved at `/tmp/issue1967-each-tool-cli.patch`
+for commit on the existing PR branch by the owning automation lane.
+
 ## Keepalive follow-up: original Git object readback — 2026-11-12 UTC
 
 Reviewed recent commits through `ca937c9e` and reconciled tasks 3 and 4 as

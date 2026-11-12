@@ -562,8 +562,9 @@ def test_named_workflow_guard_break_and_restoration_via_pytest(tmp_path: Path) -
     assert restored.returncode == 0, restored.stdout + restored.stderr
 
 
-def test_historical_diagnostic_break_and_restoration_via_pytest(tmp_path: Path) -> None:
-    """Removing versions must fail the named historical test in a real pytest process."""
+@pytest.mark.parametrize("tool", ["mypy", "pytest", "ruff", "all"])
+def test_historical_diagnostic_break_and_restoration_via_pytest(tmp_path: Path, tool: str) -> None:
+    """Losing any tool's versions must fail the named test in a real pytest process."""
     module_relative = Path("tests/scripts/test_cross_repo_dev_pins.py")
     producer_ref = "acc4aeddee5f4ffefbdc73fcb07505cd3d198197"
     for relative in (
@@ -583,10 +584,16 @@ def test_historical_diagnostic_break_and_restoration_via_pytest(tmp_path: Path) 
     assert baseline.returncode == 0, baseline.stdout + baseline.stderr
     module = tmp_path / module_relative
     original = module.read_bytes()
-    # Keep conflict detection intact, but print package names without versions.
+    # Keep conflict detection intact while removing only the selected versions.
+    # Losing Ruff or pytest must fail even when the first (mypy) line is correct.
+    affected_tools = ("mypy", "pytest", "ruff") if tool == "all" else (tool,)
+    replacement = (
+        f"'{{planner_req.name if name in {affected_tools!r} else planner_req}}' vs TPP "
+        f"'{{tpp_req.name if name in {affected_tools!r} else tpp_req}}'"
+    ).encode()
     broken_source = original.replace(
         b"'{planner_req}' vs TPP '{tpp_req}'",
-        b"'{planner_req.name}' vs TPP '{tpp_req.name}'",
+        replacement,
         1,
     )
     assert broken_source != original
@@ -595,7 +602,11 @@ def test_historical_diagnostic_break_and_restoration_via_pytest(tmp_path: Path) 
         broken = _run_focused_pytest(tmp_path, nodeid)
         assert broken.returncode == 1, broken.stdout + broken.stderr
         assert "assert diagnostic_lines[:5] ==" in broken.stdout
-        assert "mypy: trip-planner 'mypy' vs TPP 'mypy'" in broken.stdout
+        first_affected = affected_tools[0]
+        assert (
+            f"{first_affected}: trip-planner '{first_affected}' vs TPP '{first_affected}'"
+            in broken.stdout
+        )
         assert "1 failed" in broken.stdout
     finally:
         module.write_bytes(original)
