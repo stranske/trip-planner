@@ -1,5 +1,32 @@
 # Issue #1967: retained repair and exact-target acceptance
 
+## Sandbox follow-up — 2026-11-12 UTC
+
+The exact-diagnostic sensitivity regression now also swaps the planner and TPP
+requirements while retaining both original versions. Each tool and the combined
+case must fail the historical regression, then pass after function restoration.
+This checks attribution as well as presence of the original version details.
+
+`python -m pytest tests/scripts/test_cross_repo_dev_pins.py -q -m "not slow"`
+reports **66 passed, 2 skipped** under Python 3.14.10. Focused Ruff and mypy pass.
+The skips require a real producer checkout; the literal owner interpreter and
+`/private/tmp/issue2017-tpp` are absent here. This does not reproduce the owner's
+zero-skip acceptance command. Python 3.12.2 remains the owner-directed fallback;
+supported-runtime application validation relies on hosted checks. No full suite,
+workflow edit, or dependency-pin change was made. The workflow mutation task
+remains blocked under the standard agent permissions.
+
+The required repository-wide Black check passes with **530 files unchanged**,
+using `BLACK_CACHE_DIR=/tmp/issue1967-attribution-black-cache` and
+`BLACK_NUM_WORKERS=1` after serial checks populated the writable cache.
+
+The connector rejected adding `needs-human` and the blocker comment to #2029
+because those writes require approval and this run's approval policy is `never`.
+Staging failed because `.git/index.lock` cannot be created on the read-only Git
+directory, so no commit was created. The validated changes are saved in
+`/tmp/issue1967-diagnostic-attribution.patch` for commit on the existing PR branch
+from a writable checkout. Readback confirms #2029 is open with `draft=false`.
+
 ## Current continuation readback — 2026-11-11 Central
 
 Recorded before acceptance execution at 2026-11-12T00:20Z: Outcome 1 is a

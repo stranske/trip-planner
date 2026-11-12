@@ -497,22 +497,29 @@ def test_smoke_pin_guard_with_historical_editable_checkouts(
 
 
 @pytest.mark.parametrize("tool", ["ruff", "mypy", "pytest", "all"])
-@pytest.mark.parametrize("missing_from", ["planner", "producer", "both"])
-def test_historical_regression_rejects_missing_version_diagnostics(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tool: str, missing_from: str
+@pytest.mark.parametrize("diagnostic_change", ["planner", "producer", "both", "swapped"])
+def test_historical_regression_rejects_inaccurate_version_diagnostics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tool: str, diagnostic_change: str
 ) -> None:
-    """Losing either project's versions must fail the historical regression."""
+    """Missing or misattributed versions must fail the historical regression."""
     original_find_pin_conflicts = find_pin_conflicts
 
-    def without_versions(planner: Path, producer: Path) -> list[str]:
+    def inaccurate_versions(planner: Path, producer: Path) -> list[str]:
         conflicts = original_find_pin_conflicts(planner, producer)
         for index, conflict in enumerate(conflicts):
             name = conflict.split(":", 1)[0]
             if tool in (name, "all"):
                 planner_diagnostic, producer_diagnostic = conflict.split(" vs TPP ", 1)
-                if missing_from in ("planner", "both"):
+                if diagnostic_change == "swapped":
+                    # Keep both original requirements present but attribute each
+                    # to the wrong project. Checking version presence alone
+                    # must not satisfy the exact historical diagnostic.
+                    planner_requirement = planner_diagnostic.split("trip-planner ", 1)[1]
+                    planner_diagnostic = f"{name}: trip-planner {producer_diagnostic}"
+                    producer_diagnostic = planner_requirement
+                if diagnostic_change in ("planner", "both"):
                     planner_diagnostic = f"{name}: trip-planner"
-                if missing_from in ("producer", "both"):
+                if diagnostic_change in ("producer", "both"):
                     producer_diagnostic = ""
                 conflicts[index] = f"{planner_diagnostic} vs TPP {producer_diagnostic}".rstrip()
         return conflicts
@@ -522,7 +529,7 @@ def test_historical_regression_rejects_missing_version_diagnostics(
         checkout.mkdir()
         with monkeypatch.context() as isolated:
             if phase == "broken":
-                isolated.setattr(f"{__name__}.find_pin_conflicts", without_versions)
+                isolated.setattr(f"{__name__}.find_pin_conflicts", inaccurate_versions)
                 with pytest.raises(AssertionError):
                     test_smoke_pin_guard_with_historical_editable_checkouts(
                         checkout, isolated, "failed", "failed", True
