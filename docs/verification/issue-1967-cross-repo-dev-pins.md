@@ -1,5 +1,118 @@
 # Issue #1967: retained repair and exact-target acceptance
 
+## Closer continuation readback — 2026-11-11 America/Chicago (2026-11-12 UTC)
+
+Recorded before acceptance execution at 2026-11-12T04:05Z (check date:
+2026-11-11 America/Chicago / 2026-11-12 UTC):
+
+- **Outcome command**:
+  ```sh
+  TPP_REPO_PATH=/private/tmp/issue2017-tpp /opt/anaconda3/bin/python3 -m pytest tests/scripts/test_cross_repo_dev_pins.py -q
+  ```
+- **Bounded stop rule**: one attempt per acceptance step, at most 30 minutes from
+  2026-11-12T04:05Z; stop at the first unresolved failure and do not add
+  diagnostic permutations or downgrade pins.
+
+### Worktree and branch preservation
+
+`git worktree list --porcelain` listed `refs/heads/codex/issue-1967` only at
+`/Users/teacher/.codex/orchestrator/worktrees/stranske__trip-planner__2029__closer`
+at HEAD `d82f0537428fbcddfd687c931baced3f3dbffcd4`, with a clean working tree.
+No `preserved/` holder worktree existed for PR #2029, and no worktree was reset
+or cleaned. All prior regression tests (`test_cross_repo_dev_pins.py`) and
+compatible dependency pins (`ruff==0.17.4`, `mypy==2.4.1`, `pytest==9.2.0`,
+`TPP_PINNED_REF: 5c9ec6e15ac959023b9fc9cdd1099d70a6073396`) are retained
+unchanged.
+
+### Acceptance step results
+
+- [x] **Retain #2029's useful changes and run focused validation against the real workflow-pinned TPP checkout without skips**:
+  ```sh
+  TPP_REPO_PATH=/private/tmp/issue2017-tpp /opt/anaconda3/bin/python3 -m pytest tests/scripts/test_cross_repo_dev_pins.py -q
+  ```
+  Exited **0** and printed **`77 passed in 21.55s`** with **0 skipped** (plus the
+  `pytest_asyncio` `asyncio_default_fixture_loop_scope` deprecation warning)
+  under `/opt/anaconda3/bin/python3` (Python 3.12.2, since no repository `.venv`
+  is present). This includes all 77 expanded tests on branch head
+  `d82f0537428fbcddfd687c931baced3f3dbffcd4` — including the real-checkout
+  compatibility and `git --no-replace-objects` provenance checks against
+  `/private/tmp/issue2017-tpp` at `5c9ec6e15ac959023b9fc9cdd1099d70a6073396`
+  and the offline pip resolver checks.
+- [x] **PR #2029 exact-head hosted CI and Gate**:
+  `gh pr view 2029 --repo stranske/trip-planner --json headRefOid,state,isDraft,statusCheckRollup`
+  and `gh run view 43145189282 --repo stranske/trip-planner --json conclusion,headSha,status,url,jobs`
+  confirm PR #2029 is `OPEN` (`isDraft: false`) at head
+  `d82f0537428fbcddfd687c931baced3f3dbffcd4` with all checks green:
+  - [Cross-Repo Smoke 43145189282](https://github.com/stranske/trip-planner/actions/runs/43145189282):
+    `conclusion: "success"`, `headSha: "d82f0537428fbcddfd687c931baced3f3dbffcd4"`,
+    job `cross-repo-full-product` (`databaseId: 130941249382`, `conclusion: "success"`).
+  - [Gate 43145189857](https://github.com/stranske/trip-planner/actions/runs/43145189857):
+    `conclusion: "success"` across `Cross-Repo Smoke / cross-repo-full-product`
+    (`130941397759`), `Python CI / python 3.13` (`130941554487`),
+    `Python CI / python 3.14` (`130941554513`), and `gate-summary` (`130943245487`).
+  - [CI 43145189990](https://github.com/stranske/trip-planner/actions/runs/43145189990):
+    `conclusion: "success"` across `Python CI / python 3.13` (`130941347406`),
+    `Python CI / python 3.14` (`130941347386`), and `Product contract observations`
+    (`130941252608`), resolving the earlier transient `CreateArtifact` failure on
+    `92e779d3feee5de8d768f6476cf177ea53c34c14`.
+- [ ] **Record the configured local test-command result (`python -m pytest`) for the final branch**:
+  Explicitly unmet locally. The repository's configured test command (`Makefile`
+  target `test`) is `python -m pytest`. This continuation's execution rules
+  explicitly forbid running the full test suite locally
+  (`Never run the full test suite locally: CI runs it on the PR`). Accordingly,
+  `python -m pytest` was not executed locally, and hosted CI is not substituted
+  for local full-suite execution.
+- [ ] **Establish explicit native successor lineage for #1966 and successful exact-head `cross-repo-full-product` evidence**:
+  Exact-head `cross-repo-full-product` evidence is verified on functional Maint 52
+  successor [#2006](https://github.com/stranske/trip-planner/pull/2006), but
+  explicit native `predecessor_prs`/`successor_prs` marker lineage from #1966
+  remains absent:
+  ```sh
+  gh pr view 1966 --repo stranske/trip-planner --json headRefOid,state,mergedAt,body
+  gh pr view 2006 --repo stranske/trip-planner --json headRefOid
+  gh run view 42484305260 --repo stranske/trip-planner --json conclusion,headSha,status,url,jobs
+  gh run view 42484305671 --repo stranske/trip-planner --json conclusion,headSha,status,url,jobs
+  gh run view 41674233862 --repo stranske/trip-planner --json conclusion,headSha,status,url,jobs
+  ```
+  - `#1966` remains `CLOSED` (`mergedAt: null`) at `headRefOid`
+    `164ed1a02b126e72ce407620829e40aa92925a53` (`plan_id: "dev-tool-44505f50de37"`,
+    `source_commit: "2bd1aa094698d3e9f2ce91f754f6b00fb748a52d"`,
+    `desired_tree_hash: "2824d328ae1c8b645d07f9e73aecf0a51145efc5"`,
+    `"predecessor_prs":[],"successor_prs":[]`). Original [run 41674233862](https://github.com/stranske/trip-planner/actions/runs/41674233862)
+    on `164ed1a02b126e72ce407620829e40aa92925a53` remains `conclusion: "failure"`.
+  - `#2006` (`plan_id: "dev-tool-91791b44e525"`, regenerated by Maint 52
+    `maint-52-sync-dev-versions.yml` run `42484255917` and merged at
+    `419015e6035cc77db18de3ab58c60651d8e51bc8`) delivered the same
+    `ruff==0.17.3`, `mypy==2.4.1`, `pytest==9.2.0` payload at `headRefOid`
+    `fcb6e97a291bd620629aa228561d36c3ee6cdf0d`. At that exact head, both
+    [Cross-Repo Smoke 42484305260](https://github.com/stranske/trip-planner/actions/runs/42484305260)
+    (job `cross-repo-full-product`, `databaseId: 128742727094`,
+    `conclusion: "success"`) and [Gate 42484305671](https://github.com/stranske/trip-planner/actions/runs/42484305671)
+    (job `Cross-Repo Smoke / cross-repo-full-product`, `databaseId: 128742800569`,
+    `conclusion: "success"`) succeeded.
+  - However, Maint 52 initializes `"predecessor_prs":[],"successor_prs":[]` empty
+    and exposes only `repos`, `dry_run`, and `source_sha` inputs, while `main`
+    has since advanced to `ruff==0.17.4` (`#2016`/`#2018`). A coding agent in
+    this repository cannot populate native `predecessor_prs`/`successor_prs`
+    lineage on `#1966` without hand-editing generated PR markers or modifying
+    `stranske/Workflows` producer logic.
+- [x] **Capture a subsequent canonical sync-core classification without this finding**:
+  Executed the exact scoped canonical sync-core command from this seat:
+  ```sh
+  /opt/anaconda3/bin/python3 /Users/teacher/.codex/sync-core/sync_core.py run --targets stranske/trip-planner#1966 --no-judge
+  ```
+  Exited **0** and printed:
+  ```text
+  sync-core 20261112T040500Z scope=targets apply=no: targets 1; terminal 1 (superseded 1); waiting 0 (); handoffs filed 0 (dups 0, deferred 0); refresh dispatched 0; maint71 nudged 0; model calls 0; maint71 run 43136579085 refresh_skips 0; blocking 0, drainable 0, next idle (fully terminal)
+  ```
+  Round `20261112T040500Z` (with `maint71 run 43136579085`) completed without
+  `PermissionError` and recorded `targets 1; terminal 1 (superseded 1); waiting 0 (); handoffs filed 0 (dups 0, deferred 0); ... blocking 0, drainable 0, next idle (fully terminal)` —
+  confirming that the `#1967` pin-conflict finding is absent. Note: because
+  `--targets` runs in `scope=targets apply=no` mode and `#1966` is closed without
+  a native `successor_prs` link, `#1966`'s classification remains `superseded`
+  (whereas merged Maint 52 delivery `#2006` was classified `delivered` with
+  `0 mismatches` in controller apply round `20261108T133016Z`).
+
 ## Keepalive follow-up: each tool through pytest — 2026-11-12 UTC
 
 Reviewed commits through `97c2acaf`. Tasks 3 and 4 are verified; tasks 1 and 2
