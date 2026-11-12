@@ -1,5 +1,39 @@
 # Issue #1967: retained repair and exact-target acceptance
 
+## Keepalive reconciliation and exact conflict set — 2026-11-12 UTC
+
+Reviewed recent commits through `bee8bb08` before continuing. Tasks 3 and 4
+remain verified by the diagnostic sensitivity/restoration tests and focused-only
+validation. Tasks 1 and 2 remain unchecked for literal revalidation: the owner
+interpreter and live checkout paths are absent, Git cannot resolve `github.com`,
+and standard agent permissions prohibit repository workflow mutations. The
+historical 45-pass result is not the current module's test count.
+
+The existing offline workflow regression now requires the complete ordered
+conflict set, followed immediately by the repair guidance. Previously, matching
+substrings allowed additional spurious conflicts to pass. This advances the
+temporary-fixture alternative for task 2 without claiming protected-file
+acceptance. Injecting one extra conflict through a temporary pytest plugin makes
+the Ruff case fail at the new assertion; running without the plugin restores
+all four original-pin break/restoration cases to passing.
+
+`python -m pytest tests/scripts/test_cross_repo_dev_pins.py -q -m "not slow"`
+reports **66 passed, 2 skipped** under Python 3.14.10. Both skips still require
+a real producer checkout. Focused Ruff and mypy pass. Only focused pytest checks
+ran; Python 3.12.2 remains the owner-directed fallback, and supported-runtime
+application validation relies on hosted checks.
+
+The connector rejected the reconciled PR checklist, `needs-human` label and
+blocker comment because those writes require approval under policy `never`.
+The proposed PR body is saved at `/tmp/issue1967-pr-body.md` for the owning lane.
+
+The required repository-wide Black check passes with **530 files unchanged**
+after serial checks populated `/tmp/issue1967-exact-conflicts-black-cache`.
+Staging fails because `.git/index.lock` cannot be created on the read-only Git
+directory; no commit was created. The source and note changes are saved in
+`/tmp/issue1967-exact-conflicts.patch` for commit on the checked-out PR branch
+from a writable checkout. Fresh readback confirms #2029 is open with `draft=false`.
+
 ## Sandbox follow-up — 2026-11-12 UTC
 
 The exact-diagnostic sensitivity regression now also swaps the planner and TPP

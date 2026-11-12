@@ -426,11 +426,16 @@ def test_offline_workflow_guard_rejects_original_producer_pins(
         with pytest.raises(AssertionError, match="cannot be installed together") as failure:
             test_workflow_tpp_pin_resolves_with_planner_dev_pins(monkeypatch)
 
-        for tool, version in restored.items():
-            assert (
-                f"{tool}: trip-planner '{requirements[tool][0]}' vs TPP '{tool}=={version}'"
-                in str(failure.value)
-            )
+        # A one-tool break must report only that conflict. Checking for expected
+        # substrings alone would also accept spurious conflicts for the other
+        # tools, weakening the evidence that the workflow ref is the cause.
+        diagnostic_lines = [line.strip() for line in str(failure.value).splitlines()]
+        expected_conflicts = [
+            f"{tool}: trip-planner '{requirements[tool][0]}' vs TPP '{tool}=={version}'"
+            for tool, version in sorted(restored.items())
+        ]
+        assert diagnostic_lines[1 : 1 + len(expected_conflicts)] == expected_conflicts
+        assert diagnostic_lines[1 + len(expected_conflicts)].startswith("Move TPP_PINNED_REF ")
     finally:
         current_metadata.write_bytes(producer_bytes)
         workflow_path.write_bytes(workflow_bytes)
