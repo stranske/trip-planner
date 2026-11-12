@@ -1,5 +1,35 @@
 # Issue #1967: retained repair and exact-target acceptance
 
+## Keepalive follow-up: original Git object readback — 2026-11-12 UTC
+
+Reviewed recent commits through `ca937c9e` and reconciled tasks 3 and 4 as
+verified. Tasks 1 and 2 remain unchecked: the exact owner interpreter and live
+producer checkout are absent, Git cannot resolve `github.com`, and repository
+workflow edits require an explicitly approved high-privilege run. The connector
+rejected the PR-body update, `needs-human` label and blocker comment because
+those writes require approval under this run's `never` policy. The reconciled
+body is saved in `/tmp/issue1967-pr-body.md`.
+
+The live guard now reads the pinned Git object with `--no-replace-objects`.
+Previously, local replacement refs could substitute reviewed dependency metadata
+while HEAD still identified a commit with different runtime or dev requirements.
+Four regression cases reproduce that false acceptance, with and without inherited
+Git locations. All four fail against the previous guard and pass with the fix.
+This strengthens task 1's source readback without claiming a live-checkout run.
+
+Focused validation: **72 passed, 2 skipped** under Python 3.14.10 with
+`-m "not slow"`; the skips require the live producer checkout. Focused Ruff and
+mypy pass. No application suite ran. Python 3.12.2 remains the owner-directed
+fallback; supported-runtime application validation relies on hosted checks.
+
+The required repository-wide Black check passes with **530 files unchanged**
+using `BLACK_CACHE_DIR=/tmp/issue1967-replacement-black-cache` and
+`BLACK_NUM_WORKERS=1` after serial checks populated that writable cache.
+The commit attempt failed at staging because `.git/index.lock` cannot be created
+on the read-only Git filesystem. The validated source and note changes are saved
+at `/tmp/issue1967-original-object.patch` for commit on the existing PR branch.
+Fresh GitHub readback confirms #2029 remains open with `draft=false`.
+
 ## Keepalive follow-up: historical pytest process — 2026-11-12 UTC
 
 Reviewed the current branch through `2b6abca6`. The new subprocess regression

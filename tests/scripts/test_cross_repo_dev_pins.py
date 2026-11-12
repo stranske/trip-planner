@@ -225,7 +225,16 @@ def test_live_tpp_checkout_matches_workflow_snapshot() -> None:
     producer = tomllib.loads((checkout / "pyproject.toml").read_text())["project"]
     committed = tomllib.loads(
         subprocess.check_output(
-            ["git", "-C", str(checkout), "show", f"{resolved}:pyproject.toml"],
+            # Read the pinned object itself, even if the checkout has local
+            # replacement refs that would substitute another commit or tree.
+            [
+                "git",
+                "--no-replace-objects",
+                "-C",
+                str(checkout),
+                "show",
+                f"{resolved}:pyproject.toml",
+            ],
             text=True,
             timeout=10,
             env=_checkout_git_env(),
@@ -249,7 +258,17 @@ def test_live_tpp_checkout_matches_workflow_snapshot() -> None:
 
 @pytest.mark.parametrize(
     "mismatch",
-    [None, "head", "runtime", "dev", "committed-runtime", "committed-dev", "nested-checkout"],
+    [
+        None,
+        "head",
+        "runtime",
+        "dev",
+        "committed-runtime",
+        "committed-dev",
+        "replaced-runtime",
+        "replaced-dev",
+        "nested-checkout",
+    ],
 )
 @pytest.mark.parametrize("inherit_git_locations", [False, True])
 def test_live_snapshot_guard_rejects_unverified_producer_metadata(
@@ -279,9 +298,9 @@ def test_live_snapshot_guard_rejects_unverified_producer_metadata(
         '[project.optional-dependencies]\ndev = ["ruff==0.17.3"]\n'
     )
     committed_metadata = metadata
-    if mismatch == "committed-runtime":
+    if mismatch in ("committed-runtime", "replaced-runtime"):
         committed_metadata = metadata.replace("httpx>=0.28.1", "httpx>=0.29")
-    elif mismatch == "committed-dev":
+    elif mismatch in ("committed-dev", "replaced-dev"):
         committed_metadata = metadata.replace("ruff==0.17.3", "ruff==0.17.2")
     pyproject.write_text(committed_metadata, encoding="utf-8")
     for command in (
@@ -314,6 +333,41 @@ def test_live_snapshot_guard_rejects_unverified_producer_metadata(
         timeout=10,
         env=_checkout_git_env(),
     ).strip()
+    if mismatch in ("replaced-runtime", "replaced-dev"):
+        # A local replacement can make ordinary `git show HEAD:pyproject.toml`
+        # return reviewed metadata while HEAD still identifies the wrong source.
+        for command in (
+            ["add", "pyproject.toml"],
+            [
+                "-c",
+                "user.name=Pin regression",
+                "-c",
+                "user.email=pins@example.invalid",
+                "-c",
+                "commit.gpgsign=false",
+                "commit",
+                "--quiet",
+                "-m",
+                "Replacement metadata",
+            ],
+            ["replace", pinned_ref, "HEAD"],
+            ["update-ref", "HEAD", pinned_ref],
+        ):
+            subprocess.run(
+                ["git", "-C", str(checkout), *command],
+                check=True,
+                timeout=10,
+                env=_checkout_git_env(),
+            )
+        assert (
+            subprocess.check_output(
+                ["git", "-C", str(checkout), "show", f"{pinned_ref}:pyproject.toml"],
+                text=True,
+                timeout=10,
+                env=_checkout_git_env(),
+            )
+            == metadata
+        )
     workflow_directory = tmp_path / ".github" / "workflows"
     workflow_directory.mkdir(parents=True)
     workflow_ref = "0" * 40 if mismatch == "head" else pinned_ref
