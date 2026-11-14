@@ -24,6 +24,14 @@ PYTEST_PREFIXES = ("pytest", "python -m pytest", "python3 -m pytest")
 COMMAND_PREFIX = re.compile(
     r"^(?:pytest|python3? -m pytest|node --test|npm test|npm run|ruff|mypy|make)(?:\s|$)"
 )
+# An issue may pin its interpreter by path or version ("/opt/anaconda3/bin/python3 -m pytest ...",
+# Workflows#4523): that path exists only on the author's machine and names a retired runtime, and the
+# prefix test above silently dropped the command, so the round recorded `results: []` (2026-11-12,
+# #4672 and #4674). Such a command runs as `python3 -m pytest ...` in the gate venv, like every
+# other pytest gate. Bare `pytest` / `python -m pytest` / `python3 -m pytest` are left as written.
+PINNED_INTERPRETER_PYTEST = re.compile(
+    r"^(?:\S*/python(?:3(?:\.\d+)?)?|python3\.\d+)\s+-m\s+pytest(?=\s|$)"
+)
 TIMEOUT_SECONDS = 300
 OUTPUT_BYTES = 2048
 TOTAL_OUTPUT_BYTES = 8192
@@ -33,6 +41,7 @@ TOTAL_OUTPUT_BYTES = 8192
 class Command:
     criterion: int
     command: str
+    original_command: str | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -41,11 +50,31 @@ class Result:
     command: str
     exit_code: int
     output: str
+    original_command: str | None = None
+
+
+# Criterion markers. An acceptance section with no checkbox at all may still list its criteria as
+# plain top-level bullets: 113 of 514 fleet issues closed 10-13..11-12 did, 15 of them naming a
+# runnable command the gate never ran. Bullets count only when the section has no checkbox, so a
+# section that has even one keeps its checkbox numbering unchanged.
+CHECKBOX_ITEM = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+\[[ xX]\]\s+(.*)")
+BULLET_ITEM = re.compile(r"^(?:[-*+]|\d+[.)])\s+(?!\[[ xX]\])(.*)")
 
 
 def extract_commands(markdown: str) -> list[Command]:
-    """Read inline backticks and fenced command lines belonging to AC checkboxes."""
+    """Read inline backticks and fenced command lines belonging to AC checkboxes.
+
+    Without any checkbox in the acceptance section, its top-level bullets are the criteria.
+    """
+    commands, saw_checkbox = _scan_acceptance(markdown, CHECKBOX_ITEM)
+    if not saw_checkbox:
+        commands, _ = _scan_acceptance(markdown, BULLET_ITEM)
+    return commands
+
+
+def _scan_acceptance(markdown: str, item: re.Pattern[str]) -> tuple[list[Command], bool]:
     commands = []
+    saw_item = False
     in_acceptance = False
     heading_level = 0
     criterion = -1
@@ -77,8 +106,9 @@ def extract_commands(markdown: str) -> list[Command]:
                 continue
         if not in_acceptance:
             continue
-        checkbox = re.match(r"^\s*(?:[-*+]|\d+[.)])\s+\[[ xX]\]\s+(.*)", line)
+        checkbox = item.match(line)
         if checkbox and not fence:
+            saw_item = True
             criterion += 1
             active_checkbox = True
             line = checkbox[1]
@@ -90,11 +120,15 @@ def extract_commands(markdown: str) -> list[Command]:
             continue
         candidates = [line.strip()] if fence else re.findall(r"(?<!`)`([^`\n]+)`(?!`)", line)
         for candidate in candidates:
+            pinned = PINNED_INTERPRETER_PYTEST.match(candidate)
+            original_command = candidate if pinned else None
+            if pinned:
+                candidate = "python3 -m pytest" + candidate[pinned.end() :]
             if COMMAND_PREFIX.match(candidate):
-                command = Command(criterion, candidate)
+                command = Command(criterion, candidate, original_command)
                 if command not in commands:
                     commands.append(command)
-    return commands
+    return commands, saw_item
 
 
 def run(commands: list[Command], cwd: str | Path) -> list[Result]:
@@ -133,7 +167,9 @@ def run(commands: list[Command], cwd: str | Path) -> list[Result]:
             tail = b"\n".join(output.read(limit).split(b"\n")[-41:]).decode(errors="ignore")
             tail = "".join(tail.splitlines(keepends=True)[-40:])
             remaining_bytes -= len(tail.encode())
-        results.append(Result(command.criterion, command.command, exit_code, tail))
+        results.append(
+            Result(command.criterion, command.command, exit_code, tail, command.original_command)
+        )
     return results
 
 
@@ -175,7 +211,13 @@ def prepare(commands: list[Command], cwd: Path) -> list[Result]:
         except (OSError, subprocess.SubprocessError) as error:
             reason = f"Gate environment setup failed: could not create a virtualenv: {error}"
             return [
-                Result(command.criterion, command.command, 127, reason[:OUTPUT_BYTES])
+                Result(
+                    command.criterion,
+                    command.command,
+                    127,
+                    reason[:OUTPUT_BYTES],
+                    command.original_command,
+                )
                 for command in commands
             ]
         _activate(gate_python)
@@ -227,7 +269,15 @@ def prepare(commands: list[Command], cwd: Path) -> list[Result]:
                     errors="ignore"
                 )
                 remaining_bytes -= len(tail.encode())
-                failures.append(Result(command.criterion, command.command, result.exit_code, tail))
+                failures.append(
+                    Result(
+                        command.criterion,
+                        command.command,
+                        result.exit_code,
+                        tail,
+                        command.original_command,
+                    )
+                )
             return failures
     return []
 
