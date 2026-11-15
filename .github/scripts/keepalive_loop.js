@@ -28,6 +28,15 @@ async function extractAcceptanceCommands(markdown) {
   return JSON.parse(stdout);
 }
 
+// Different authored gates can normalize to the same command in one criterion.
+// Older saved results omit original_command; explicit null identifies an unnormalized gate.
+function findGateResult(results, command) {
+  return results.find(result =>
+    result.command === command.command && result.criterion === command.criterion
+    && (result.original_command === undefined
+      || result.original_command === (command.original_command ?? null)));
+}
+
 async function acceptanceGatePlan({ github, context, pr, state }) {
   const issueNumber = extractIssueNumberFromPull(pr);
   // Deliberately bypass the API cache: edits must affect this verify round.
@@ -43,9 +52,7 @@ async function acceptanceGatePlan({ github, context, pr, state }) {
   const previous = state?.deterministic_gates;
   const current = previous?.head_sha === pr.head.sha && previous?.source_hash === sourceHash;
   const results = current && Array.isArray(previous.results) ? previous.results : [];
-  const passed = commands.filter(command => results.some(result =>
-    result.criterion === command.criterion && result.command === command.command && result.exit_code === 0
-  )).length;
+  const passed = commands.filter(command => findGateResult(results, command)?.exit_code === 0).length;
   return {
     markdown, commands, head_sha: pr.head.sha, source_hash: sourceHash,
     results, passed, total: commands.length, complete: passed === commands.length,
@@ -54,11 +61,9 @@ async function acceptanceGatePlan({ github, context, pr, state }) {
 
 function deterministicGatePrompt(gates) {
   if (!gates) return '';
-  const failures = gates.commands.filter(command => !gates.results.some(result =>
-    result.command === command.command && result.criterion === command.criterion && result.exit_code === 0
-  ));
+  const failures = gates.commands.filter(command => findGateResult(gates.results, command)?.exit_code !== 0);
   const details = failures.map(command => {
-    const result = gates.results.find(item => item.command === command.command && item.criterion === command.criterion);
+    const result = findGateResult(gates.results, command);
     return `${command.command} (exit ${result?.exit_code ?? 'not run on this head/criteria'})\n${result?.output || ''}`;
   });
   return [
@@ -68,13 +73,28 @@ function deterministicGatePrompt(gates) {
   ].join('\n\n');
 }
 
+// A gate belongs to the acceptance checkbox with its own criterion number (the k-th checkbox is
+// criterion k, the numbering acceptance_gate.py extracts), and the checkbox must name the gate's
+// authored or normalized command as a whole token (inside backticks, or bounded by whitespace /
+// line ends). Text alone attached a pinned gate to a bare criterion with the same normalized
+// command, so a failing pinned gate unchecked a passing criterion
+// (stranske/learning-management-system#829 review, Workflows#4686).
+function textNamesCommand(text, command) {
+  if (!command) return false;
+  const escaped = command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|[\\s\`])${escaped}(?=$|[\\s\`])`, 'm').test(text);
+}
+
+function criterionNamesGate(criterion, criterionIndex, command) {
+  return command.criterion === criterionIndex
+    && (textNamesCommand(criterion, command.original_command) || textNamesCommand(criterion, command.command));
+}
+
 function renderDeterministicGates(body, gates) {
-  const passed = gates.commands.filter(command => gates.results.some(result =>
-    result.command === command.command && result.criterion === command.criterion && result.exit_code === 0
-  )).length;
+  const passed = gates.commands.filter(command => findGateResult(gates.results, command)?.exit_code === 0).length;
   const line = `Deterministic gates: ${passed}/${gates.commands.length} passed`;
   const details = gates.commands.map(command => {
-    const result = gates.results.find(item => item.command === command.command && item.criterion === command.criterion);
+    const result = findGateResult(gates.results, command);
     return `Criterion ${command.criterion + 1}: ${result?.exit_code === 0 ? 'PASS' : 'FAIL'} — \`${command.command}\` (exit ${result?.exit_code ?? 'missing'})`;
   });
   const report = [line, ...details].join('\n');
@@ -83,6 +103,7 @@ function renderDeterministicGates(body, gates) {
   // Preserve manual-only criteria and never auto-check them from test output.
   let inAcceptance = false;
   let acceptanceLevel = 0;
+  let checkboxIndex = -1;
   const lines = body.split('\n');
   for (let index = 0; index < lines.length; index++) {
     const heading = lines[index].match(/^(#{1,6})\s+(.+)/);
@@ -90,16 +111,19 @@ function renderDeterministicGates(body, gates) {
       if (/^Acceptance criteria\s*$/i.test(heading[2])) {
         inAcceptance = true;
         acceptanceLevel = heading[1].length;
+        checkboxIndex = -1;
       } else if (heading[1].length <= acceptanceLevel) inAcceptance = false;
     }
-    if (!inAcceptance || !/^\s*(?:[-*+]|\d+[.)])\s+\[[xX]\]/.test(lines[index])) continue;
+    if (!inAcceptance || !/^\s*(?:[-*+]|\d+[.)])\s+\[[ xX]\]/.test(lines[index])) continue;
+    checkboxIndex++;
+    if (!/^\s*(?:[-*+]|\d+[.)])\s+\[[xX]\]/.test(lines[index])) continue;
     let end = index + 1;
     while (end < lines.length && !/^\s*(?:[-*+]|\d+[.)])\s+\[[ xX]\]|^#{1,6}\s/.test(lines[end])) end++;
     const criterion = lines.slice(index, end).join('\n');
-    const matched = gates.commands.filter(command => criterion.includes(command.command));
-    if (matched.some(command => !gates.results.some(result =>
-      result.command === command.command && result.criterion === command.criterion && result.exit_code === 0
-    ))) lines[index] = lines[index].replace(/\[[xX]\]/, '[ ]');
+    const matched = gates.commands.filter(command => criterionNamesGate(criterion, checkboxIndex, command));
+    if (matched.some(command => findGateResult(gates.results, command)?.exit_code !== 0)) {
+      lines[index] = lines[index].replace(/\[[xX]\]/, '[ ]');
+    }
   }
   body = lines.join('\n');
   const end = '<!-- auto-status-summary:end -->';
