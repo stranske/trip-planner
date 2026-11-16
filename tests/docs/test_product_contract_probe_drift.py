@@ -87,9 +87,7 @@ def test_pre_1962_tp3_fabricated_fails_against_works_probe(
             and re.match(r"^[ \t]*\|[ \t]*TP3[ \t]*\|", line)
             and re.search(r"\|[ \t]*WORKS[ \t]*\|[ \t]*$", line)
         ):
-            line = re.sub(
-                r"\|[ \t]*WORKS[ \t]*\|([ \t]*\n?)$", r"| FABRICATED |\1", line, count=1
-            )
+            line = re.sub(r"\|[ \t]*WORKS[ \t]*\|([ \t]*\n?)$", r"| FABRICATED |\1", line, count=1)
             replaced = True
         broken_lines.append(line)
     assert replaced, "TP3 WORKS status cell not found in PRODUCT_CONTRACT.md"

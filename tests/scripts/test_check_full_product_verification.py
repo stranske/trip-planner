@@ -492,8 +492,20 @@ def test_live_negative_journey_requires_completed_policy_refusal(error_category:
             )
 
 
-@pytest.mark.parametrize("vary", [False, True], ids=["constant-figures", "varying-figures"])
-def test_product_probe_report_marks_constant_figures_fabricated(monkeypatch, vary):
+@pytest.mark.parametrize(
+    ("vary_destination", "vary_price", "vary_party", "expected"),
+    [
+        (False, False, False, "FABRICATED"),
+        (True, True, True, "WORKS"),
+        (True, False, True, "PARTIAL"),
+        (False, True, True, "PARTIAL"),
+        (False, False, True, "FABRICATED"),
+    ],
+    ids=["constant-figures", "varying-figures", "destination-only", "price-only", "party-only"],
+)
+def test_product_probe_report_marks_constant_figures_fabricated(
+    monkeypatch, vary_destination, vary_price, vary_party, expected
+):
     from trip_planner.app.services import workspace
 
     original = workspace._build_runtime_scenario_search_for_trip
@@ -502,8 +514,9 @@ def test_product_probe_report_marks_constant_figures_fabricated(monkeypatch, var
         result = original(**kwargs)
         record = kwargs["record"]
         multiplier = 1
-        if vary:
+        if vary_destination:
             multiplier += 10 if "Reykjavik" in record.primary_regions[0] else 0
+        if vary_party:
             multiplier += record.traveler_count
         for row in result["scenarios"]:
             row["scenario_summary"].update(
@@ -514,26 +527,50 @@ def test_product_probe_report_marks_constant_figures_fabricated(monkeypatch, var
         return result
 
     monkeypatch.setattr(workspace, "_build_runtime_scenario_search_for_trip", scenario_engine)
-    if not vary:
+    if not vary_price:
         # Keep the final figures constant even when the comparison reads an entered price.
         monkeypatch.setattr(
             workspace, "_apply_entered_total", lambda planner_total, _entered_total: planner_total
         )
     rows = verifier.run_contract_report()
     comparison = next(row for row in rows if row["id"] == "TP3")
-    assert comparison["verdict"] == ("WORKS" if vary else "FABRICATED")
+    assert comparison["verdict"] == expected
     pairs = comparison["evidence"]["pairs"]
     assert set(pairs) == {"destination", "price"}
     assert [item["destination"] for item in pairs["destination"]] == [
         "Chicago",
         "Reykjavik, Iceland",
     ]
-    assert [item["party"] for item in comparison["evidence"]["controls"]["party"]] == [1, 8]
+    party_control = comparison["evidence"]["controls"]["party"]
+    assert [item["party"] for item in party_control] == [1, 8]
+    assert (party_control[0]["figures"] != party_control[1]["figures"]) is vary_party
     assert all(item["figures"] for pair in pairs.values() for item in pair)
     assert all(request["status"] == 200 for request in comparison["evidence"]["requests"])
 
 
-def test_tp3_probe_price_pair_enters_distinct_component_totals():
+@pytest.mark.parametrize("party_response", ["unchanged", "empty", "unavailable"])
+def test_tp3_probe_price_pair_enters_distinct_component_totals(monkeypatch, party_response):
+    import httpx
+    from fastapi.testclient import TestClient
+
+    original = TestClient.request
+    party_paths = set()
+
+    def control_response(self, method, url, **kwargs):
+        if method.upper() == "GET" and str(url) in party_paths:
+            if party_response == "empty":
+                return httpx.Response(200, json={"scenarios": []})
+            if party_response == "unavailable":
+                return httpx.Response(503, json={"detail": "party control unavailable"})
+        response = original(self, method, url, **kwargs)
+        if method.upper() == "POST" and str(url) == "/api/trips":
+            frame = kwargs["json"]["trip_frame"]
+            if frame["traveler_party"]["traveler_count"] == 8:
+                trip_id = response.json()["trip"]["trip_id"]
+                party_paths.add(f"/api/workspace/{trip_id}/scenarios/compare")
+        return response
+
+    monkeypatch.setattr(TestClient, "request", control_response)
     rows = verifier.run_contract_report()
     comparison = next(row for row in rows if row["id"] == "TP3")
     evidence = comparison["evidence"]
@@ -565,9 +602,19 @@ def test_tp3_probe_price_pair_enters_distinct_component_totals():
         assert measured_totals and set(measured_totals) == {total}
 
     assert set(evidence["pairs"]) == {"destination", "price"}
-    party_control = evidence["controls"]["party"]
-    assert [item["party"] for item in party_control] == [1, 8]
-    assert party_control[0]["figures"] == party_control[1]["figures"]
+    controls = evidence["controls"]
+    if party_response == "unavailable":
+        assert "contract route failed" in controls["party_error"]
+        assert evidence["requests"][-1]["status"] == 503
+        assert evidence["requests"][-1]["body"] == {"detail": "party control unavailable"}
+    else:
+        party_control = controls["party"]
+        assert [item["party"] for item in party_control] == [1, 8]
+        assert party_control[0]["figures"]
+        if party_response == "empty":
+            assert party_control[1]["figures"] == []
+        else:
+            assert party_control[0]["figures"] == party_control[1]["figures"]
     assert comparison["verdict"] == "WORKS", comparison
 
 
