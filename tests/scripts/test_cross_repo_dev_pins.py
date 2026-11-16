@@ -431,6 +431,8 @@ def test_smoke_pin_guard_with_historical_editable_checkouts(
         pytest.param("ruff-2038", None, id="issue-2038-producer"),
         pytest.param(None, "failed", id="issue-2006-failed-install"),
         pytest.param(None, "successful", id="issue-2006-successful-install"),
+        pytest.param(None, "issue-2038-failed", id="issue-2038-original-install"),
+        pytest.param(None, "issue-2038-repaired", id="issue-2038-repaired-install"),
     ],
 )
 def test_pip_resolves_paired_dev_tool_pins_offline(
@@ -443,8 +445,9 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
     workflow; failing cases restore all or one of the producer's original pins.
     Both projects declare the tools in their dev extras, matching the joint
     installation in the workflow rather than supplying tools as root requirements.
-    Historical #2006 cases read both original source snapshots from the failed
-    and successful runs, independent of subsequent planner and workflow updates.
+    Historical cases read fixed source snapshots, independent of subsequent
+    planner and workflow updates. For #2038, only the TPP revision changes
+    between the failed and repaired installations.
     This verifies resolution only, not a complete cross-repo installation.
     """
     workflow = yaml.safe_load(
@@ -452,17 +455,30 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
     )
     snapshot = REPO_ROOT / "tests" / "fixtures" / "tpp_dev_pins" / workflow["env"]["TPP_PINNED_REF"]
     planner = REPO_ROOT / "pyproject.toml"
+    historical_failure = historical_phase in ("failed", "issue-2038-failed")
     if historical_phase is not None:
-        # These are the actual editable checkouts in runs 42449207754 and
-        # 42484305260, not current requirements with selected pins overwritten.
-        producer_ref = {
-            "failed": "acc4aeddee5f4ffefbdc73fcb07505cd3d198197",
-            "successful": "b56d92b389736c70370aa9134f379ac8cd1f3ad1",
+        # #2006 uses the editable checkouts in runs 42449207754 / 42484305260;
+        # #2038 preserves sync PR #2037's planner metadata at head 65b25b559ea6.
+        planner_fixture, producer_ref = {
+            "failed": (
+                "issue_2025_ledger/failed-trip-planner.toml",
+                "acc4aeddee5f4ffefbdc73fcb07505cd3d198197",
+            ),
+            "successful": (
+                "issue_2025_ledger/successful-trip-planner.toml",
+                "b56d92b389736c70370aa9134f379ac8cd1f3ad1",
+            ),
+            "issue-2038-failed": (
+                "issue_2038_dev_pins/trip-planner.toml",
+                "5c9ec6e15ac959023b9fc9cdd1099d70a6073396",
+            ),
+            "issue-2038-repaired": (
+                "issue_2038_dev_pins/trip-planner.toml",
+                "50992156e4a1f97c1115b6c7af84a219a3b9aae7",
+            ),
         }[historical_phase]
         snapshot = REPO_ROOT / "tests/fixtures/tpp_dev_pins" / producer_ref
-        planner = (
-            REPO_ROOT / "tests/fixtures/issue_2025_ledger" / f"{historical_phase}-trip-planner.toml"
-        )
+        planner = REPO_ROOT / "tests/fixtures" / planner_fixture
     if restored_tool in ("ruff-2017", "ruff-2038"):
         # These are the actual producers from the failed sync deliveries. Their
         # mypy and pytest pins already matched planner; only Ruff was incompatible.
@@ -540,10 +556,10 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
         check=False,
     )
     diagnostics = result.stdout + result.stderr
-    if restored_tool is not None or historical_phase == "failed":
+    if restored_tool is not None or historical_failure:
         assert result.returncode != 0, diagnostics
         assert "ResolutionImpossible" in diagnostics
-        if restored_tool in ("all", "ruff-2017", "ruff-2038") or historical_phase == "failed":
+        if restored_tool in ("all", "ruff-2017", "ruff-2038") or historical_failure:
             tool = "ruff"
         else:
             # The enclosing condition means this branch is reachable only for

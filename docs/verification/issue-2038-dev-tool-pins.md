@@ -87,3 +87,47 @@ T7 contains only an elided placeholder, so its four unspecified subtasks cannot
 be marked complete. T1-T6 and T8 are verified by source readback and focused
 checks; A2 is verified by the deliberate-break/revert above. T4 and T6 need no
 new pin edits because the required pytest and mypy values are already present.
+
+## Round 3: fixed historical resolver inputs
+
+On 2026-11-16, added an immutable dependency snapshot from sync PR #2037's
+failed planner head `65b25b559ea631d494e3dcfd624fb0126b098bbf`. Two pip resolver
+cases now use that same planner snapshot against the original TPP `5c9ec6e`
+and repaired TPP `50992156`. The original pair must fail with
+`ResolutionImpossible`; changing only the TPP source must resolve. These cases
+retain the #2038 regression when current planner pins or the workflow ref change.
+The offline wheels isolate Ruff, mypy and pytest; this does not prove a complete
+cross-repo installation.
+
+Using the available Python **3.14.10**, the focused command is:
+
+```sh
+python -m pytest tests/scripts/test_cross_repo_dev_pins.py tests/scripts/test_cross_repo_smoke_workflow.py -q -m 'not slow'
+```
+
+Result: **88 passed, 2 skipped in 4.97s**. The skips still require a live TPP
+checkout. Ruff and mypy on the changed test file pass.
+The required repository-wide Black command passes: **530 files unchanged**.
+To avoid the sandbox's blocked asynchronous wakeups, each file was checked
+sequentially first, using a temporary Black cache; the unchanged full command
+then passed with that cache and `BLACK_NUM_WORKERS=1`.
+
+- [x] Extend the regression with both original #2038 installation inputs.
+- [x] Verify deliberate-break/revert: temporarily replacing Ruff 0.17.5 with
+  0.17.4 in the repaired producer snapshot makes
+  `test_pip_resolves_paired_dev_tool_pins_offline[issue-2038-repaired-install]`
+  fail with `ResolutionImpossible`. Restoring the snapshot byte-for-byte makes
+  it pass. Logs: `/tmp/issue-2038-round3-{broken,restored}.log`.
+
+The broader `pytest -q -m 'not slow' -x` run exits during setup because the
+sandbox denies local socketpair I/O needed by `TestClient`; it is not a passing
+full-suite result. PR #2037 is still open and ready at its original failed head
+`65b25b559ea631d494e3dcfd624fb0126b098bbf`, so regenerated-sync CI and the next
+sync-core classification remain unverified. No workflow was modified this round.
+
+Committing this round was blocked: `git add` could not create `.git/index.lock`
+because `.git` is mounted read-only. The test, fixture and this record remain
+uncommitted in the workspace; a run with writable Git metadata must commit them.
+Attempts to add a blocker comment and `needs-human` label to PR #2039 were also
+rejected: the GitHub tools require approval, while this run's approval policy is
+`never`. Neither remote update was applied.
