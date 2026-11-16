@@ -460,3 +460,20 @@ successful Maint 52 run at check time, `43845488027`, did not include a
 trip-planner sync job. After the source repair lands, the owning sync lane
 needs to regenerate the target and verify Python 3.14 and the subsequent
 classification on the resulting head.
+
+## Local keepalive round 10/12
+
+On 2026-11-16, `gh run view` confirmed that Python 3.14 failed in both Gate
+run `43820524287` and CI run `43820524244` on #2037's current head
+`65b25b559ea6`. The latest Maint 68 run at check time, `43807518951`, started
+at 05:01 UTC, before #2037's failing runs, and listed no trip-planner job.
+Consumer main `f58ed586e27c` still selects TPP `5c9ec6e15ac9`. Gate run
+`43851664583` on source PR #2039 at `fbf6678a95ca` passed Python 3.14.
+The focused two-file command from round 3 passed 127 tests locally in 10.49s
+against TPP `50992156e4a1`. A1 remains open pending regenerated-PR CI.
+
+Sync-core round `20261116T105944Z` still records `pin-conflict` and
+`pin-held` for #2037, citing Python 3.14 and 3.13 failures on the pin-only PR
+with passing checks on main. A3 remains open. Verify it against a sync-core
+classification after the source repair lands and the sync owner regenerates
+#2037.
