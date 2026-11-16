@@ -6,9 +6,9 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
-import re
 import json
 import os
+import re
 import shlex
 import shutil
 import socket
@@ -28,14 +28,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
 from httpx import HTTPError
 
-from trip_planner.app.main import create_app  # noqa: E402
-from trip_planner.app.services.planner_runtime_config import (  # noqa: E402
+from trip_planner.app.main import create_app
+from trip_planner.app.services.planner_runtime_config import (
     build_planner_runtime_config,
 )
-from trip_planner.persistence.db import (  # noqa: E402
+from trip_planner.persistence.db import (
     ensure_database_ready,
     reset_database_state,
 )

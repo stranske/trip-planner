@@ -855,8 +855,8 @@ def test_product_probe_report_lists_every_contract_id():
 def test_product_probe_planner_cancellation_classifications(
     monkeypatch, first_reply, second_reply, mode, expected
 ):
-    from fastapi.testclient import TestClient
     import httpx
+    from fastapi.testclient import TestClient
 
     replies = iter((first_reply, second_reply))
     original = TestClient.request
@@ -894,8 +894,8 @@ def test_contract_report_survives_negative_journey_and_keeps_exit_zero(
 
 
 def test_contract_report_captures_route_failure_and_continues(monkeypatch):
-    from fastapi.testclient import TestClient
     import httpx
+    from fastapi.testclient import TestClient
 
     original = TestClient.request
 
