@@ -170,3 +170,37 @@ existing `codex/issue-2038` branch in a run with writable Git metadata.
 The blocker comment and `needs-human` label were also rejected because the
 GitHub tools require approval and this run's approval policy is `never`;
 neither remote update was applied.
+
+## Round 5: verify historical workflow source selection
+
+Extended the historical smoke-guard regression to run through both the live
+checkout and offline workflow-snapshot entry points. The offline cases select
+the original or repaired TPP revision using temporary test metadata and ignore
+an inherited `TPP_REPO_PATH`. This verifies that source selection detects the
+original Ruff conflict and accepts the repaired producer. No repository workflow
+file was modified.
+
+- [x] On Python 3.14.10, the focused two-file pytest command above passes:
+  **95 passed, 2 skipped**. The skips require a live TPP checkout. Ruff and mypy
+  pass on the changed test file.
+- [x] Deliberate-break/revert: restoring Ruff 0.17.4 in the repaired snapshot
+  makes the `workflow-snapshot-issue-2038-repaired-install` case fail with the
+  expected Ruff conflict. Restoring the snapshot byte-for-byte makes it pass.
+  Logs: `/tmp/issue-2038-round5-{broken,restored}.log`.
+
+The full `python -m pytest -q -m 'not slow' -x` command still exits during setup
+because the sandbox denies local socketpair I/O required by `TestClient`.
+PR #2037 remains open and ready at its original head `65b25b559ea6`; PR #2039
+is also open and ready. Regenerated-sync CI and the next sync-core classification
+remain pending, and their acceptance checkboxes remain incomplete.
+
+The required repository-wide Black command passes: **530 files unchanged**,
+using the sequential-cache workaround documented above. `gh run view
+43820524287 --repo stranske/trip-planner --json headSha,status,conclusion`
+cannot connect to the GitHub API; the PR metadata readback used the GitHub tool.
+
+Committing remains blocked: `git add` cannot create `.git/index.lock` because
+Git metadata is mounted read-only. The two changed files remain uncommitted.
+Attempts to add the blocker comment and `needs-human` label to PR #2039 were
+rejected because the tools require approval and the approval policy is `never`.
+Neither remote update was applied.

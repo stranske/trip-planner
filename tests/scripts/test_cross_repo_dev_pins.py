@@ -414,14 +414,16 @@ def test_offline_workflow_guard_rejects_original_producer_pins(
         ),
     ],
 )
+@pytest.mark.parametrize("guard", ["live-checkout", "workflow-snapshot"])
 def test_smoke_pin_guard_with_historical_editable_checkouts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     planner_fixture: str,
     producer_ref: str,
     conflicting_tools: tuple[str, ...],
+    guard: str,
 ) -> None:
-    """The actual smoke guard must detect the old checkout and accept its replacement."""
+    """Both guard entry points must reject the old source and accept its replacement."""
     planner_source = REPO_ROOT / "tests/fixtures" / planner_fixture
     producer_source = REPO_ROOT / "tests/fixtures/tpp_dev_pins" / producer_ref / "pyproject.toml"
     # Preserve both complete original metadata files, including runtime and dev
@@ -431,17 +433,36 @@ def test_smoke_pin_guard_with_historical_editable_checkouts(
     checkout.mkdir()
     (checkout / "pyproject.toml").write_bytes(producer_source.read_bytes())
     monkeypatch.setattr(f"{__name__}.REPO_ROOT", tmp_path)
-    monkeypatch.setenv("TPP_REPO_PATH", "tpp")
+
+    def run_guard() -> None:
+        if guard == "live-checkout":
+            test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
+        else:
+            test_workflow_tpp_pin_resolves_with_planner_dev_pins(monkeypatch)
+
+    if guard == "live-checkout":
+        monkeypatch.setenv("TPP_REPO_PATH", "tpp")
+    else:
+        workflow_directory = tmp_path / ".github" / "workflows"
+        workflow_directory.mkdir(parents=True)
+        (workflow_directory / "cross-repo-smoke.yml").write_text(
+            yaml.safe_dump({"env": {"TPP_PINNED_REF": producer_ref}}), encoding="utf-8"
+        )
+        snapshot = tmp_path / "tests" / "fixtures" / "tpp_dev_pins" / producer_ref
+        snapshot.mkdir(parents=True)
+        (snapshot / "pyproject.toml").write_bytes(producer_source.read_bytes())
+        # An inherited checkout must not override the workflow's selected source.
+        monkeypatch.setenv("TPP_REPO_PATH", str(tmp_path / "missing-checkout"))
 
     if conflicting_tools:
         with pytest.raises(AssertionError, match="cannot be installed together") as failure:
-            test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
+            run_guard()
         diagnostics = str(failure.value)
         for tool in ("ruff", "mypy", "pytest"):
             assert (f"{tool}: trip-planner" in diagnostics) == (tool in conflicting_tools)
         assert "Move TPP_PINNED_REF" in diagnostics
     else:
-        test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
+        run_guard()
 
 
 @pytest.mark.parametrize(
