@@ -279,3 +279,24 @@ in `.github/workflows/autofix-versions.env`, `pyproject.toml`, and
 through that owner as part of integrating the compatible TPP revision and
 regenerating the sync PR. A1 needs the Python 3.14 run on the regenerated
 head. A3 needs a subsequent sync-core result for #2037 without `pin-conflict`.
+
+## Local keepalive round 5/12
+
+On 2026-11-16, `gh run view 43820524287 --repo stranske/trip-planner --json headSha,status,conclusion,jobs`
+confirmed that `Python CI / python 3.14` failed on #2037 head
+`65b25b559ea631d494e3dcfd624fb0126b098bbf`. GitHub still reports that head.
+The focused test command from round 3 passed against TPP
+`50992156e4a1f97c1115b6c7af84a219a3b9aae7` on Python 3.12.2 (97 passed).
+The full local suite was outside this round's scope. A1 remains open.
+
+The latest sync-core entry for #2037, round `20261116T093115Z`, still records
+`pin-conflict` and `pin-held`, with #2038 as its open handoff. A3 remains open.
+
+The [original delivery job](https://github.com/stranske/Workflows/actions/runs/43820042445/job/133141022631)
+identifies **Maint 52 Sync Dev Versions** as the workflow that created #2037
+and pushed that exact head. Route regeneration through the Maint 52 owner.
+The latest workflow definition prepares the generated branch from consumer main
+and reuses an open PR for the same wave when it has a generated change to ship.
+The pin owner and sync owner need to coordinate the Ruff 0.17.5 delivery with
+the compatible TPP checkout. Verify a passing Python 3.14 job on the regenerated
+#2037 head, then read the next sync-core record for that target.
