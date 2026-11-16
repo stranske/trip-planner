@@ -38,14 +38,17 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-""".strip() + "\n",
+""".strip()
+        + "\n",
         encoding="utf-8",
     )
     venv_python.write_text(
         f'#!/usr/bin/env bash\nexec {verifier.sys.executable} "$@"\n',
         encoding="utf-8",
     )
-    venv_python.chmod(venv_python.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    venv_python.chmod(
+        venv_python.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+    )
     return repo_path, venv_python
 
 
@@ -57,18 +60,23 @@ def _make_missing_deps_tpp_repo(tmp_path: Path) -> tuple[Path, Path]:
     (package_path / "http_service.py").write_text(
         """
 import definitely_missing_dependency
-""".strip() + "\n",
+""".strip()
+        + "\n",
         encoding="utf-8",
     )
     venv_python.write_text(
         f'#!/usr/bin/env bash\nexec {verifier.sys.executable} "$@"\n',
         encoding="utf-8",
     )
-    venv_python.chmod(venv_python.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    venv_python.chmod(
+        venv_python.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+    )
     return repo_path, venv_python
 
 
-def test_started_tpp_service_starts_and_terminates_cleanly(monkeypatch, tmp_path: Path) -> None:
+def test_started_tpp_service_starts_and_terminates_cleanly(
+    monkeypatch, tmp_path: Path
+) -> None:
     repo_path, _ = _make_repo_with_venv(tmp_path)
 
     class FakeProcess:
@@ -113,7 +121,10 @@ def test_started_tpp_service_starts_and_terminates_cleanly(monkeypatch, tmp_path
 
     captured_process = process_holder["proc"]
     assert captured_process.command[0] == str(repo_path / ".venv" / "bin" / "python")
-    assert captured_process.command[1:3] == ["-m", "travel_plan_permission.http_service"]
+    assert captured_process.command[1:3] == [
+        "-m",
+        "travel_plan_permission.http_service",
+    ]
     assert captured_process.terminated is True
     assert captured_process.wait_calls == 1
 
@@ -140,7 +151,9 @@ def test_started_tpp_service_starts_known_good_repo_and_tears_down(
     assert process.poll() is not None
 
 
-def test_started_tpp_service_base_url_skips_auto_start(monkeypatch, tmp_path: Path) -> None:
+def test_started_tpp_service_base_url_skips_auto_start(
+    monkeypatch, tmp_path: Path
+) -> None:
     repo_path, _venv_python = _make_repo_with_venv(tmp_path)
 
     def fail_resolve(_repo_path: Path) -> list[str]:
@@ -218,7 +231,9 @@ def test_started_tpp_service_readiness_failure_includes_captured_stderr(
     assert "stderr-9" not in message
 
 
-def test_started_tpp_service_launch_failure_cleans_temp_files(monkeypatch, tmp_path: Path) -> None:
+def test_started_tpp_service_launch_failure_cleans_temp_files(
+    monkeypatch, tmp_path: Path
+) -> None:
     repo_path, _ = _make_repo_with_venv(tmp_path)
     created_paths: list[Path] = []
     real_named_temporary_file = verifier.tempfile.NamedTemporaryFile
@@ -231,7 +246,9 @@ def test_started_tpp_service_launch_failure_cleans_temp_files(monkeypatch, tmp_p
     def fail_popen(*_args, **_kwargs):
         raise OSError("cannot start")
 
-    monkeypatch.setattr(verifier.tempfile, "NamedTemporaryFile", tracked_named_temporary_file)
+    monkeypatch.setattr(
+        verifier.tempfile, "NamedTemporaryFile", tracked_named_temporary_file
+    )
     monkeypatch.setattr(verifier.subprocess, "Popen", fail_popen)
     monkeypatch.setattr(verifier, "_free_local_port", lambda _preferred: 43125)
 
@@ -274,7 +291,9 @@ def test_tail_file_drops_partial_first_line(tmp_path: Path) -> None:
     assert tail == "complete-1\ncomplete-2"
 
 
-def test_started_tpp_service_readiness_failure_quotes_command(monkeypatch, tmp_path: Path) -> None:
+def test_started_tpp_service_readiness_failure_quotes_command(
+    monkeypatch, tmp_path: Path
+) -> None:
     repo_path = tmp_path / "Travel Plan Permission"
     venv_python = repo_path / ".venv" / "bin" / "python"
     venv_python.parent.mkdir(parents=True)
@@ -353,18 +372,24 @@ def test_resolve_tpp_interpreter_prefers_repo_venv(tmp_path: Path) -> None:
     assert resolved == [str(venv_python)]
 
 
-def test_resolve_tpp_interpreter_uses_uv_when_lock_present(monkeypatch, tmp_path: Path) -> None:
+def test_resolve_tpp_interpreter_uses_uv_when_lock_present(
+    monkeypatch, tmp_path: Path
+) -> None:
     repo_path = tmp_path / "Travel-Plan-Permission"
     repo_path.mkdir(parents=True)
     (repo_path / "uv.lock").write_text("", encoding="utf-8")
     monkeypatch.setattr(
-        verifier.shutil, "which", lambda command: "/usr/bin/uv" if command == "uv" else None
+        verifier.shutil,
+        "which",
+        lambda command: "/usr/bin/uv" if command == "uv" else None,
     )
     resolved = verifier._resolve_tpp_interpreter(repo_path)
     assert resolved == ["uv", "run", "--directory", str(repo_path), "python"]
 
 
-def test_resolve_tpp_interpreter_fails_fast_when_no_venv_or_uv(monkeypatch, tmp_path: Path) -> None:
+def test_resolve_tpp_interpreter_fails_fast_when_no_venv_or_uv(
+    monkeypatch, tmp_path: Path
+) -> None:
     repo_path = tmp_path / "Travel-Plan-Permission"
     repo_path.mkdir(parents=True)
     monkeypatch.setattr(verifier.shutil, "which", lambda _command: None)
@@ -396,7 +421,9 @@ def test_verifier_fails_when_local_and_live_verdicts_disagree() -> None:
 
 
 def test_verifier_fails_on_failed_status_poll() -> None:
-    with pytest.raises(verifier.VerificationFailure, match="status poll reported failure"):
+    with pytest.raises(
+        verifier.VerificationFailure, match="status poll reported failure"
+    ):
         verifier._assert_business_verification_outcomes(
             _business_details(status_poll="failed"),
             expected_evaluation_status="compliant",
@@ -404,7 +431,9 @@ def test_verifier_fails_on_failed_status_poll() -> None:
 
 
 def test_verifier_fails_on_failed_live_status_poll() -> None:
-    with pytest.raises(verifier.VerificationFailure, match="status poll reported failure"):
+    with pytest.raises(
+        verifier.VerificationFailure, match="status poll reported failure"
+    ):
         verifier._assert_business_verification_outcomes(
             _business_details(),
             expected_evaluation_status="compliant",
@@ -432,7 +461,9 @@ def test_temporary_tpp_client_environment_restores_missing_keys(monkeypatch) -> 
         assert key not in os.environ
 
 
-def test_temporary_tpp_client_environment_restores_prior_values_on_exception(monkeypatch) -> None:
+def test_temporary_tpp_client_environment_restores_prior_values_on_exception(
+    monkeypatch,
+) -> None:
     monkeypatch.setenv("TPP_BASE_URL", "http://prior.example")
     monkeypatch.setenv("TPP_ACCESS_TOKEN", "prior-token")
     monkeypatch.delenv("TPP_OIDC_PROVIDER", raising=False)
@@ -458,7 +489,10 @@ def test_temporary_tpp_client_environment_restores_prior_values_on_exception(mon
 
 def test_evaluation_fixture_name_maps_expected_status() -> None:
     assert verifier._evaluation_fixture_name("compliant") == "approved_evaluation.json"
-    assert verifier._evaluation_fixture_name("non_compliant") == "non_compliant_evaluation.json"
+    assert (
+        verifier._evaluation_fixture_name("non_compliant")
+        == "non_compliant_evaluation.json"
+    )
 
 
 def test_verifier_requires_the_declared_expected_business_outcome() -> None:
@@ -473,7 +507,9 @@ def test_verifier_summary_marks_skipped_surfaces_as_uncovered(capsys) -> None:
     verifier._print_results(
         [
             verifier.CheckResult("local-business-journey", "PASS", _business_details()),
-            verifier.CheckResult("planner-llm", "SKIPPED", {"reason": "not configured"}),
+            verifier.CheckResult(
+                "planner-llm", "SKIPPED", {"reason": "not configured"}
+            ),
         ]
     )
 
@@ -481,20 +517,27 @@ def test_verifier_summary_marks_skipped_surfaces_as_uncovered(capsys) -> None:
 
 
 @pytest.mark.parametrize("error_category", ["policy", "transport"])
-def test_live_negative_journey_requires_completed_policy_refusal(error_category: str) -> None:
+def test_live_negative_journey_requires_completed_policy_refusal(
+    error_category: str,
+) -> None:
     local = _business_details(evaluation_status="non_compliant")
     live = _business_details(evaluation_status="non_compliant", status_poll="failed")
     live.update(
         submission_outcome="blocked_by_policy",
         evaluation_transport_status="succeeded",
-        submission_error={"category": error_category, "code": "proposal_blocked_by_policy"},
+        submission_error={
+            "category": error_category,
+            "code": "proposal_blocked_by_policy",
+        },
     )
     if error_category == "policy":
         verifier._assert_business_verification_outcomes(
             local, expected_evaluation_status="non_compliant", live_details=live
         )
     else:
-        with pytest.raises(verifier.VerificationFailure, match="live TPP proposal status poll"):
+        with pytest.raises(
+            verifier.VerificationFailure, match="live TPP proposal status poll"
+        ):
             verifier._assert_business_verification_outcomes(
                 local, expected_evaluation_status="non_compliant", live_details=live
             )
@@ -509,7 +552,13 @@ def test_live_negative_journey_requires_completed_policy_refusal(error_category:
         (False, True, True, "PARTIAL"),
         (False, False, True, "FABRICATED"),
     ],
-    ids=["constant-figures", "varying-figures", "destination-only", "price-only", "party-only"],
+    ids=[
+        "constant-figures",
+        "varying-figures",
+        "destination-only",
+        "price-only",
+        "party-only",
+    ],
 )
 def test_product_probe_report_marks_constant_figures_fabricated(
     monkeypatch, vary_destination, vary_price, vary_party, expected
@@ -534,11 +583,15 @@ def test_product_probe_report_marks_constant_figures_fabricated(
             )
         return result
 
-    monkeypatch.setattr(workspace, "_build_runtime_scenario_search_for_trip", scenario_engine)
+    monkeypatch.setattr(
+        workspace, "_build_runtime_scenario_search_for_trip", scenario_engine
+    )
     if not vary_price:
         # Keep the final figures constant even when the comparison reads an entered price.
         monkeypatch.setattr(
-            workspace, "_apply_entered_total", lambda planner_total, _entered_total: planner_total
+            workspace,
+            "_apply_entered_total",
+            lambda planner_total, _entered_total: planner_total,
         )
     rows = verifier.run_contract_report()
     comparison = next(row for row in rows if row["id"] == "TP3")
@@ -553,13 +606,17 @@ def test_product_probe_report_marks_constant_figures_fabricated(
     assert [item["party"] for item in party_control] == [1, 8]
     assert (party_control[0]["figures"] != party_control[1]["figures"]) is vary_party
     assert all(item["figures"] for pair in pairs.values() for item in pair)
-    assert all(request["status"] == 200 for request in comparison["evidence"]["requests"])
+    assert all(
+        request["status"] == 200 for request in comparison["evidence"]["requests"]
+    )
 
 
 @pytest.mark.parametrize(
     "party_response", ["unchanged", "empty", "unavailable", "malformed", "interrupted"]
 )
-def test_tp3_probe_price_pair_enters_distinct_component_totals(monkeypatch, party_response):
+def test_tp3_probe_price_pair_enters_distinct_component_totals(
+    monkeypatch, party_response
+):
     import httpx
     from fastapi.testclient import TestClient
 
@@ -601,24 +658,39 @@ def test_tp3_probe_price_pair_enters_distinct_component_totals(monkeypatch, part
     ]
 
     price_requests = [
-        request for request in evidence["requests"] if request["path"].endswith("/prices")
+        request
+        for request in evidence["requests"]
+        if request["path"].endswith("/prices")
     ]
-    assert [request["method"] for request in price_requests] == ["PUT", "GET", "PUT", "GET"]
+    assert [request["method"] for request in price_requests] == [
+        "PUT",
+        "GET",
+        "PUT",
+        "GET",
+    ]
     first_put, first_read, second_put, second_read = price_requests
     assert first_put["path"] == first_read["path"]
     assert second_put["path"] == second_read["path"]
     assert first_put["path"] != second_put["path"]
     assert all(request["status"] == 200 for request in price_requests)
     assert price_puts == [
-        (first_put["path"], {"component": "transport", "amount": 250.0, "currency": "USD"}),
-        (second_put["path"], {"component": "transport", "amount": 700.0, "currency": "USD"}),
+        (
+            first_put["path"],
+            {"component": "transport", "amount": 250.0, "currency": "USD"},
+        ),
+        (
+            second_put["path"],
+            {"component": "transport", "amount": 700.0, "currency": "USD"},
+        ),
     ]
     # Bind the price requests to persisted trips so a second changed determinant
     # cannot masquerade as sensitivity to entered prices.
     first_frame = trip_frames[first_put["path"]]
     second_frame = trip_frames[second_put["path"]]
     assert first_frame["origin"] == second_frame["origin"] == "Seattle"
-    assert first_frame["primary_regions"] == second_frame["primary_regions"] == ["Chicago"]
+    assert (
+        first_frame["primary_regions"] == second_frame["primary_regions"] == ["Chicago"]
+    )
     assert first_frame["traveler_party"] == second_frame["traveler_party"]
     assert first_frame["traveler_party"]["traveler_count"] == 1
     for field in ("start_date", "end_date", "duration_days"):
@@ -633,7 +705,8 @@ def test_tp3_probe_price_pair_enters_distinct_component_totals(monkeypatch, part
     assert [item["entered_total"] for item in price_pair] == persisted_totals
     for item, total in zip(price_pair, persisted_totals, strict=True):
         measured_totals = [
-            (figure["estimated_total"] or {}).get("typical_amount") for figure in item["figures"]
+            (figure["estimated_total"] or {}).get("typical_amount")
+            for figure in item["figures"]
         ]
         assert measured_totals and set(measured_totals) == {total}
 
@@ -649,7 +722,9 @@ def test_tp3_probe_price_pair_enters_distinct_component_totals(monkeypatch, part
         assert "party" not in controls
         if party_response == "unavailable":
             assert evidence["requests"][-1]["status"] == 503
-            assert evidence["requests"][-1]["body"] == {"detail": "party control unavailable"}
+            assert evidence["requests"][-1]["body"] == {
+                "detail": "party control unavailable"
+            }
         elif party_response == "malformed":
             assert evidence["requests"][-1]["status"] == 200
             assert evidence["requests"][-1]["body"] == {"scenarios": None}
@@ -690,7 +765,9 @@ def test_tp3_control_errors_do_not_change_determinant_verdict(
                             "currency": "USD",
                             "typical_amount": amount if vary_figures else 100.0,
                         },
-                        "travel_minutes": 120 if vary_figures and "Iceland" in region else 60,
+                        "travel_minutes": 120
+                        if vary_figures and "Iceland" in region
+                        else 60,
                     }
                 ],
             }
@@ -699,13 +776,17 @@ def test_tp3_control_errors_do_not_change_determinant_verdict(
 
     monkeypatch.setattr(verifier, "_comparison_pair", observe_pair)
     evidence = {}
-    assert verifier._probe_comparison(None, evidence) == ("WORKS" if vary_figures else "FABRICATED")
+    assert verifier._probe_comparison(None, evidence) == (
+        "WORKS" if vary_figures else "FABRICATED"
+    )
     assert evidence["controls"] == {"party_error": str(error)}
     assert set(evidence["pairs"]) == {"destination", "price"}
 
 
 @pytest.mark.parametrize("corrupt_amounts", [(250.0,), (700.0,), (250.0, 700.0)])
-def test_tp3_probe_rejects_incorrect_persisted_price_totals(monkeypatch, corrupt_amounts):
+def test_tp3_probe_rejects_incorrect_persisted_price_totals(
+    monkeypatch, corrupt_amounts
+):
     from fastapi.testclient import TestClient
 
     original = TestClient.request
@@ -727,15 +808,16 @@ def test_tp3_probe_rejects_incorrect_persisted_price_totals(monkeypatch, corrupt
     assert requested_amounts == [250.0, 700.0]
     assert [item["requested_total"] for item in price_pair] == requested_amounts
     expected_totals = [
-        amount * 2 if amount in corrupt_amounts else amount for amount in requested_amounts
+        amount * 2 if amount in corrupt_amounts else amount
+        for amount in requested_amounts
     ]
     assert [item["entered_total"] for item in price_pair] == expected_totals
     # Displaying the same wrong totals must not count as preserving entered prices.
     for item, total in zip(price_pair, expected_totals, strict=True):
         assert item["figures"]
-        assert {figure["estimated_total"]["typical_amount"] for figure in item["figures"]} == {
-            total
-        }
+        assert {
+            figure["estimated_total"]["typical_amount"] for figure in item["figures"]
+        } == {total}
     assert comparison["verdict"] == "PARTIAL", comparison
 
 
@@ -753,7 +835,8 @@ def test_tp3_probe_rejects_one_incorrect_scenario_total(
             "requested_total": amount,
             "entered_total": amount,
             "figures": [
-                {"estimated_total": {"currency": "USD", "typical_amount": amount}} for _ in range(2)
+                {"estimated_total": {"currency": "USD", "typical_amount": amount}}
+                for _ in range(2)
             ],
         }
         for amount in (250.0, 700.0)
@@ -764,7 +847,9 @@ def test_tp3_probe_rejects_one_incorrect_scenario_total(
         item for item in price_pair if item["entered_total"] == corrupt_amount
     )
     corrupt_observation["figures"][0]["estimated_total"] = (
-        None if displayed_total is None else {"currency": "USD", "typical_amount": displayed_total}
+        None
+        if displayed_total is None
+        else {"currency": "USD", "typical_amount": displayed_total}
     )
 
     def observe_pair(_client, _evidence, inputs):
@@ -795,7 +880,9 @@ def test_product_probe_report_lists_every_contract_id():
     rows = verifier.run_contract_report()
     assert [row["id"] for row in rows] == ids
     assert len(rows) == 7
-    assert all(row["verdict"] in verifier.CONTRACT_VERDICTS and row["evidence"] for row in rows)
+    assert all(
+        row["verdict"] in verifier.CONTRACT_VERDICTS and row["evidence"] for row in rows
+    )
     planner = rows[3]
     assert planner["verdict"] == "PARTIAL"
     assert len(set(planner["evidence"]["reply_sha256"])) == 2
@@ -805,7 +892,12 @@ def test_product_probe_report_lists_every_contract_id():
 @pytest.mark.parametrize(
     ("first_reply", "second_reply", "mode", "expected"),
     [
-        ("Static canned planner reply.", "Static canned planner reply.", "model", "FABRICATED"),
+        (
+            "Static canned planner reply.",
+            "Static canned planner reply.",
+            "model",
+            "FABRICATED",
+        ),
         (
             "Understood, canceling this trip now.",
             "Could you clarify what you need?",
@@ -926,14 +1018,19 @@ def test_contract_report_tp3_not_fabricated_without_monkeypatch():
 
     trips = next(row for row in rows if row["id"] == "TP2")
     assert [
-        request["body"]["trip"]["trip_frame"]["origin"] for request in trips["evidence"]["requests"]
+        request["body"]["trip"]["trip_frame"]["origin"]
+        for request in trips["evidence"]["requests"]
     ] == ["Seattle", "Seattle"], trips
 
     destinations = comparison["evidence"]["pairs"]["destination"]
-    assert [item["destination"] for item in destinations] == ["Chicago", "Reykjavik, Iceland"]
+    assert [item["destination"] for item in destinations] == [
+        "Chicago",
+        "Reykjavik, Iceland",
+    ]
     assert [item["party"] for item in destinations] == [1, 1]
     travel_minutes = [
-        [figure["travel_minutes"] for figure in item["figures"]] for item in destinations
+        [figure["travel_minutes"] for figure in item["figures"]]
+        for item in destinations
     ]
     # Changing another metric must not hide the local-only 45-minute fallback.
     assert all(
@@ -942,7 +1039,9 @@ def test_contract_report_tp3_not_fabricated_without_monkeypatch():
     assert set(travel_minutes[0]) != set(travel_minutes[1]), comparison
 
 
-def test_contract_report_missing_origin_exposes_local_only_destination_figures(monkeypatch):
+def test_contract_report_missing_origin_exposes_local_only_destination_figures(
+    monkeypatch,
+):
     from fastapi.testclient import TestClient
 
     original_request = TestClient.request
@@ -967,8 +1066,13 @@ def test_contract_report_missing_origin_exposes_local_only_destination_figures(m
     comparison = next(row for row in rows if row["id"] == "TP3")
     assert comparison["verdict"] == "PARTIAL", comparison
     destinations = comparison["evidence"]["pairs"]["destination"]
-    assert [item["destination"] for item in destinations] == ["Chicago", "Reykjavik, Iceland"]
+    assert [item["destination"] for item in destinations] == [
+        "Chicago",
+        "Reykjavik, Iceland",
+    ]
     assert [item["party"] for item in destinations] == [1, 1]
     for item in destinations:
         assert item["figures"], comparison
-        assert {figure["travel_minutes"] for figure in item["figures"]} == {45}, comparison
+        assert {figure["travel_minutes"] for figure in item["figures"]} == {45}, (
+            comparison
+        )
