@@ -374,7 +374,9 @@ def test_offline_workflow_guard_rejects_original_producer_pins(
 
     for tool, version in restored_pins.items():
         planner_pin = planner_requirements[tool][0]
-        assert f"{tool}: trip-planner '{planner_pin}' vs TPP '{tool}=={version}'" in str(failure.value)
+        assert f"{tool}: trip-planner '{planner_pin}' vs TPP '{tool}=={version}'" in str(
+            failure.value
+        )
 
 
 @pytest.mark.parametrize(
@@ -426,6 +428,7 @@ def test_smoke_pin_guard_with_historical_editable_checkouts(
     [
         *((tool, None) for tool in ("all", "ruff", "mypy", "pytest", None)),
         pytest.param("ruff-2017", None, id="issue-2017-producer"),
+        pytest.param("ruff-2038", None, id="issue-2038-producer"),
         pytest.param(None, "failed", id="issue-2006-failed-install"),
         pytest.param(None, "successful", id="issue-2006-successful-install"),
     ],
@@ -435,7 +438,7 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
 ) -> None:
     """Exercise pip's resolver for the failing tool pins without network or installs.
 
-    Metadata-only wheels isolate the tools reported in #1973 and #2017. The passing
+    Metadata-only wheels isolate the tools reported in #1973, #2017 and #2038. The passing
     case reads the real planner requirements and the snapshot selected by the
     workflow; failing cases restore all or one of the producer's original pins.
     Both projects declare the tools in their dev extras, matching the joint
@@ -460,16 +463,14 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
         planner = (
             REPO_ROOT / "tests/fixtures/issue_2025_ledger" / f"{historical_phase}-trip-planner.toml"
         )
-    if restored_tool == "ruff-2017":
-        # This is the actual producer from failed run 42542025018, whose mypy
-        # and pytest pins already matched planner. Only Ruff was incompatible.
-        snapshot = (
-            REPO_ROOT
-            / "tests"
-            / "fixtures"
-            / "tpp_dev_pins"
-            / "b56d92b389736c70370aa9134f379ac8cd1f3ad1"
-        )
+    if restored_tool in ("ruff-2017", "ruff-2038"):
+        # These are the actual producers from the failed sync deliveries. Their
+        # mypy and pytest pins already matched planner; only Ruff was incompatible.
+        producer_ref = {
+            "ruff-2017": "b56d92b389736c70370aa9134f379ac8cd1f3ad1",
+            "ruff-2038": "5c9ec6e15ac959023b9fc9cdd1099d70a6073396",
+        }[restored_tool]
+        snapshot = REPO_ROOT / "tests/fixtures/tpp_dev_pins" / producer_ref
     old_versions = {"ruff": "0.17.2", "mypy": "2.4.0", "pytest": "9.1.1"}
     projects = {
         "planner": _requirements(planner),
@@ -542,7 +543,7 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
     if restored_tool is not None or historical_phase == "failed":
         assert result.returncode != 0, diagnostics
         assert "ResolutionImpossible" in diagnostics
-        if restored_tool in ("all", "ruff-2017") or historical_phase == "failed":
+        if restored_tool in ("all", "ruff-2017", "ruff-2038") or historical_phase == "failed":
             tool = "ruff"
         else:
             # The enclosing condition means this branch is reachable only for
@@ -551,7 +552,7 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
             tool = restored_tool
         producer_requirement = (
             str(projects["tpp"][tool][0])
-            if historical_phase is not None or restored_tool == "ruff-2017"
+            if historical_phase is not None or restored_tool in ("ruff-2017", "ruff-2038")
             else f"{tool}=={old_versions[tool]}"
         )
         assert producer_requirement in diagnostics
