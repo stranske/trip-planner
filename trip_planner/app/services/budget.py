@@ -227,6 +227,12 @@ def _build_budget_summary(
                     "flexibility": allocation["flexibility"],
                 }
             )
+        for category_key in sorted(
+            key for key in spend_totals_by_category if key not in allocated_keys
+        ):
+            category_summaries.append(
+                _unallocated_category_summary(category_key, spend_totals_by_category[category_key])
+            )
     else:
         suggested_categories = _suggested_categories(trip_mode)
         suggested_keys = set(suggested_categories)
