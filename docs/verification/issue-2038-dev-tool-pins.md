@@ -204,3 +204,58 @@ Git metadata is mounted read-only. The two changed files remain uncommitted.
 Attempts to add the blocker comment and `needs-human` label to PR #2039 were
 rejected because the tools require approval and the approval policy is `never`.
 Neither remote update was applied.
+
+## Local keepalive round 3/12: recover T7 and verify real producer inputs
+
+Check date: 2026-11-16, 09:02 UTC. Tested parent head:
+`d74997aa9573141ef5c58832729021db1dba650b`.
+Outcome: planner and the workflow-selected TPP source have no dev-tool pin
+conflicts, and the focused pin/smoke guards pass against a real producer checkout.
+Command printing the outcome:
+
+```sh
+TPP_REPO_PATH=/tmp/issue2038-tpp-round3 /opt/anaconda3/bin/python3 -m pytest tests/scripts/test_cross_repo_dev_pins.py tests/scripts/test_cross_repo_smoke_workflow.py -q -m 'not slow'
+```
+
+Stop rule: three attempts per failing step or 30 minutes. No implementation
+repair was necessary. Result: **97 passed in 4.07s, zero skips** on Python 3.12.2.
+This interpreter is below the application's supported range; the result verifies
+these metadata/guard tests, not supported-runtime application execution. The full
+suite was not run, following this round's explicit focused-tests-only instruction.
+
+T7 is a formatter elision. The complete
+[optimizer suggestion](https://github.com/stranske/trip-planner/issues/2038#issuecomment-6910331424)
+continues the mypy sentence with Ruff compatibility and asks for the assertions
+at historical lines 179 and 369 to pass. It defines four proposed tasks in total,
+not four additional implementation requirements. Its claim of three independent
+current pin conflicts is inaccurate: the previous TPP revision already matched
+mypy and pytest; Ruff was the remaining mismatch. Existing source selection of
+TPP `50992156e4a1f97c1115b6c7af84a219a3b9aae7` resolves that mismatch.
+
+A fresh, clean TPP checkout was fetched at that exact SHA. The focused suite
+verifies its HEAD, runtime/dev metadata against the reviewed snapshot, the live
+planner/producer compatibility assertion, and the historical negative cases.
+Thus T7's recovered compatibility and assertion requirements are verified.
+No dependency pin, workflow, fixture or test code was edited in this round.
+Earlier commit failures recorded above are historical; the tested changes are
+already committed in the parent head.
+
+A1 remains incomplete. Fresh `gh run view 43820524287 --repo
+stranske/trip-planner --json headSha,conclusion,jobs` reports `failure` on
+`65b25b559ea631d494e3dcfd624fb0126b098bbf`, including `Python CI / python 3.14`.
+PR #2037 remains open and ready on that original head, rather than regenerated.
+The focused result above is not a full repository test result.
+
+A3 remains incomplete. The latest target-specific entry read from canonical
+`~/.codex/orchestrator/sync-core/rounds.jsonl`, round `20261116T090144Z` at
+09:01:47 UTC, still classifies #2037 as `pin-conflict`, terminal `pin-held`,
+with handoff #2038. This is positive evidence that the requested clean
+classification has not yet been observed, rather than an unavailable readback.
+
+Blocking/drainable pair: regenerated-sync CI and clean classification missing /
+the owning sync/controller lane can integrate the existing source repair,
+regenerate #2037 through its normal source workflow, then read back the new
+Python 3.14 run and subsequent classification. This round neither edits the
+generated PR nor dispatches or takes over that lane. PR #2039 was read back open
+and ready before this documentation-only update. T7 is complete; A1 and A3 stay
+unchecked.
