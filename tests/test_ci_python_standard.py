@@ -124,6 +124,25 @@ def test_mypy_matches_reusable_python_ci() -> None:
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
+def test_make_test_matches_reusable_python_ci_pytest() -> None:
+    """Reusable Python CI on PR head runs ``python -m pytest``; ``make test`` must match."""
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    recipe: list[str] = []
+    in_test_target = False
+    for line in makefile.splitlines():
+        if line.startswith("test:"):
+            in_test_target = True
+            continue
+        if not in_test_target:
+            continue
+        if line.startswith("\t"):
+            recipe.append(line.strip())
+            continue
+        if line.strip():
+            break
+    assert recipe == ["python -m pytest"], f"Makefile test target recipe mismatch: {recipe!r}"
+
+
 def test_black_format_matches_pre_commit_gate() -> None:
     """Keepalive and pre-commit Black gate: line length 100, exclude workflows-lib and node_modules."""
     completed = subprocess.run(
