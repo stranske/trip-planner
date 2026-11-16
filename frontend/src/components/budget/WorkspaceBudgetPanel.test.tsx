@@ -139,4 +139,89 @@ describe("WorkspaceBudgetPanel", () => {
     expect(second.container.textContent ?? "").not.toMatch(/-\$0/);
     expect(second.container.textContent ?? "").not.toMatch(/should feed later planner/);
   });
+
+  it("shows unallocated spend categories with negative remaining amounts", () => {
+    const props = {
+      tripMode: "leisure",
+      busyLabel: null,
+      errorMessage: null,
+      onSaveBudget: vi.fn(),
+      onRecordSpend: vi.fn(),
+    };
+    const withUnallocatedSpend: BudgetWorkspaceState = {
+      ...budgetState,
+      budget_plan: {
+        ...budgetState.budget_plan!,
+        scenario_budgets: [
+          {
+            ...budgetState.budget_plan!.scenario_budgets[0],
+            allocations: [
+              {
+                category_key: "food",
+                label: "Food",
+                planned_amount: 100,
+                currency: "USD",
+                flexibility: "flexible",
+                notes: [],
+              },
+            ],
+          },
+        ],
+      },
+      spend_events: [
+        {
+          spend_event_id: "spend:lodging-1",
+          trip_id: "trip:kyoto",
+          budget_plan_id: "budget:kyoto",
+          category_key: "lodging",
+          amount: 50,
+          currency: "USD",
+          occurred_at: "2026-08-02T00:00:00Z",
+          source_kind: "manual",
+          source_context: "Hotel deposit",
+          scenario_budget_id: "scenario-budget:kyoto",
+          saved_scenario_id: "saved-scenario:kyoto",
+          merchant_name: "",
+          source_ref: null,
+          notes: [],
+        },
+      ],
+      summary: {
+        ...budgetState.summary,
+        planned_total: 100,
+        actual_total: 50,
+        remaining_total: 50,
+        spend_event_count: 1,
+        suggested_categories: ["food"],
+        category_summaries: [
+          {
+            category_key: "food",
+            label: "Food",
+            currency: "USD",
+            planned_amount: 100,
+            actual_amount: 0,
+            remaining_amount: 100,
+            flexibility: "flexible",
+          },
+          {
+            category_key: "lodging",
+            label: "Lodging",
+            currency: "USD",
+            planned_amount: 0,
+            actual_amount: 50,
+            remaining_amount: -50,
+            flexibility: "flexible",
+          },
+        ],
+      },
+    };
+
+    render(<WorkspaceBudgetPanel budgetState={withUnallocatedSpend} {...props} />);
+
+    const lodgingHeading = screen.getByRole("heading", { name: "Lodging", level: 3 });
+    const lodgingRow = lodgingHeading.closest("article");
+    expect(lodgingRow).toHaveTextContent("$0.00");
+    expect(lodgingRow).toHaveTextContent("$50.00");
+    expect(lodgingRow).toHaveTextContent("-$50.00");
+  });
 });

@@ -409,3 +409,58 @@ def test_workspace_budget_spend_event_updates_session_timestamp(client: TestClie
     assert updated.status_code == 200
     workspace_after_update = client.get(f"/api/workspace/{trip_id}").json()
     assert workspace_after_update["session"]["updated_at"] > after_create_timestamp
+
+
+def test_unallocated_category_spend_counts_in_actual_total(client: TestClient) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Unallocated spend",
+            "summary": "Spend outside allocations should still appear in summaries.",
+            "mode": "leisure",
+            "trip_frame": {"duration_days": 3, "primary_regions": ["Kyoto"]},
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+
+    client.put(
+        f"/api/workspace/{trip_id}/budget",
+        json={
+            "title": "Kyoto guardrails",
+            "currency": "USD",
+            "scenario_budgets": [
+                {
+                    "title": "Baseline",
+                    "allocations": [
+                        {
+                            "category_key": "food",
+                            "label": "Food",
+                            "planned_amount": 100,
+                        },
+                    ],
+                }
+            ],
+        },
+    )
+
+    payload = client.post(
+        f"/api/workspace/{trip_id}/budget/spend-events",
+        json={
+            "category_key": "lodging",
+            "amount": 50,
+            "source_kind": "manual",
+            "source_context": "Hotel deposit",
+        },
+    ).json()
+
+    assert payload["summary"]["actual_total"] == 50
+    assert payload["summary"]["remaining_total"] == 50
+    lodging_row = next(
+        item
+        for item in payload["summary"]["category_summaries"]
+        if item["category_key"] == "lodging"
+    )
+    assert lodging_row["planned_amount"] == 0
+    assert lodging_row["actual_amount"] == 50
+    assert lodging_row["remaining_amount"] == -50
+    assert lodging_row["flexibility"] == "flexible"
