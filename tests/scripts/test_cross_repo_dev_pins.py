@@ -49,11 +49,19 @@ def _checkout_git_env() -> dict[str, str]:
 
 def _requirements(pyproject: Path) -> dict[str, list[Requirement]]:
     project = tomllib.loads(pyproject.read_text())["project"]
-    entries = list(project.get("dependencies", []))
-    entries += project.get("optional-dependencies", {}).get("dev", [])
     requirements: dict[str, list[Requirement]] = {}
-    for req in map(Requirement, entries):
-        requirements.setdefault(canonicalize_name(req.name), []).append(req)
+    for entries, extras in (
+        (project.get("dependencies", []), ("", "dev")),
+        (project.get("optional-dependencies", {}).get("dev", []), ("dev",)),
+    ):
+        for req in map(Requirement, entries):
+            # Optional dev dependencies also have an implicit extra == 'dev'
+            # condition; evaluating them in the base context admits inactive pins.
+            if req.marker is not None and not any(
+                req.marker.evaluate(environment={"extra": extra}) for extra in extras
+            ):
+                continue
+            requirements.setdefault(canonicalize_name(req.name), []).append(req)
     return requirements
 
 
@@ -94,6 +102,58 @@ def test_find_pin_conflicts_flags_diverged_exact_pin(tmp_path: Path) -> None:
     assert find_pin_conflicts(planner, tpp) == [
         "ruff: trip-planner 'ruff==0.17.3' vs TPP 'ruff==0.17.2'"
     ]
+
+
+@pytest.mark.parametrize("constrained_project", ["planner", "tpp"])
+@pytest.mark.parametrize("section", ["dependencies", "dev"])
+@pytest.mark.parametrize(
+    ("marker", "runtime_active", "dev_active"),
+    [
+        ("python_version < '3'", False, False),
+        ("python_version >= '3'", True, True),
+        ("extra == 'dev'", True, True),
+        ("extra == 'test'", False, False),
+        ("extra != 'dev'", True, False),
+        ("extra == ''", True, False),
+        ("python_version < '3' and extra == 'dev'", False, False),
+        ("python_version >= '3' and extra != 'dev'", True, False),
+    ],
+)
+def test_find_pin_conflicts_checks_active_dev_install_requirements(
+    tmp_path: Path,
+    constrained_project: str,
+    section: str,
+    marker: str,
+    runtime_active: bool,
+    dev_active: bool,
+) -> None:
+    """The smoke job installs base and dev requirements for the running Python."""
+    projects = {name: tmp_path / f"{name}.toml" for name in ("planner", "tpp")}
+    marked_requirement = f"ruff==0.17.4; {marker}"
+    for name, path in projects.items():
+        requirement = marked_requirement if name == constrained_project else "ruff==0.17.5"
+        runtime = [requirement] if section == "dependencies" else []
+        dev = [requirement] if section == "dev" else []
+        path.write_text(
+            f"[project]\ndependencies = {json.dumps(runtime)}\n"
+            f"[project.optional-dependencies]\ndev = {json.dumps(dev)}\n",
+            encoding="utf-8",
+        )
+
+    conflicts = find_pin_conflicts(projects["planner"], projects["tpp"])
+
+    active = runtime_active if section == "dependencies" else dev_active
+    if active:
+        planner_req, tpp_req = (
+            (marked_requirement, "ruff==0.17.5")
+            if constrained_project == "planner"
+            else ("ruff==0.17.5", marked_requirement)
+        )
+        assert conflicts == [
+            f"ruff: trip-planner '{Requirement(planner_req)}' vs TPP '{Requirement(tpp_req)}'"
+        ]
+    else:
+        assert conflicts == []
 
 
 @pytest.mark.parametrize("constrained_project", ["planner", "tpp"])
@@ -209,6 +269,10 @@ def test_live_tpp_checkout_matches_workflow_snapshot() -> None:
     snapshot = REPO_ROOT / "tests" / "fixtures" / "tpp_dev_pins" / pinned_ref / "pyproject.toml"
     producer = tomllib.loads((checkout / "pyproject.toml").read_text())["project"]
     reviewed = tomllib.loads(snapshot.read_text())["project"]
+    assert producer.get("requires-python") == reviewed.get("requires-python"), (
+        f"TPP requires-python snapshot differs from checkout {pinned_ref}; "
+        "refresh the snapshot from the pinned source before recording verification."
+    )
     for section, actual, expected in (
         ("runtime", producer["dependencies"], reviewed["dependencies"]),
         ("dev", producer["optional-dependencies"]["dev"], reviewed["optional-dependencies"]["dev"]),
@@ -219,7 +283,7 @@ def test_live_tpp_checkout_matches_workflow_snapshot() -> None:
         )
 
 
-@pytest.mark.parametrize("mismatch", [None, "head", "runtime", "dev"])
+@pytest.mark.parametrize("mismatch", [None, "head", "runtime", "dev", "python", "missing-python"])
 @pytest.mark.parametrize("inherit_git_locations", [False, True])
 def test_live_snapshot_guard_rejects_unverified_producer_metadata(
     tmp_path: Path,
@@ -244,7 +308,7 @@ def test_live_snapshot_guard_rejects_unverified_producer_metadata(
     checkout.mkdir()
     pyproject = checkout / "pyproject.toml"
     metadata = (
-        '[project]\ndependencies = ["httpx>=0.28.1"]\n'
+        '[project]\nrequires-python = ">=3.13"\ndependencies = ["httpx>=0.28.1"]\n'
         '[project.optional-dependencies]\ndev = ["ruff==0.17.3"]\n'
     )
     pyproject.write_text(metadata, encoding="utf-8")
@@ -289,6 +353,12 @@ def test_live_snapshot_guard_rejects_unverified_producer_metadata(
         pyproject.write_text(metadata.replace("httpx>=0.28.1", "httpx>=0.29"), encoding="utf-8")
     elif mismatch == "dev":
         pyproject.write_text(metadata.replace("ruff==0.17.3", "ruff==0.17.2"), encoding="utf-8")
+    elif mismatch == "python":
+        pyproject.write_text(metadata.replace(">=3.13", ">=3.13,<3.14"), encoding="utf-8")
+    elif mismatch == "missing-python":
+        (snapshot / "pyproject.toml").write_text(
+            metadata.replace('requires-python = ">=3.13"\n', ""), encoding="utf-8"
+        )
     monkeypatch.setattr(f"{__name__}.REPO_ROOT", tmp_path)
     monkeypatch.setenv("TPP_REPO_PATH", "tpp")
 
@@ -325,32 +395,39 @@ def test_workflow_tpp_pin_resolves_with_planner_dev_pins(
     test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
 
 
-@pytest.mark.parametrize("restored_tool", ["all", "ruff", "mypy", "pytest"])
+@pytest.mark.parametrize(
+    "restored_pins",
+    [
+        pytest.param({"ruff": "0.17.2", "mypy": "2.4.0", "pytest": "9.1.1"}, id="all"),
+        pytest.param({"ruff": "0.17.2"}, id="ruff"),
+        pytest.param({"mypy": "2.4.0"}, id="mypy"),
+        pytest.param({"pytest": "9.1.1"}, id="pytest"),
+        pytest.param({"ruff": "0.17.4"}, id="issue-2038-stale-ruff"),
+    ],
+)
 def test_offline_workflow_guard_rejects_original_producer_pins(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, restored_tool: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, restored_pins: dict[str, str]
 ) -> None:
     """The actual offline gate must catch an unpaired sync without a live checkout."""
+    test_workflow_tpp_pin_resolves_with_planner_dev_pins(monkeypatch)
+
     workflow = yaml.safe_load(
         (REPO_ROOT / ".github" / "workflows" / "cross-repo-smoke.yml").read_text()
     )
     pinned_ref = workflow["env"]["TPP_PINNED_REF"]
     producer = REPO_ROOT / "tests" / "fixtures" / "tpp_dev_pins" / pinned_ref / "pyproject.toml"
     metadata = producer.read_text(encoding="utf-8")
-    requirements = _requirements(producer)
-    old_versions = {"ruff": "0.17.2", "mypy": "2.4.0", "pytest": "9.1.1"}
-    restored = (
-        old_versions if restored_tool == "all" else {restored_tool: old_versions[restored_tool]}
-    )
-    for tool, version in restored.items():
-        current = str(requirements[tool][0])
+    producer_requirements = _requirements(producer)
+    planner = REPO_ROOT / "pyproject.toml"
+    planner_requirements = _requirements(planner)
+    for tool, version in restored_pins.items():
+        current = str(producer_requirements[tool][0])
         assert current in metadata
         metadata = metadata.replace(current, f"{tool}=={version}")
 
     # Preserve real planner requirements and the workflow's snapshot selection;
     # change only the producer pins that caused the reported installation failure.
-    (tmp_path / "pyproject.toml").write_text(
-        (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"), encoding="utf-8"
-    )
+    (tmp_path / "pyproject.toml").write_bytes(planner.read_bytes())
     workflow_directory = tmp_path / ".github" / "workflows"
     workflow_directory.mkdir(parents=True)
     (workflow_directory / "cross-repo-smoke.yml").write_text(
@@ -365,54 +442,178 @@ def test_offline_workflow_guard_rejects_original_producer_pins(
     with pytest.raises(AssertionError, match="cannot be installed together") as failure:
         test_workflow_tpp_pin_resolves_with_planner_dev_pins(monkeypatch)
 
-    for tool, version in restored.items():
-        assert f"{tool}: trip-planner '{requirements[tool][0]}' vs TPP '{tool}=={version}'" in str(
+    for tool, version in restored_pins.items():
+        planner_pin = planner_requirements[tool][0]
+        assert f"{tool}: trip-planner '{planner_pin}' vs TPP '{tool}=={version}'" in str(
             failure.value
         )
 
 
 @pytest.mark.parametrize(
-    ("planner_phase", "producer_phase", "conflicting"),
+    ("planner_fixture", "producer_ref", "conflicting_tools"),
     [
-        pytest.param("failed", "failed", True, id="original-install-inputs"),
-        pytest.param("failed", "successful", False, id="change-only-tpp-checkout"),
-        pytest.param("successful", "successful", False, id="merged-install-inputs"),
+        pytest.param(
+            "issue_2025_ledger/failed-trip-planner.toml",
+            "acc4aeddee5f4ffefbdc73fcb07505cd3d198197",
+            ("mypy", "pytest", "ruff"),
+            id="original-install-inputs",
+        ),
+        pytest.param(
+            "issue_2025_ledger/failed-trip-planner.toml",
+            "b56d92b389736c70370aa9134f379ac8cd1f3ad1",
+            (),
+            id="change-only-tpp-checkout",
+        ),
+        pytest.param(
+            "issue_2025_ledger/successful-trip-planner.toml",
+            "b56d92b389736c70370aa9134f379ac8cd1f3ad1",
+            (),
+            id="merged-install-inputs",
+        ),
+        pytest.param(
+            "issue_2038_dev_pins/trip-planner.toml",
+            "5c9ec6e15ac959023b9fc9cdd1099d70a6073396",
+            ("ruff",),
+            id="issue-2038-original-install",
+        ),
+        pytest.param(
+            "issue_2038_dev_pins/trip-planner.toml",
+            "50992156e4a1f97c1115b6c7af84a219a3b9aae7",
+            (),
+            id="issue-2038-repaired-install",
+        ),
     ],
 )
+@pytest.mark.parametrize("guard", ["live-checkout", "workflow-snapshot"])
 def test_smoke_pin_guard_with_historical_editable_checkouts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    planner_phase: str,
-    producer_phase: str,
-    conflicting: bool,
+    planner_fixture: str,
+    producer_ref: str,
+    conflicting_tools: tuple[str, ...],
+    guard: str,
 ) -> None:
-    """The actual smoke guard must detect the old checkout and accept its replacement."""
-    planner_source = (
-        REPO_ROOT / "tests/fixtures/issue_2025_ledger" / f"{planner_phase}-trip-planner.toml"
-    )
-    producer_ref = {
-        "failed": "acc4aeddee5f4ffefbdc73fcb07505cd3d198197",
-        "successful": "b56d92b389736c70370aa9134f379ac8cd1f3ad1",
-    }[producer_phase]
+    """Both guard entry points must reject the old source and accept its replacement."""
+    planner_source = REPO_ROOT / "tests/fixtures" / planner_fixture
     producer_source = REPO_ROOT / "tests/fixtures/tpp_dev_pins" / producer_ref / "pyproject.toml"
     # Preserve both complete original metadata files, including runtime and dev
-    # requirements. The middle case changes only the selected producer source.
+    # requirements. Each repair changes only the selected producer source.
     (tmp_path / "pyproject.toml").write_bytes(planner_source.read_bytes())
     checkout = tmp_path / "tpp"
     checkout.mkdir()
     (checkout / "pyproject.toml").write_bytes(producer_source.read_bytes())
     monkeypatch.setattr(f"{__name__}.REPO_ROOT", tmp_path)
-    monkeypatch.setenv("TPP_REPO_PATH", "tpp")
 
-    if conflicting:
-        with pytest.raises(AssertionError, match="cannot be installed together") as failure:
+    def run_guard() -> None:
+        if guard == "live-checkout":
             test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
+        else:
+            test_workflow_tpp_pin_resolves_with_planner_dev_pins(monkeypatch)
+
+    if guard == "live-checkout":
+        monkeypatch.setenv("TPP_REPO_PATH", "tpp")
+    else:
+        workflow_directory = tmp_path / ".github" / "workflows"
+        workflow_directory.mkdir(parents=True)
+        (workflow_directory / "cross-repo-smoke.yml").write_text(
+            yaml.safe_dump({"env": {"TPP_PINNED_REF": producer_ref}}), encoding="utf-8"
+        )
+        snapshot = tmp_path / "tests" / "fixtures" / "tpp_dev_pins" / producer_ref
+        snapshot.mkdir(parents=True)
+        (snapshot / "pyproject.toml").write_bytes(producer_source.read_bytes())
+        # An inherited checkout must not override the workflow's selected source.
+        monkeypatch.setenv("TPP_REPO_PATH", str(tmp_path / "missing-checkout"))
+
+    if conflicting_tools:
+        with pytest.raises(AssertionError, match="cannot be installed together") as failure:
+            run_guard()
         diagnostics = str(failure.value)
         for tool in ("ruff", "mypy", "pytest"):
-            assert f"{tool}: trip-planner" in diagnostics
+            assert (f"{tool}: trip-planner" in diagnostics) == (tool in conflicting_tools)
         assert "Move TPP_PINNED_REF" in diagnostics
     else:
-        test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
+        run_guard()
+
+
+@pytest.mark.parametrize(
+    ("producer_ref", "expected_exit"),
+    [
+        pytest.param("5c9ec6e15ac959023b9fc9cdd1099d70a6073396", 1, id="original-producer"),
+        pytest.param("50992156e4a1f97c1115b6c7af84a219a3b9aae7", 0, id="repaired-producer"),
+    ],
+)
+@pytest.mark.parametrize(
+    "guard_mode", ["live-checkout", "workflow-snapshot", "missing-snapshot", "combined-guards"]
+)
+def test_pin_guard_cli_with_issue_2038_checkouts(
+    tmp_path: Path, producer_ref: str, expected_exit: int, guard_mode: str
+) -> None:
+    """Both pytest guards must reject #2037's old pair and unreviewed source pins."""
+    planner = REPO_ROOT / "tests/fixtures/issue_2038_dev_pins/trip-planner.toml"
+    producer = REPO_ROOT / "tests/fixtures/tpp_dev_pins" / producer_ref / "pyproject.toml"
+    (tmp_path / "pyproject.toml").write_bytes(planner.read_bytes())
+    checkout = tmp_path / "tpp"
+    checkout.mkdir()
+    (checkout / "pyproject.toml").write_bytes(producer.read_bytes())
+    guard = tmp_path / "tests/scripts/test_cross_repo_dev_pins.py"
+    guard.parent.mkdir(parents=True)
+    guard.write_bytes(Path(__file__).read_bytes())
+    test_names = ["test_planner_dev_pins_resolve_with_pinned_tpp_checkout"]
+    if guard_mode != "live-checkout":
+        snapshot_test = "test_workflow_tpp_pin_resolves_with_planner_dev_pins"
+        if guard_mode == "combined-guards":
+            test_names.append(snapshot_test)
+        else:
+            test_names = [snapshot_test]
+        workflow = tmp_path / ".github/workflows/cross-repo-smoke.yml"
+        workflow.parent.mkdir(parents=True)
+        workflow.write_text(
+            yaml.safe_dump({"env": {"TPP_PINNED_REF": producer_ref}}), encoding="utf-8"
+        )
+        if guard_mode in ("workflow-snapshot", "combined-guards"):
+            snapshot = tmp_path / "tests/fixtures/tpp_dev_pins" / producer_ref / "pyproject.toml"
+            snapshot.parent.mkdir(parents=True)
+            snapshot.write_bytes(producer.read_bytes())
+        else:
+            expected_exit = 1
+
+    # A fresh pytest process exercises collection, checkout discovery and failure
+    # propagation, without inheriting the parent process's monkeypatches or config.
+    environment = _checkout_git_env()
+    environment["TPP_REPO_PATH"] = "tpp"
+    environment["PYTEST_ADDOPTS"] = ""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            *(f"tests/scripts/test_cross_repo_dev_pins.py::{name}" for name in test_names),
+            "-q",
+            "-m",
+            "not slow",
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    diagnostics = result.stdout + result.stderr
+    assert result.returncode == expected_exit, diagnostics
+    if expected_exit:
+        assert f"{len(test_names)} failed" in diagnostics
+    if guard_mode == "missing-snapshot":
+        # Even a compatible live checkout cannot replace review of a new pin.
+        assert f"Missing TPP dependency snapshot for {producer_ref}" in diagnostics
+        assert "cannot be installed together" not in diagnostics
+    elif expected_exit:
+        assert "cannot be installed together" in diagnostics
+        assert "ruff: trip-planner 'ruff==0.17.5' vs TPP 'ruff==0.17.4'" in diagnostics
+        assert "mypy: trip-planner" not in diagnostics
+        assert "pytest: trip-planner" not in diagnostics
+    else:
+        assert f"{len(test_names)} passed" in diagnostics
 
 
 @pytest.mark.parametrize(
@@ -420,22 +621,29 @@ def test_smoke_pin_guard_with_historical_editable_checkouts(
     [
         *((tool, None) for tool in ("all", "ruff", "mypy", "pytest", None)),
         pytest.param("ruff-2017", None, id="issue-2017-producer"),
+        pytest.param("ruff-2038", None, id="issue-2038-producer"),
         pytest.param(None, "failed", id="issue-2006-failed-install"),
         pytest.param(None, "successful", id="issue-2006-successful-install"),
+        pytest.param(None, "issue-2038-failed", id="issue-2038-original-install"),
+        pytest.param(None, "issue-2038-repaired", id="issue-2038-repaired-install"),
     ],
 )
+@pytest.mark.parametrize("target_python", ["3.13", "3.14"])
 def test_pip_resolves_paired_dev_tool_pins_offline(
-    tmp_path: Path, restored_tool: str | None, historical_phase: str | None
+    tmp_path: Path, restored_tool: str | None, historical_phase: str | None, target_python: str
 ) -> None:
     """Exercise pip's resolver for the failing tool pins without network or installs.
 
-    Metadata-only wheels isolate the tools reported in #1973 and #2017. The passing
+    Metadata-only wheels isolate the tools reported in #1973, #2017 and #2038. The passing
     case reads the real planner requirements and the snapshot selected by the
     workflow; failing cases restore all or one of the producer's original pins.
     Both projects declare the tools in their dev extras, matching the joint
     installation in the workflow rather than supplying tools as root requirements.
-    Historical #2006 cases read both original source snapshots from the failed
-    and successful runs, independent of subsequent planner and workflow updates.
+    Historical cases read fixed source snapshots, independent of subsequent
+    planner and workflow updates. For #2038, only the TPP revision changes
+    between the failed and repaired installations.
+    Resolve for both CI Python versions, preserving the source projects' Python
+    requirements rather than relying on whichever interpreter runs this test.
     This verifies resolution only, not a complete cross-repo installation.
     """
     workflow = yaml.safe_load(
@@ -443,31 +651,46 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
     )
     snapshot = REPO_ROOT / "tests" / "fixtures" / "tpp_dev_pins" / workflow["env"]["TPP_PINNED_REF"]
     planner = REPO_ROOT / "pyproject.toml"
+    historical_failure = historical_phase in ("failed", "issue-2038-failed")
     if historical_phase is not None:
-        # These are the actual editable checkouts in runs 42449207754 and
-        # 42484305260, not current requirements with selected pins overwritten.
-        producer_ref = {
-            "failed": "acc4aeddee5f4ffefbdc73fcb07505cd3d198197",
-            "successful": "b56d92b389736c70370aa9134f379ac8cd1f3ad1",
+        # #2006 uses the editable checkouts in runs 42449207754 / 42484305260;
+        # #2038 preserves sync PR #2037's planner metadata at head 65b25b559ea6.
+        planner_fixture, producer_ref = {
+            "failed": (
+                "issue_2025_ledger/failed-trip-planner.toml",
+                "acc4aeddee5f4ffefbdc73fcb07505cd3d198197",
+            ),
+            "successful": (
+                "issue_2025_ledger/successful-trip-planner.toml",
+                "b56d92b389736c70370aa9134f379ac8cd1f3ad1",
+            ),
+            "issue-2038-failed": (
+                "issue_2038_dev_pins/trip-planner.toml",
+                "5c9ec6e15ac959023b9fc9cdd1099d70a6073396",
+            ),
+            "issue-2038-repaired": (
+                "issue_2038_dev_pins/trip-planner.toml",
+                "50992156e4a1f97c1115b6c7af84a219a3b9aae7",
+            ),
         }[historical_phase]
         snapshot = REPO_ROOT / "tests/fixtures/tpp_dev_pins" / producer_ref
-        planner = (
-            REPO_ROOT / "tests/fixtures/issue_2025_ledger" / f"{historical_phase}-trip-planner.toml"
-        )
-    if restored_tool == "ruff-2017":
-        # This is the actual producer from failed run 42542025018, whose mypy
-        # and pytest pins already matched planner. Only Ruff was incompatible.
-        snapshot = (
-            REPO_ROOT
-            / "tests"
-            / "fixtures"
-            / "tpp_dev_pins"
-            / "b56d92b389736c70370aa9134f379ac8cd1f3ad1"
-        )
+        planner = REPO_ROOT / "tests/fixtures" / planner_fixture
+    if restored_tool in ("ruff-2017", "ruff-2038"):
+        # These are the actual producers from the failed sync deliveries. Their
+        # mypy and pytest pins already matched planner; only Ruff was incompatible.
+        producer_ref = {
+            "ruff-2017": "b56d92b389736c70370aa9134f379ac8cd1f3ad1",
+            "ruff-2038": "5c9ec6e15ac959023b9fc9cdd1099d70a6073396",
+        }[restored_tool]
+        snapshot = REPO_ROOT / "tests/fixtures/tpp_dev_pins" / producer_ref
     old_versions = {"ruff": "0.17.2", "mypy": "2.4.0", "pytest": "9.1.1"}
     projects = {
         "planner": _requirements(planner),
         "tpp": _requirements(snapshot / "pyproject.toml"),
+    }
+    project_metadata = {
+        "planner": tomllib.loads(planner.read_text(encoding="utf-8"))["project"],
+        "tpp": tomllib.loads((snapshot / "pyproject.toml").read_text(encoding="utf-8"))["project"],
     }
 
     def write_wheel(name: str, version: str, dependency_metadata: str = "") -> None:
@@ -486,6 +709,8 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
     project_names = {"planner": "trip_planner", "tpp": "travel_plan_permission"}
     for name, requirements in projects.items():
         dependency_metadata = "Provides-Extra: dev\n"
+        if requires_python := project_metadata[name].get("requires-python"):
+            dependency_metadata += f"Requires-Python: {requires_python}\n"
         for tool, old_version in old_versions.items():
             selected = requirements[tool]
             if name == "tpp" and restored_tool in ("all", tool):
@@ -519,6 +744,9 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
             "install",
             "--dry-run",
             "--ignore-installed",
+            "--python-version",
+            target_python,
+            "--only-binary=:all:",
             "--no-index",
             "--no-cache-dir",
             "--find-links",
@@ -533,10 +761,10 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
         check=False,
     )
     diagnostics = result.stdout + result.stderr
-    if restored_tool is not None or historical_phase == "failed":
+    if restored_tool is not None or historical_failure:
         assert result.returncode != 0, diagnostics
         assert "ResolutionImpossible" in diagnostics
-        if restored_tool in ("all", "ruff-2017") or historical_phase == "failed":
+        if restored_tool in ("all", "ruff-2017", "ruff-2038") or historical_failure:
             tool = "ruff"
         else:
             # The enclosing condition means this branch is reachable only for
@@ -545,7 +773,7 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
             tool = restored_tool
         producer_requirement = (
             str(projects["tpp"][tool][0])
-            if historical_phase is not None or restored_tool == "ruff-2017"
+            if historical_phase is not None or restored_tool in ("ruff-2017", "ruff-2038")
             else f"{tool}=={old_versions[tool]}"
         )
         assert producer_requirement in diagnostics
@@ -563,6 +791,13 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
             canonicalize_name(entry["metadata"]["name"]): entry["metadata"]["version"]
             for entry in resolved
         } == expected
+        resolved_metadata = {
+            canonicalize_name(entry["metadata"]["name"]): entry["metadata"] for entry in resolved
+        }
+        for name, distribution in project_names.items():
+            assert resolved_metadata[canonicalize_name(distribution)].get("requires_python") == (
+                project_metadata[name].get("requires-python")
+            )
 
 
 @pytest.mark.parametrize(
