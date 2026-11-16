@@ -1290,32 +1290,80 @@ def _comparison_figures(payload: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-def _probe_comparison(client: TestClient, evidence: dict[str, Any]) -> str:
-    pairs = {}
-    for determinant, inputs in (
-        ("destination", (("Chicago", 1), ("Reykjavik, Iceland", 1))),
-        ("party", (("Chicago", 1), ("Chicago", 8))),
-    ):
-        observations = []
-        for region, count in inputs:
-            trip_id = _create_trip(
-                client,
-                mode="business",
-                title="Contract comparison",
-                region=region,
-                traveler_count=count,
-            )
+def _comparison_pair(
+    client: TestClient,
+    evidence: dict[str, Any],
+    inputs: tuple[tuple[str, int, float | None], tuple[str, int, float | None]],
+) -> list[dict[str, Any]]:
+    observations = []
+    for region, count, amount in inputs:
+        trip_id = _create_trip(
+            client,
+            mode="business",
+            title="Contract comparison",
+            region=region,
+            traveler_count=count,
+        )
+        observation: dict[str, Any] = {"destination": region, "party": count}
+        if amount is None:
             payload = _observe(
                 client, evidence, "GET", f"/api/workspace/{trip_id}/scenarios/compare"
             )
-            observations.append(
-                {"destination": region, "party": count, "figures": _comparison_figures(payload)}
+        else:
+            price_path = f"/api/workspace/{trip_id}/prices"
+            _observe(
+                client,
+                evidence,
+                "PUT",
+                price_path,
+                json={"component": "transport", "amount": amount, "currency": "USD"},
             )
-        pairs[determinant] = observations
+            total = _observe(client, evidence, "GET", price_path)["total"]
+            observation["entered_total"] = total["typical_amount"] if total else None
+            # The Compare tab reads route_comparison from the workspace, which applies
+            # entered prices to the scenario figures.
+            workspace = _observe(client, evidence, "GET", f"/api/workspace/{trip_id}")
+            payload = workspace["route_comparison"]
+        observation["figures"] = _comparison_figures(payload)
+        observations.append(observation)
+    return observations
+
+
+def _probe_comparison(client: TestClient, evidence: dict[str, Any]) -> str:
+    pairs = {}
+    for determinant, inputs in (
+        ("destination", (("Chicago", 1, None), ("Reykjavik, Iceland", 1, None))),
+        ("price", (("Chicago", 1, 250.0), ("Chicago", 1, 700.0))),
+    ):
+        pairs[determinant] = _comparison_pair(client, evidence, inputs)
     evidence["pairs"] = pairs
+    controls = evidence["controls"] = {}
+    try:
+        controls["party"] = _comparison_pair(
+            client, evidence, (("Chicago", 1, None), ("Chicago", 8, None))
+        )
+    except VerificationFailure as exc:
+        controls["party_error"] = str(exc)
+
     if any(not observation["figures"] for pair in pairs.values() for observation in pair):
         return "PARTIAL"
-    moved = [pair[0]["figures"] != pair[1]["figures"] for pair in pairs.values()]
+    moved = []
+    for determinant, pair in pairs.items():
+        if determinant == "price":
+            moved.append(
+                pair[0]["entered_total"] != pair[1]["entered_total"]
+                and all(
+                    observation["entered_total"] is not None
+                    and {
+                        (figure["estimated_total"] or {}).get("typical_amount")
+                        for figure in observation["figures"]
+                    }
+                    == {observation["entered_total"]}
+                    for observation in pair
+                )
+            )
+        else:
+            moved.append(pair[0]["figures"] != pair[1]["figures"])
     # Cross-pair comparison is essential: HTTP success cannot detect fabricated figures.
     if not any(moved):
         return "FABRICATED"

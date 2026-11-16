@@ -514,18 +514,61 @@ def test_product_probe_report_marks_constant_figures_fabricated(monkeypatch, var
         return result
 
     monkeypatch.setattr(workspace, "_build_runtime_scenario_search_for_trip", scenario_engine)
+    if not vary:
+        # Keep the final figures constant even when the comparison reads an entered price.
+        monkeypatch.setattr(
+            workspace, "_apply_entered_total", lambda planner_total, _entered_total: planner_total
+        )
     rows = verifier.run_contract_report()
     comparison = next(row for row in rows if row["id"] == "TP3")
     assert comparison["verdict"] == ("WORKS" if vary else "FABRICATED")
     pairs = comparison["evidence"]["pairs"]
-    assert set(pairs) == {"destination", "party"}
+    assert set(pairs) == {"destination", "price"}
     assert [item["destination"] for item in pairs["destination"]] == [
         "Chicago",
         "Reykjavik, Iceland",
     ]
-    assert [item["party"] for item in pairs["party"]] == [1, 8]
+    assert [item["party"] for item in comparison["evidence"]["controls"]["party"]] == [1, 8]
     assert all(item["figures"] for pair in pairs.values() for item in pair)
     assert all(request["status"] == 200 for request in comparison["evidence"]["requests"])
+
+
+def test_tp3_probe_price_pair_enters_distinct_component_totals():
+    rows = verifier.run_contract_report()
+    comparison = next(row for row in rows if row["id"] == "TP3")
+    evidence = comparison["evidence"]
+    price_pair = evidence["pairs"]["price"]
+    assert [(item["destination"], item["party"]) for item in price_pair] == [
+        ("Chicago", 1),
+        ("Chicago", 1),
+    ]
+
+    price_requests = [
+        request for request in evidence["requests"] if request["path"].endswith("/prices")
+    ]
+    assert [request["method"] for request in price_requests] == ["PUT", "GET", "PUT", "GET"]
+    first_put, first_read, second_put, second_read = price_requests
+    assert first_put["path"] == first_read["path"]
+    assert second_put["path"] == second_read["path"]
+    assert first_put["path"] != second_put["path"]
+    assert all(request["status"] == 200 for request in price_requests)
+
+    persisted_totals = [
+        read["body"]["total"]["typical_amount"] for read in (first_read, second_read)
+    ]
+    assert persisted_totals == [250.0, 700.0]
+    assert [item["entered_total"] for item in price_pair] == persisted_totals
+    for item, total in zip(price_pair, persisted_totals, strict=True):
+        measured_totals = [
+            (figure["estimated_total"] or {}).get("typical_amount") for figure in item["figures"]
+        ]
+        assert measured_totals and set(measured_totals) == {total}
+
+    assert set(evidence["pairs"]) == {"destination", "price"}
+    party_control = evidence["controls"]["party"]
+    assert [item["party"] for item in party_control] == [1, 8]
+    assert party_control[0]["figures"] == party_control[1]["figures"]
+    assert comparison["verdict"] == "WORKS", comparison
 
 
 def test_product_probe_report_lists_every_contract_id():
@@ -683,7 +726,7 @@ def test_contract_report_tp3_not_fabricated_without_monkeypatch():
     assert set(travel_minutes[0]) != set(travel_minutes[1]), comparison
 
 
-def test_contract_report_missing_origin_exposes_local_only_fabrication(monkeypatch):
+def test_contract_report_missing_origin_exposes_local_only_destination_figures(monkeypatch):
     from fastapi.testclient import TestClient
 
     original_request = TestClient.request
@@ -706,7 +749,7 @@ def test_contract_report_missing_origin_exposes_local_only_fabrication(monkeypat
     ), trips
 
     comparison = next(row for row in rows if row["id"] == "TP3")
-    assert comparison["verdict"] == "FABRICATED", comparison
+    assert comparison["verdict"] == "PARTIAL", comparison
     destinations = comparison["evidence"]["pairs"]["destination"]
     assert [item["destination"] for item in destinations] == ["Chicago", "Reykjavik, Iceland"]
     assert [item["party"] for item in destinations] == [1, 1]
