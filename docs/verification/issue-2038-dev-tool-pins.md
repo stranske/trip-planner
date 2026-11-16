@@ -615,3 +615,45 @@ produces a diff against current main. If both changes reach main and the
 replay produces an empty diff, the sync owner needs to record the disposition
 of #2037. A1 still requires a passing Python 3.14 run on a regenerated head.
 A3 requires a subsequent sync-core record for that target.
+
+## Local keepalive round 12/12
+
+Check date: 2026-11-16. Outcome: **A1 and A3 remain unsatisfied**. Stop rule:
+one evidence pass with one transient-failure retry, within 20 minutes. The
+command printing the downstream outcome was:
+
+```sh
+gh run view 43820524287 --repo stranske/trip-planner --json headSha,conclusion,jobs
+```
+
+It still reports a failed `Python CI / python 3.14` job on #2037's unchanged
+head `65b25b559ea631d494e3dcfd624fb0126b098bbf`. PR #2039 remains open and
+ready at the checked source head `662d25702f96d882e653962311a792e85ae0d492`.
+Green repair-PR CI does not establish regenerated-sync acceptance.
+
+The focused command below passed **152 tests in 18.97 seconds**, with no skips,
+against a detached checkout of TPP `50992156e4a1f97c1115b6c7af84a219a3b9aae7`:
+
+```sh
+TPP_REPO_PATH=/tmp/issue2038-round12-tpp /opt/anaconda3/bin/python3 -m pytest tests/scripts/test_cross_repo_dev_pins.py tests/scripts/test_cross_repo_smoke_workflow.py -q -m 'not slow'
+```
+
+That interpreter is Python 3.12.2, below the application's supported minimum;
+the result establishes focused metadata/regression behavior only. The same
+command through `/Users/teacher/.codex/python-bin/python` (Python 3.14.3)
+reported **130 passed, 22 failed** because its interpreter has no `pip` module,
+which the offline resolver tests invoke. Log:
+`/tmp/issue2038-round12-supported.log`. No runtime or dependency installation
+was changed. The full suite was not run, as this round prohibits it.
+
+Readback of `~/.codex/orchestrator/sync-core/rounds.jsonl` finds round
+`20261116T121646Z`, timestamp `2026-11-16T12:16:49Z`, still classifying #2037
+as `pin-conflict`, terminal `pin-held`, with open handoff #2038. A3 therefore
+remains open, rather than merely lacking evidence.
+
+Blocking/drainable pair: downstream acceptance is blocked on source integration
+and the owning sync lane's regeneration/disposition of #2037; the focused local
+guard and this evidence update remain drainable. After regeneration, read its
+exact-head Python 3.14 run and the subsequent sync-core classification. This
+round changes only this verification record; no dependency pins, workflows,
+acceptance checkboxes, or generated sync PR were edited.
