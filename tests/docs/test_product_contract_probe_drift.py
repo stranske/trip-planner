@@ -67,17 +67,17 @@ def test_product_contract_status_column_matches_cli_report(
     assert expected_headline in capsys.readouterr().out.splitlines()
 
 
-def test_pre_1962_tp3_fabricated_fails_against_partial_probe(
+def test_pre_1962_tp3_fabricated_fails_against_works_probe(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Issue #1964 AC: restore TP3 FABRICATED while the probe reports PARTIAL → drift fails.
+    """Restore TP3 FABRICATED while the probe reports WORKS → drift fails.
 
     Uses the real ``docs/PRODUCT_CONTRACT.md`` table shape (not a stub row) so a
     parser that only works on minimal fixtures cannot satisfy the deliberate-break
-    gate. Probe is monkeypatched to the current offline map with TP3 PARTIAL.
+    gate. Probe is monkeypatched to the current offline map with TP3 WORKS.
     """
     real_text = (verifier.REPO_ROOT / "docs" / "PRODUCT_CONTRACT.md").read_text(encoding="utf-8")
-    assert _contract_status_by_id(real_text)["TP3"] == "PARTIAL"
+    assert _contract_status_by_id(real_text)["TP3"] == "WORKS"
 
     broken_lines: list[str] = []
     replaced = False
@@ -85,14 +85,12 @@ def test_pre_1962_tp3_fabricated_fails_against_partial_probe(
         if (
             not replaced
             and re.match(r"^[ \t]*\|[ \t]*TP3[ \t]*\|", line)
-            and re.search(r"\|[ \t]*PARTIAL[ \t]*\|[ \t]*$", line)
+            and re.search(r"\|[ \t]*WORKS[ \t]*\|[ \t]*$", line)
         ):
-            line = re.sub(
-                r"\|[ \t]*PARTIAL[ \t]*\|([ \t]*\n?)$", r"| FABRICATED |\1", line, count=1
-            )
+            line = re.sub(r"\|[ \t]*WORKS[ \t]*\|([ \t]*\n?)$", r"| FABRICATED |\1", line, count=1)
             replaced = True
         broken_lines.append(line)
-    assert replaced, "TP3 PARTIAL status cell not found in PRODUCT_CONTRACT.md"
+    assert replaced, "TP3 WORKS status cell not found in PRODUCT_CONTRACT.md"
     broken_text = "".join(broken_lines)
     assert _contract_status_by_id(broken_text)["TP3"] == "FABRICATED"
 
@@ -100,7 +98,7 @@ def test_pre_1962_tp3_fabricated_fails_against_partial_probe(
     contract_path.parent.mkdir()
     contract_path.write_text(broken_text, encoding="utf-8")
     monkeypatch.setattr(verifier, "REPO_ROOT", tmp_path)
-    probe = {f"TP{i}": "WORKS" if i in {1, 2, 5, 6} else "PARTIAL" for i in range(1, 8)}
+    probe = {f"TP{i}": "WORKS" if i in {1, 2, 3, 5, 6} else "PARTIAL" for i in range(1, 8)}
     monkeypatch.setattr(
         verifier,
         "run_contract_report",
@@ -110,7 +108,7 @@ def test_pre_1962_tp3_fabricated_fails_against_partial_probe(
     with pytest.raises(AssertionError) as failure:
         test_product_contract_status_column_matches_offline_probe()
 
-    assert str({"TP3": {"documented": "FABRICATED", "probe": "PARTIAL"}}) in str(failure.value)
+    assert str({"TP3": {"documented": "FABRICATED", "probe": "WORKS"}}) in str(failure.value)
 
 
 @pytest.mark.parametrize(
