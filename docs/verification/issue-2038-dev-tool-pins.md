@@ -97,3 +97,18 @@ make test
 | `docs/design-coverage-map.md` | documents `50992156…` |
 
 CI readback on head (GitHub Actions, round 5/12): **Cross-Repo Smoke / cross-repo-full-product** and **Python CI / python 3.14** pass (run `43943342466`); **Gate** pass.
+
+Keepalive round 6 (2026-11-16, commit `5dcd5427`): local PR-head parity before push:
+
+```sh
+python -m ruff check --select E4,E7,E9,F --extend-exclude .workflows-lib .
+python -m mypy --config-file pyproject.toml --exclude .workflows-lib .
+make test
+python -m pytest tests/test_ci_python_standard.py tests/scripts/test_cross_repo_smoke_workflow.py tests/scripts/test_cross_repo_dev_pins.py -q -m "not slow"
+```
+
+- Ruff (CI select set): pass
+- mypy (reusable Python CI args): pass (`493` source files after dropping stale `build/`)
+- `make test`: **3023 passed**, 6 skipped (~4m52s)
+- Pin/smoke proxy suite: **157 passed**, 2 skipped
+- New guard: `test_mypy_matches_reusable_python_ci` encodes the hosted typecheck command beside `test_ruff_check_matches_reusable_python_ci_when_ruff_omitted`
