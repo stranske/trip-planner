@@ -462,4 +462,5 @@ def test_unallocated_category_spend_counts_in_actual_total(client: TestClient) -
     )
     assert lodging_row["planned_amount"] == 0
     assert lodging_row["actual_amount"] == 50
+    assert lodging_row["remaining_amount"] == -50
     assert lodging_row["flexibility"] == "flexible"
