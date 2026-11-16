@@ -444,3 +444,19 @@ Sync-core rounds `20261116T103121Z` and `20261116T103215Z` both recorded
 sync owner need to deliver the compatible TPP checkout and regenerate #2037
 from the repaired base. Check Python 3.14 on the regenerated head and read
 back its subsequent sync-core classification.
+
+## Local keepalive round 9/12
+
+On 2026-11-16, `gh run view 43820524287 -R stranske/trip-planner --json headSha,conclusion,jobs`
+confirmed that Python 3.14 still fails on #2037 at `65b25b559ea6`. Consumer
+main still selects TPP `5c9ec6e15ac9`, whose Ruff 0.17.4 conflicts with
+#2037's Ruff 0.17.5. The focused two-file command above passed all 127 tests
+on #2039 against its exact TPP checkout `50992156e4a1`, with no skips. The
+full local suite was outside this round's scope. A1 remains open.
+
+The 10:43 UTC sync-core round `20261116T104345Z` still classified #2037 as
+`pin-conflict` with terminal state `pin-held`. A3 remains open. The latest
+successful Maint 52 run at check time, `43845488027`, did not include a
+trip-planner sync job. After the source repair lands, the owning sync lane
+needs to regenerate the target and verify Python 3.14 and the subsequent
+classification on the resulting head.
