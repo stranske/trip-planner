@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -102,10 +101,10 @@ def test_ruff_check_matches_reusable_python_ci_when_ruff_omitted() -> None:
 
 
 def test_mypy_matches_reusable_python_ci() -> None:
-    """Reusable Python CI runs mypy with pyproject config and .workflows-lib excluded."""
-    build_dir = ROOT / "build"
-    if build_dir.exists():
-        shutil.rmtree(build_dir)
+    """Reusable Python CI runs mypy with pyproject config and .workflows-lib excluded.
+
+    Local ``build/`` output is excluded rather than deleted so developer artifacts survive.
+    """
     completed = subprocess.run(
         [
             sys.executable,
@@ -114,7 +113,7 @@ def test_mypy_matches_reusable_python_ci() -> None:
             "--config-file",
             "pyproject.toml",
             "--exclude",
-            ".workflows-lib",
+            r"(^|/)(?:\.workflows-lib|build)(?:/|$)",
             ".",
         ],
         cwd=ROOT,
@@ -166,15 +165,3 @@ def test_cross_repo_full_product_offline_guards_match_pr_head() -> None:
         check=False,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
-
-
-def test_pr_head_python_ci_proxy_matches_reusable_workflow() -> None:
-    """Single keepalive entry: lint, typecheck, format, and cross-repo smoke offline proxies.
-
-    Full ``make test`` / hosted ``Python CI / python 3.14`` parity is enforced by reusable
-    workflow pytest; this bundles the fast local checks that must pass before trusting hosted CI.
-    """
-    test_ruff_check_matches_reusable_python_ci_when_ruff_omitted()
-    test_mypy_matches_reusable_python_ci()
-    test_black_format_matches_pre_commit_gate()
-    test_cross_repo_full_product_offline_guards_match_pr_head()
