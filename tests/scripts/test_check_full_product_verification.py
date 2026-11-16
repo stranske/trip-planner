@@ -556,6 +556,7 @@ def test_tp3_probe_price_pair_enters_distinct_component_totals(monkeypatch, part
     original = TestClient.request
     party_paths = set()
     price_puts = []
+    trip_frames = {}
 
     def control_response(self, method, url, **kwargs):
         if method.upper() == "PUT" and str(url).endswith("/prices"):
@@ -568,8 +569,10 @@ def test_tp3_probe_price_pair_enters_distinct_component_totals(monkeypatch, part
         response = original(self, method, url, **kwargs)
         if method.upper() == "POST" and str(url) == "/api/trips":
             frame = kwargs["json"]["trip_frame"]
+            trip = response.json()["trip"]
+            trip_frames[f"/api/workspace/{trip['trip_id']}/prices"] = trip["trip_frame"]
             if frame["traveler_party"]["traveler_count"] == 8:
-                trip_id = response.json()["trip"]["trip_id"]
+                trip_id = trip["trip_id"]
                 party_paths.add(f"/api/workspace/{trip_id}/scenarios/compare")
         return response
 
@@ -596,6 +599,17 @@ def test_tp3_probe_price_pair_enters_distinct_component_totals(monkeypatch, part
         (first_put["path"], {"component": "transport", "amount": 250.0, "currency": "USD"}),
         (second_put["path"], {"component": "transport", "amount": 700.0, "currency": "USD"}),
     ]
+    # Bind the price requests to persisted trips so a second changed determinant
+    # cannot masquerade as sensitivity to entered prices.
+    first_frame = trip_frames[first_put["path"]]
+    second_frame = trip_frames[second_put["path"]]
+    assert first_frame["origin"] == second_frame["origin"] == "Seattle"
+    assert first_frame["primary_regions"] == second_frame["primary_regions"] == ["Chicago"]
+    assert first_frame["traveler_party"] == second_frame["traveler_party"]
+    assert first_frame["traveler_party"]["traveler_count"] == 1
+    for field in ("start_date", "end_date", "duration_days"):
+        assert first_frame[field] is not None
+        assert first_frame[field] == second_frame[field]
 
     persisted_totals = [
         read["body"]["total"]["typical_amount"] for read in (first_read, second_read)
