@@ -151,3 +151,16 @@ python -m mypy --follow-imports=silent tests/scripts/test_cross_repo_dev_pins.py
 - Module ruff/mypy: pass.
 - A1 deliberate break (`trip-planner.toml` dev `ruff==0.17.4` temporary): **8 failed** in `-k issue-2038`; fixture restored to `0.17.5`; suite **112 passed** again.
 - CI readback on head: **Cross-Repo Smoke / cross-repo-full-product** and **Python CI / python 3.14** pass (workflow runs on `920a5f73`, e.g. `43958534552`).
+
+Keepalive round 9/12 (2026-11-16, parent `5cd31b78`): local acceptance after orchestrator `tests_skipped` (CI green on head):
+
+```sh
+python -m pytest tests/scripts/test_cross_repo_dev_pins.py -q
+python -m ruff check tests/scripts/test_cross_repo_dev_pins.py
+python -m mypy --follow-imports=silent tests/scripts/test_cross_repo_dev_pins.py
+```
+
+- Focused pin suite: **112 passed**, 2 skipped (~15s).
+- Module ruff/mypy: pass.
+- A1 deliberate break (`trip-planner.toml` dev `ruff==0.17.4` temporary): **8 failed** in `-k issue-2038`; fixture restored to `0.17.5`; suite **112 passed** again.
+- CI readback on head: **Cross-Repo Smoke / cross-repo-full-product** and **Python CI / python 3.14** pass (workflow runs on `5cd31b78`, e.g. `43961295146`).
