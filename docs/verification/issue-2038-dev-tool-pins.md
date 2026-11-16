@@ -426,3 +426,21 @@ read-only Git metadata mount. The test and verification changes remain in
 the workspace for the existing branch's next writable run. The blocker
 comment and `needs-human` label were rejected because the GitHub tools require
 approval and this run's approval policy is `never`; neither update was applied.
+
+## Local keepalive round 8/12
+
+On 2026-11-16, `gh run view 43820524287 -R stranske/trip-planner --json headSha,conclusion,jobs`
+confirmed that `Python CI / python 3.14` still fails on the current #2037 head
+`65b25b559ea631d494e3dcfd624fb0126b098bbf`. The job log reports six failed pin
+tests, including trip-planner's Ruff 0.17.5 conflicting with TPP's Ruff 0.17.4.
+The focused two-file command from round 3 passed all 127 tests on the #2039
+code at `a68e500e1c3a` with the exact TPP checkout
+`50992156e4a1f97c1115b6c7af84a219a3b9aae7`. The full local suite was outside
+this round's scope. A1 remains open.
+
+Sync-core rounds `20261116T103121Z` and `20261116T103215Z` both recorded
+`pin-conflict` and `pin-held` for #2037. A3 remains open. Consumer main at
+`f58ed586e27c` still selects TPP `5c9ec6e15ac9`. The pin writer and Maint 52
+sync owner need to deliver the compatible TPP checkout and regenerate #2037
+from the repaired base. Check Python 3.14 on the regenerated head and read
+back its subsequent sync-core classification.
