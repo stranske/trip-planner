@@ -26,6 +26,7 @@ frontend/.env.*.local
 .DS_Store
 
 # JavaScript dependencies — never track node_modules; use npm ci to install.
+build/
 dist/
 *.tsbuildinfo
 
