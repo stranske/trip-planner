@@ -125,6 +125,28 @@ def test_mypy_matches_reusable_python_ci() -> None:
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
+def test_black_format_matches_pre_commit_gate() -> None:
+    """Keepalive and pre-commit Black gate: line length 100, exclude workflows-lib and node_modules."""
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "black",
+            "--check",
+            "--line-length",
+            "100",
+            "--exclude",
+            r"(\.workflows-lib|node_modules)",
+            ".",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
 def test_cross_repo_full_product_offline_guards_match_pr_head() -> None:
     """Cross-repo smoke job pin/runtime checks must pass offline before hosted CI is trusted."""
     completed = subprocess.run(
