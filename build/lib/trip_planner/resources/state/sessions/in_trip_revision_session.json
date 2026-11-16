@@ -1,0 +1,116 @@
+{
+  "session": {
+    "session_state_id": "session-state:kyoto-rainy-day",
+    "trip_id": "trip-leisure-kyoto-live",
+    "user_id": "user:leisure-kyoto",
+    "owner_profile_id": "traveler-profile:kyoto-primary",
+    "mode": "leisure",
+    "started_at": "2026-04-02T06:40:00Z",
+    "updated_at": "2026-04-02T11:20:00Z",
+    "interaction_state": {
+      "interaction_style": "guided",
+      "initiative_level": "planner_first",
+      "checkpoint_frequency": "turn",
+      "option_preview_timing": "immediate",
+      "summary_granularity": "brief",
+      "auto_advance_research_passes": 0,
+      "ask_before_major_change": false,
+      "notes": [
+        "Weather-triggered in-trip replanning should move quickly."
+      ]
+    },
+    "recent_option_presentations": [
+      {
+        "presentation_id": "presentation:rainy-day-v1",
+        "option_set_id": "option-set:rainy-day-v1",
+        "shown_at": "2026-04-02T11:05:00Z",
+        "surface_kind": "in_trip_update",
+        "surfaced_option_ids": [
+          "option:indoor-museum",
+          "option:tea-house"
+        ],
+        "highlighted_option_id": "option:indoor-museum",
+        "selected_option_id": "option:indoor-museum",
+        "summary": "Presented indoor fallback options after weather degraded."
+      }
+    ],
+    "pending_decisions": [
+      {
+        "decision_id": "decision:move-temple-visit",
+        "title": "Reorder afternoon route",
+        "prompt": "Should the temple visit move to tomorrow and the museum happen today?",
+        "created_at": "2026-04-02T11:08:00Z",
+        "choices": [
+          "reorder route",
+          "keep original route"
+        ],
+        "selected_choice": "reorder route",
+        "blocking": false,
+        "related_option_set_id": "option-set:rainy-day-v1",
+        "related_saved_scenario_id": "saved-scenario:kyoto-rainy-day",
+        "notes": [
+          "Recorded after the user accepted the indoor swap."
+        ]
+      }
+    ],
+    "status": "active",
+    "current_checkpoint_id": "checkpoint:rainy-day-1100",
+    "current_saved_scenario_id": "saved-scenario:kyoto-rainy-day",
+    "active_budget_plan_id": "budget-plan:kyoto-spring",
+    "activity_log_id": "activity-log:kyoto-live",
+    "tags": [
+      "in-trip",
+      "weather"
+    ],
+    "notes": [
+      "Live session tracking a weather-driven revision."
+    ]
+  },
+  "events": [
+    {
+      "activity_event_id": "activity:rainy-day-save",
+      "trip_id": "trip-leisure-kyoto-live",
+      "session_state_id": "session-state:kyoto-rainy-day",
+      "occurred_at": "2026-04-02T11:10:00Z",
+      "event_kind": "scenario_saved",
+      "summary": "Saved the rainy-day fallback scenario.",
+      "actor": "planner",
+      "saved_scenario_id": "saved-scenario:kyoto-rainy-day",
+      "checkpoint_id": "checkpoint:rainy-day-1100",
+      "metadata": {
+        "label": "in_trip_revision"
+      },
+      "tags": [
+        "in-trip"
+      ]
+    },
+    {
+      "activity_event_id": "activity:rainy-day-budget",
+      "trip_id": "trip-leisure-kyoto-live",
+      "session_state_id": "session-state:kyoto-rainy-day",
+      "occurred_at": "2026-04-02T11:14:00Z",
+      "event_kind": "budget_updated",
+      "summary": "Shifted activity spend toward indoor alternatives.",
+      "actor": "planner",
+      "budget_plan_id": "budget-plan:kyoto-spring",
+      "scenario_budget_id": "budget-scenario:kyoto-rainy-day",
+      "metadata": {
+        "changed_category": "activities"
+      }
+    },
+    {
+      "activity_event_id": "activity:rainy-day-change-request",
+      "trip_id": "trip-leisure-kyoto-live",
+      "session_state_id": "session-state:kyoto-rainy-day",
+      "occurred_at": "2026-04-02T11:18:00Z",
+      "event_kind": "in_trip_change_requested",
+      "summary": "Recorded the weather-driven change request for the live itinerary.",
+      "actor": "user",
+      "related_decision_id": "decision:move-temple-visit",
+      "related_option_set_id": "option-set:rainy-day-v1",
+      "metadata": {
+        "trigger": "heavy_rain"
+      }
+    }
+  ]
+}

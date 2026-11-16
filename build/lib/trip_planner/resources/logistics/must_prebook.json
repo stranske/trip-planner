@@ -1,0 +1,97 @@
+{
+  "schema_version": "0.1.0",
+  "patterns": [
+    {
+      "id": "rail-glacier-express-seat",
+      "scope": "transport",
+      "item": "Glacier Express seat reservation",
+      "match_terms": ["glacier express", "zermatt st moritz", "st moritz zermatt"],
+      "modes": ["rail", "train"],
+      "why": "Panoramic rail tickets do not replace the mandatory seat reservation, and popular departures can sell out.",
+      "deadline_rule": "reserve weeks ahead for peak dates",
+      "confidence": "high",
+      "release_pattern": "scheduled",
+      "backup": "Use regional rail legs on the same corridor or shift to a less constrained departure."
+    },
+    {
+      "id": "rail-bernina-express-seat",
+      "scope": "transport",
+      "item": "Bernina Express seat reservation",
+      "match_terms": ["bernina express", "tirano chur", "chur tirano"],
+      "modes": ["rail", "train"],
+      "why": "Panoramic-car seats require a separate reservation from the rail ticket.",
+      "deadline_rule": "reserve weeks ahead for peak dates",
+      "confidence": "high",
+      "release_pattern": "scheduled",
+      "backup": "Use regional trains over the Bernina route if panoramic seats are unavailable."
+    },
+    {
+      "id": "rail-eurostar-cross-channel",
+      "scope": "transport",
+      "item": "Eurostar cross-channel rail",
+      "match_terms": ["eurostar", "london paris", "paris london"],
+      "modes": ["rail", "train"],
+      "why": "International high-speed rail has capacity controls and better fares before close-in dates.",
+      "deadline_rule": "book as soon as the travel date is firm",
+      "confidence": "medium",
+      "release_pattern": "scheduled",
+      "backup": "Keep a flight or ferry routing as a timing fallback."
+    },
+    {
+      "id": "rail-paris-italy-high-speed",
+      "scope": "transport",
+      "item": "Paris-Italy high-speed rail",
+      "match_terms": ["paris milan", "paris italy", "tgv inoui italy", "frecciarossa paris"],
+      "modes": ["rail", "train"],
+      "why": "Cross-border high-speed seats can be capacity-limited and sell through before local legs.",
+      "deadline_rule": "book once route and date are stable",
+      "confidence": "medium",
+      "release_pattern": "scheduled",
+      "backup": "Break the route into domestic legs or compare a short-haul flight."
+    },
+    {
+      "id": "permit-inca-trail",
+      "scope": "poi",
+      "item": "Inca Trail permit",
+      "match_terms": ["inca trail", "machu picchu trek"],
+      "why": "Classic Inca Trail access is permit-limited and operator-managed; there is no ordinary late release to wait for.",
+      "deadline_rule": "secure with an authorized operator months ahead",
+      "confidence": "high",
+      "release_pattern": "none",
+      "backup": "Use an alternate Sacred Valley trek or a non-permit Machu Picchu visit plan."
+    },
+    {
+      "id": "sight-alhambra-nasrid",
+      "scope": "poi",
+      "item": "Alhambra Nasrid Palaces timed entry",
+      "match_terms": ["alhambra", "nasrid palace", "nasrid palaces"],
+      "why": "Nasrid Palaces entry is timed and often sells out separately from broader Granada planning.",
+      "deadline_rule": "reserve a timed palace slot weeks ahead",
+      "confidence": "high",
+      "release_pattern": "scheduled",
+      "backup": "Hold a Granada day with Generalife/Alcazaba focus or use a reputable guided slot if available."
+    },
+    {
+      "id": "sight-last-supper",
+      "scope": "poi",
+      "item": "The Last Supper timed ticket",
+      "match_terms": ["last supper", "cenacolo vinciano", "santa maria delle grazie"],
+      "why": "Small timed-entry inventory makes same-week availability unreliable.",
+      "deadline_rule": "reserve when ticket blocks open",
+      "confidence": "high",
+      "release_pattern": "scheduled",
+      "backup": "Use a Milan art itinerary that does not depend on Cenacolo entry."
+    },
+    {
+      "id": "permit-half-dome-lottery",
+      "scope": "poi",
+      "item": "Half Dome permit lottery",
+      "match_terms": ["half dome", "yosemite half dome"],
+      "why": "Cable access requires a permit lottery rather than a normal admission ticket.",
+      "deadline_rule": "enter the seasonal or daily lottery before committing the hike day",
+      "confidence": "high",
+      "release_pattern": "allotment",
+      "backup": "Plan a Yosemite hike day around Clouds Rest, Mist Trail, or Glacier Point instead."
+    }
+  ]
+}

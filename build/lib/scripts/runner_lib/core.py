@@ -1,0 +1,2631 @@
+"""Shared runner prompt, output parsing, and dispatch debounce utilities."""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import binascii
+import contextlib
+import dataclasses
+import datetime as dt
+import hashlib
+import importlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import uuid
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any, Protocol, TypeGuard
+
+from scripts.state_fingerprint import GitHubApi, _github_context
+
+MARKER_VERSION = "v1"
+MARKER_PREFIX = "runner-dispatch"
+COMPLETION_MARKER_PREFIX = "runner-completion"
+RESERVATION_MARKER_PREFIX = "runner-reservation"
+PROVIDERS = {"autofix", "claude", "codex", "cursor", "gemini", "muse"}
+# cursor, gemini and muse use the same plain-text (non-JSONL) prompt/parse path as claude.
+PROMPT_PROVIDERS = {"claude", "codex", "cursor", "gemini", "muse"}
+TERMINAL_STATUSES = {"completed", "error"}
+TASK_PROGRESS_SCHEMA = 1
+TASK_PROGRESS_FINGERPRINT_RE = re.compile(r"^[0-9a-f]{64}$")
+PENDING_STALE_AFTER_SECONDS = 30 * 60
+# A runner can exit 0 having produced nothing — the codex sandbox failing to initialize
+# (`bwrap: loopback: Failed RTM_NEWADDR`) reports itself as a SUCCESSFUL run with no commit.
+# Recording that as a terminal `completed` burned the (head_sha, provider) key, and the only
+# thing that clears the key is a new head commit, which only the agent being refused could
+# produce: clearing the gate required the action the gate forbade. This many re-dispatches are
+# granted on the same head after an unproductive completion (#3433). ONE constant, consumed by
+# both the refusal branch and the message it prints, so the two cannot drift apart.
+UNPRODUCTIVE_COMPLETION_RETRY_LIMIT = 2
+# What happens once those retries are spent. Refusing until the head changes would put the
+# ORIGINAL latch back one step further out: a new head commit can only come from the agent
+# being refused. So the allowance expires into a cooldown instead — a wait that time alone
+# clears, which the hourly keepalive sweep then wakes. Nothing the gate forbids is required
+# to open it.
+UNPRODUCTIVE_COMPLETION_COOLDOWN_SECONDS = 30 * 60
+TRUSTED_MARKER_AUTHORS = {
+    "chatgpt-codex-connector",
+    "chatgpt-codex-connector[bot]",
+    "github-actions[bot]",
+    "stranske",
+    "stranske-automation-bot",
+}
+TRUSTED_MARKER_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
+CAPABILITY_ID_RE = re.compile(r"^capability:(?=[a-z0-9-]{3,128}$)[a-z0-9]+(?:-[a-z0-9]+)*$")
+SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+EVIDENCE_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/#@-]{0,255}$")
+SECRET_LIKE_EVIDENCE_PREFIXES = ("ghp_", "github_pat_", "sk-")
+SECRET_LIKE_EVIDENCE_SEGMENT_RE = re.compile(
+    r"(?:^|[:/#@])(?:" + "|".join(SECRET_LIKE_EVIDENCE_PREFIXES) + r")",
+    re.IGNORECASE,
+)
+SUPERVISION_MODES = {
+    "shadow",
+    "human-reviewed",
+    "human-on-exception",
+    "unattended",
+}
+CAPABILITY_EVIDENCE_STATUSES = {"accepted", "rejected", "not-evaluated"}
+TERMINAL_DISPOSITIONS = {
+    "success",
+    "failure",
+    "no-change",
+    "blocked",
+    "cancelled",
+}
+
+
+@dataclasses.dataclass(frozen=True)
+class RunnerPrompt:
+    provider: str
+    file: str
+    text: str
+    reference_pack_name: str | None = None
+
+
+@dataclasses.dataclass(frozen=True)
+class RunnerResult:
+    provider: str
+    success: bool
+    final_message: str
+    summary: str
+    error: str | None = None
+    truncated: bool = False
+
+
+@dataclasses.dataclass(frozen=True)
+class DebounceDecision:
+    should_dispatch: bool
+    reason: str
+    key: str
+    prior_status: str | None = None
+    prior_head_sha: str | None = None
+    # What would clear this refusal. Runtime rule: a gate reports its blocking quantity AND its
+    # drainable quantity in the same place, so a refusal can never go silent about what would
+    # release it. Empty when nothing is being blocked.
+    drainable: str = ""
+
+
+def _validate_capability_effect_evidence_values(values: dict[str, str]) -> None:
+    non_strings = [name for name, value in values.items() if not isinstance(value, str)]
+    if non_strings:
+        raise ValueError(
+            "capability evidence fields must be strings; invalid " + ", ".join(non_strings)
+        )
+    if not any(values.values()):
+        return
+    missing = [name for name, value in values.items() if not value]
+    if missing:
+        raise ValueError(
+            "partial capability evidence is not allowed; missing " + ", ".join(missing)
+        )
+    if not CAPABILITY_ID_RE.fullmatch(values["capability_id"]):
+        raise ValueError("capability_id must match capability:<lowercase-kebab-id>")
+    if not SHA256_RE.fullmatch(values["effect_fingerprint"]):
+        raise ValueError("effect_fingerprint must be a lowercase sha256 digest")
+    artifact_ref = values["evidence_artifact_ref"]
+    if not EVIDENCE_REF_RE.fullmatch(artifact_ref):
+        raise ValueError("evidence_artifact_ref must be a bounded durable logical reference")
+    lowered_ref = artifact_ref.lower()
+    if SECRET_LIKE_EVIDENCE_SEGMENT_RE.search(artifact_ref):
+        raise ValueError("evidence_artifact_ref has a credential-like prefix")
+    if any(
+        marker in lowered_ref for marker in ("token", "secret", "password", "api-key", "apikey")
+    ):
+        raise ValueError("evidence_artifact_ref contains a secret-like marker")
+    if values["supervision_mode"] not in SUPERVISION_MODES:
+        raise ValueError("unsupported supervision_mode")
+    if values["capability_evidence_status"] not in CAPABILITY_EVIDENCE_STATUSES:
+        raise ValueError("unsupported capability_evidence_status")
+    if values["terminal_disposition"] not in TERMINAL_DISPOSITIONS:
+        raise ValueError("unsupported terminal_disposition")
+
+
+@dataclasses.dataclass(frozen=True)
+class CapabilityEffectEvidence:
+    """Bounded, provider-neutral evidence carried by a runner result.
+
+    Empty evidence is valid for backwards compatibility. Once any capability
+    field is present, the identity, effect fingerprint, durable artifact
+    reference, supervision mode, evidence status, and terminal disposition
+    must all be present and valid.
+    """
+
+    capability_id: str = ""
+    effect_fingerprint: str = ""
+    evidence_artifact_ref: str = ""
+    supervision_mode: str = ""
+    capability_evidence_status: str = ""
+    terminal_disposition: str = ""
+
+    def __post_init__(self) -> None:
+        _validate_capability_effect_evidence_values(
+            {
+                "capability_id": self.capability_id,
+                "effect_fingerprint": self.effect_fingerprint,
+                "evidence_artifact_ref": self.evidence_artifact_ref,
+                "supervision_mode": self.supervision_mode,
+                "capability_evidence_status": self.capability_evidence_status,
+                "terminal_disposition": self.terminal_disposition,
+            }
+        )
+
+    def github_outputs(self) -> dict[str, str]:
+        return {
+            "capability-id": self.capability_id,
+            "effect-fingerprint": self.effect_fingerprint,
+            "evidence-artifact-ref": self.evidence_artifact_ref,
+            "supervision-mode": self.supervision_mode,
+            "capability-evidence-status": self.capability_evidence_status,
+            "terminal-disposition": self.terminal_disposition,
+        }
+
+
+def normalize_capability_effect_evidence(
+    *,
+    capability_id: str = "",
+    effect_fingerprint: str = "",
+    evidence_artifact_ref: str = "",
+    supervision_mode: str = "",
+    capability_evidence_status: str = "",
+    terminal_disposition: str = "",
+) -> CapabilityEffectEvidence:
+    """Validate optional runner capability evidence without inferring from prose."""
+    values = {
+        "capability_id": str(capability_id or "").strip().lower(),
+        "effect_fingerprint": str(effect_fingerprint or "").strip().lower(),
+        "evidence_artifact_ref": str(evidence_artifact_ref or "").strip(),
+        "supervision_mode": str(supervision_mode or "").strip().lower(),
+        "capability_evidence_status": str(capability_evidence_status or "").strip().lower(),
+        "terminal_disposition": str(terminal_disposition or "").strip().lower(),
+    }
+    _validate_capability_effect_evidence_values(values)
+    return CapabilityEffectEvidence(**values)
+
+
+class RunnerDispatchStorage(Protocol):
+    def read_record(self, pr_number: int, provider: str) -> dict[str, Any] | None: ...
+
+    def write_record(self, pr_number: int, provider: str, record: dict[str, Any]) -> None: ...
+
+
+def _utc_now() -> str:
+    return dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _validate_provider(provider: str) -> str:
+    normalized = provider.strip().lower()
+    if normalized not in PROVIDERS:
+        raise ValueError(f"unsupported provider: {provider}")
+    return normalized
+
+
+def _resolve_child_path(root: Path, path: str | Path, *, description: str) -> Path:
+    root_resolved = root.resolve()
+    raw_path = Path(path)
+    candidate = raw_path if raw_path.is_absolute() else root_resolved / raw_path
+    candidate = candidate.resolve()
+    try:
+        candidate.relative_to(root_resolved)
+    except ValueError as exc:
+        raise ValueError(f"{description} must stay within {root_resolved}") from exc
+    return candidate
+
+
+def _resolve_reference_checkout_path(workspace_path: Path, checkout_path: str | Path) -> Path:
+    reference_root = (workspace_path / ".reference").resolve()
+    candidate = _resolve_child_path(
+        workspace_path,
+        checkout_path,
+        description="reference checkout path",
+    )
+    try:
+        candidate.relative_to(reference_root)
+    except ValueError as exc:
+        raise ValueError("reference checkout path must stay within .reference") from exc
+    if candidate == reference_root:
+        raise ValueError("reference checkout path must identify a child of .reference")
+    return candidate
+
+
+def _runner_key(pr_number: int, head_sha: str, provider: str) -> str:
+    payload = f"{provider}:{pr_number}:{head_sha}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _normalize_task_progress_snapshot(value: object) -> dict[str, Any] | None:
+    """Return a validated checklist snapshot, or None when progress is unmeasurable."""
+    if isinstance(value, str):
+        if not value.strip():
+            return None
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            return None
+    if not isinstance(value, dict) or value.get("schema") != TASK_PROGRESS_SCHEMA:
+        return None
+    total = value.get("total")
+    completed = value.get("completed")
+    fingerprint = value.get("fingerprint")
+    if (
+        not isinstance(total, int)
+        or isinstance(total, bool)
+        or not isinstance(completed, int)
+        or isinstance(completed, bool)
+        or total < 0
+        or completed < 0
+        or completed > total
+        or not isinstance(fingerprint, str)
+        or not TASK_PROGRESS_FINGERPRINT_RE.fullmatch(fingerprint)
+    ):
+        return None
+    return {
+        "schema": TASK_PROGRESS_SCHEMA,
+        "total": total,
+        "completed": completed,
+        "fingerprint": fingerprint,
+    }
+
+
+def _task_progress_before_from_record(record: dict[str, Any]) -> dict[str, Any] | None:
+    return _normalize_task_progress_snapshot(
+        {
+            "schema": record.get("task_progress_schema"),
+            "total": record.get("tasks_total_before"),
+            "completed": record.get("tasks_completed_before"),
+            "fingerprint": record.get("task_set_fingerprint_before"),
+        }
+    )
+
+
+def _task_progress_record_fields(snapshot: dict[str, Any] | None, *, suffix: str) -> dict[str, Any]:
+    if snapshot is None:
+        return {}
+    return {
+        "task_progress_schema": TASK_PROGRESS_SCHEMA,
+        f"tasks_total_{suffix}": snapshot["total"],
+        f"tasks_completed_{suffix}": snapshot["completed"],
+        f"task_set_fingerprint_{suffix}": snapshot["fingerprint"],
+    }
+
+
+def _read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"{path} must be valid UTF-8") from exc
+
+
+def _provider_instruction_path(workspace: Path, provider: str) -> Path:
+    if provider == "codex":
+        return workspace / ".github" / "codex" / "AGENT_INSTRUCTIONS.md"
+    return workspace / ".github" / "claude" / "AGENT_INSTRUCTIONS.md"
+
+
+def _repository_guidance_path(workspace: Path) -> Path:
+    return workspace / "AGENTS.md"
+
+
+def _prompt_output_name(provider: str, pr_number: str | int | None) -> str:
+    suffix = f"-{pr_number}" if pr_number not in (None, "") else ""
+    return f"{provider}-prompt{suffix}.md"
+
+
+def _load_reference_packs_module() -> Any:
+    try:
+        return importlib.import_module("scripts.reference_packs")
+    except ModuleNotFoundError as exc:
+        if exc.name == "scripts.reference_packs":
+            raise RuntimeError(
+                "reference packs are not supported in this repository because "
+                "scripts/reference_packs.py was not synced"
+            ) from exc
+        raise
+
+
+def _load_orchestrator_skill_module() -> Any:
+    try:
+        return importlib.import_module("scripts.orchestrator_skill")
+    except ModuleNotFoundError as exc:
+        if exc.name == "scripts.orchestrator_skill":
+            raise RuntimeError(
+                "orchestrator skill context is not supported in this repository because "
+                "scripts/orchestrator_skill.py was not synced"
+            ) from exc
+        raise
+
+
+def _run_git(args: list[str], env: dict[str, str] | None = None) -> None:
+    try:
+        subprocess.check_call(
+            args,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=env,
+        )
+    except subprocess.CalledProcessError as exc:
+        redacted = ["<redacted>" if "x-access-token:" in part else part for part in args]
+        raise RuntimeError(
+            f"git command failed with exit code {exc.returncode}: {' '.join(redacted)}"
+        ) from exc
+
+
+def materialize_reference_packs(
+    workspace: str | Path = ".",
+    reference_pack_name: str | None = None,
+    token: str | None = None,
+) -> Path | None:
+    """Validate and materialize configured reference packs into `.reference/`."""
+    reference_packs = _load_reference_packs_module()
+    workspace_path = Path(workspace).resolve()
+    snapshot = reference_packs.load_reference_packs(workspace_path)
+    if not snapshot.exists:
+        return None
+
+    plans = reference_packs.build_checkout_plan(snapshot.packs)
+    if reference_pack_name:
+        plans = [plan for plan in plans if plan.name == reference_pack_name]
+        if not plans:
+            raise ValueError(f"reference pack not found: {reference_pack_name}")
+
+    reference_dir = workspace_path / ".reference"
+    reference_dir.mkdir(exist_ok=True)
+
+    for plan in plans:
+        clone_parent = Path(tempfile.mkdtemp(prefix=f"ref-pack-{plan.name}-"))
+        clone_dir = clone_parent / "repo"
+        askpass_path = clone_parent / "git-askpass.sh"
+        git_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+        if token:
+            askpass_path.write_text(
+                "#!/bin/sh\n"
+                'case "$1" in\n'
+                "  *Username*) printf '%s\\n' \"${GIT_ASKPASS_USERNAME:-x-access-token}\" ;;\n"
+                "  *) printf '%s\\n' \"$GIT_ASKPASS_PASSWORD\" ;;\n"
+                "esac\n",
+                encoding="utf-8",
+            )
+            askpass_path.chmod(0o700)
+            git_env.update(
+                {
+                    "GIT_ASKPASS": str(askpass_path),
+                    "GIT_ASKPASS_USERNAME": "x-access-token",
+                    "GIT_ASKPASS_PASSWORD": token,
+                }
+            )
+
+        clone_url = f"https://github.com/{plan.repo}.git"
+        clone_cmd = ["git", "clone", "--depth=1", "--filter=blob:none", "--sparse"]
+        is_sha = bool(re.fullmatch(r"[0-9a-fA-F]{40}", plan.ref))
+        if not is_sha:
+            clone_cmd.extend(["--branch", plan.ref])
+        clone_cmd.extend([clone_url, str(clone_dir)])
+        try:
+            _run_git(clone_cmd, env=git_env)
+
+            if is_sha:
+                _run_git(
+                    ["git", "-C", str(clone_dir), "fetch", "origin", plan.ref, "--depth=1"],
+                    env=git_env,
+                )
+                _run_git(["git", "-C", str(clone_dir), "checkout", plan.ref], env=git_env)
+
+            _run_git(
+                [
+                    "git",
+                    "-C",
+                    str(clone_dir),
+                    "sparse-checkout",
+                    "set",
+                    "--no-cone",
+                    *plan.paths,
+                ],
+                env=git_env,
+            )
+            _run_git(["git", "-C", str(clone_dir), "sparse-checkout", "reapply"], env=git_env)
+
+            checkout_path = workspace_path / plan.checkout_path
+            checkout_path.mkdir(parents=True, exist_ok=True)
+            for rel_path in plan.paths:
+                src = clone_dir / rel_path
+                dst = checkout_path / rel_path
+                if src.is_dir():
+                    shutil.copytree(src, dst, dirs_exist_ok=True)
+                elif src.is_file():
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src, dst)
+                else:
+                    print(
+                        f"warning: path '{rel_path}' not found in {plan.repo}@{plan.ref}",
+                        file=sys.stderr,
+                    )
+        finally:
+            shutil.rmtree(clone_parent, ignore_errors=True)
+
+    summary_path = reference_dir / "REFERENCE_PACKS.md"
+    with summary_path.open("w", encoding="utf-8") as handle:
+        for plan in plans:
+            checkout_path = workspace_path / plan.checkout_path
+            handle.write(f"## {plan.name}\n")
+            handle.write(f"- **Repo:** `{plan.repo}`\n")
+            handle.write(f"- **Ref:** `{plan.ref}`\n")
+            handle.write(f"- **Paths:** {', '.join(f'`{path}`' for path in plan.paths)}\n")
+            handle.write(f"- **Location:** `{plan.checkout_path}/`\n\n")
+            handle.write("### Contents\n")
+            for path in sorted(item for item in checkout_path.rglob("*") if item.is_file()):
+                handle.write(f"- `{path.relative_to(checkout_path)}`\n")
+            handle.write("\n")
+    return summary_path
+
+
+def _materialize_single_checkout_plan(
+    workspace_path: Path,
+    *,
+    repo: str,
+    ref: str,
+    paths: list[str],
+    checkout_path: str,
+    token: str | None,
+) -> Path:
+    clone_parent = Path(tempfile.mkdtemp(prefix="orchestrator-skill-"))
+    clone_dir = clone_parent / "repo"
+    askpass_path = clone_parent / "git-askpass.sh"
+    git_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    if token:
+        askpass_path.write_text(
+            "#!/bin/sh\n"
+            'case "$1" in\n'
+            "  *Username*) printf '%s\\n' \"${GIT_ASKPASS_USERNAME:-x-access-token}\" ;;\n"
+            "  *) printf '%s\\n' \"$GIT_ASKPASS_PASSWORD\" ;;\n"
+            "esac\n",
+            encoding="utf-8",
+        )
+        askpass_path.chmod(0o700)
+        git_env.update(
+            {
+                "GIT_ASKPASS": str(askpass_path),
+                "GIT_ASKPASS_USERNAME": "x-access-token",
+                "GIT_ASKPASS_PASSWORD": token,
+            }
+        )
+
+    clone_url = f"https://github.com/{repo}.git"
+    clone_cmd = ["git", "clone", "--depth=1", "--filter=blob:none", "--sparse"]
+    is_sha = bool(re.fullmatch(r"[0-9a-fA-F]{40}", ref))
+    if not is_sha:
+        clone_cmd.extend(["--branch", ref])
+    clone_cmd.extend([clone_url, str(clone_dir)])
+    try:
+        _run_git(clone_cmd, env=git_env)
+
+        if is_sha:
+            _run_git(
+                ["git", "-C", str(clone_dir), "fetch", "origin", ref, "--depth=1"],
+                env=git_env,
+            )
+            _run_git(["git", "-C", str(clone_dir), "checkout", ref], env=git_env)
+
+        _run_git(
+            [
+                "git",
+                "-C",
+                str(clone_dir),
+                "sparse-checkout",
+                "set",
+                "--no-cone",
+                *paths,
+            ],
+            env=git_env,
+        )
+        _run_git(["git", "-C", str(clone_dir), "sparse-checkout", "reapply"], env=git_env)
+
+        destination_root = _resolve_reference_checkout_path(workspace_path, checkout_path)
+        if destination_root.exists():
+            shutil.rmtree(destination_root)
+        destination_root.mkdir(parents=True, exist_ok=True)
+        for rel_path in paths:
+            src = clone_dir / rel_path
+            dst = destination_root / rel_path
+            if src.is_dir():
+                shutil.copytree(src, dst, dirs_exist_ok=True)
+            elif src.is_file():
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+            else:
+                print(
+                    f"warning: path '{rel_path}' not found in {repo}@{ref}",
+                    file=sys.stderr,
+                )
+    finally:
+        shutil.rmtree(clone_parent, ignore_errors=True)
+
+    return destination_root
+
+
+def materialize_orchestrator_skill(
+    workspace: str | Path = ".",
+    *,
+    pack_override: str | None = None,
+    enabled_override: bool | None = None,
+    token: str | None = None,
+) -> Path | None:
+    """Validate and materialize exported Orchestrator skill context into `.reference/`."""
+    orchestrator_skill = _load_orchestrator_skill_module()
+    workspace_path = Path(workspace).resolve()
+    plan = orchestrator_skill.resolve_orchestrator_skill_plan(
+        workspace_path,
+        pack_override=pack_override,
+        enabled_override=enabled_override,
+    )
+    if plan is None:
+        return None
+
+    if plan.pack:
+        reference_packs = _load_reference_packs_module()
+        snapshot = reference_packs.load_reference_packs(workspace_path)
+        matching = [
+            entry
+            for entry in reference_packs.build_checkout_plan(snapshot.packs)
+            if entry.name == plan.pack
+        ]
+        if not matching:
+            raise ValueError(f"orchestrator skill reference pack not found: {plan.pack}")
+        checkout_path = _resolve_reference_checkout_path(
+            workspace_path,
+            matching[0].checkout_path,
+        )
+        with contextlib.suppress(FileNotFoundError):
+            shutil.rmtree(checkout_path)
+        materialize_reference_packs(
+            workspace_path,
+            reference_pack_name=plan.pack,
+            token=token,
+        )
+    else:
+        checkout_path = _materialize_single_checkout_plan(
+            workspace_path,
+            repo=plan.repo,
+            ref=plan.ref,
+            paths=plan.paths,
+            checkout_path=plan.checkout_path,
+            token=token,
+        )
+
+    return orchestrator_skill.write_orchestrator_skill_summary(
+        workspace_path,
+        checkout_path,
+        pack_name=plan.pack,
+    )
+
+
+def assemble_prompt(
+    reference_pack_name: str | None, context: dict[str, Any], provider: str
+) -> RunnerPrompt:
+    """Assemble a provider-specific prompt from template, context, and references."""
+    provider = _validate_provider(provider)
+    if provider not in PROMPT_PROVIDERS:
+        raise ValueError(f"provider does not support prompt assembly: {provider}")
+    workspace = Path(str(context.get("workspace", "."))).resolve()
+    base_prompt_raw = context.get("base_prompt_file") or context.get("prompt_file")
+    if not base_prompt_raw:
+        raise ValueError("base_prompt_file is required")
+
+    base_prompt = workspace / str(base_prompt_raw)
+    if not base_prompt.is_file():
+        raise FileNotFoundError(f"base prompt file not found: {base_prompt}")
+
+    token = context.get("github_token") or context.get("token")
+    if context.get("materialize_reference_packs"):
+        materialize_reference_packs(
+            workspace,
+            reference_pack_name=reference_pack_name,
+            token=token,
+        )
+
+    if context.get("materialize_orchestrator_skill"):
+        orchestrator_summary_path = materialize_orchestrator_skill(
+            workspace,
+            pack_override=context.get("orchestrator_skill_pack") or None,
+            enabled_override=context.get("orchestrator_skill_enabled"),
+            token=token,
+        )
+    else:
+        orchestrator_summary_raw = context.get("orchestrator_skill_summary_path")
+        orchestrator_summary_path = (
+            Path(str(orchestrator_summary_raw)) if orchestrator_summary_raw else None
+        )
+        if orchestrator_summary_path:
+            orchestrator_summary_path = _resolve_child_path(
+                workspace,
+                orchestrator_summary_path,
+                description="orchestrator_skill_summary_path",
+            )
+
+    output_file = str(
+        context.get("output_file") or _prompt_output_name(provider, context.get("pr_number"))
+    )
+    output_path = workspace / output_file
+
+    parts: list[str] = []
+    instructions = _provider_instruction_path(workspace, provider)
+    if instructions.is_file():
+        parts.extend([_read_text(instructions).rstrip(), "\n---\n\n## Task Prompt\n"])
+    parts.append(_read_text(base_prompt).rstrip())
+
+    appendix = str(context.get("appendix") or "")
+    mode = str(context.get("mode") or "")
+    task_appendix_file = context.get("task_appendix_file")
+    if mode == "keepalive" and task_appendix_file:
+        task_path = Path(str(task_appendix_file))
+        if not task_path.is_absolute():
+            task_path = workspace / task_path
+        if task_path.is_file() and task_path.stat().st_size > 0:
+            appendix = _read_text(task_path)
+
+    if appendix:
+        parts.extend(["\n\n## Run context\n", appendix.rstrip()])
+
+    repository_guidance = _repository_guidance_path(workspace)
+    if repository_guidance.is_file():
+        parts.extend(["\n\n## Repository Guidance\n", _read_text(repository_guidance).rstrip()])
+
+    reference_summary = workspace / ".reference" / "REFERENCE_PACKS.md"
+    if reference_summary.is_file():
+        parts.extend(["\n\n## Reference Packs\n", _read_text(reference_summary).rstrip()])
+
+    if orchestrator_summary_path and orchestrator_summary_path.is_file():
+        parts.extend(
+            [
+                "\n\n## Orchestrator Skill Context\n",
+                _read_text(orchestrator_summary_path).rstrip(),
+            ]
+        )
+
+    text = "".join(parts).rstrip() + "\n"
+    correction_file = context.get("correction_context_file")
+    if correction_file:
+        # The workflow's native artifact preflight supplies this required file.
+        # Missing/truncated material cannot inherit optional appendix behavior.
+        from scripts.langchain.issue_pr_context import (
+            ContextOptions,
+            render_correction_context,
+            require_complete_correction_prompt,
+            select_correction_budget,
+        )
+
+        correction = json.loads(Path(str(correction_file)).read_text(encoding="utf-8"))
+        budget = str(context.get("correction_token_budget") or "")
+        if not budget.isdigit() or int(budget) <= 0:
+            raise ValueError(
+                "correction_budget_unconfigured: final coding lane requires an explicit selected ISSUE_PR_CONTEXT_TOKEN_BUDGET"
+            )
+        original = correction.get("original_issue_body")
+        if not isinstance(original, str):
+            raise ValueError(
+                "correction_original_scope_missing: native incumbent body is mandatory"
+            )
+        text += (
+            "\n## Complete original issue scope\n"
+            + original
+            + render_correction_context(correction)
+            + "\n"
+        )
+        text = require_complete_correction_prompt(
+            text, ContextOptions(token_budget=select_correction_budget(correction, budget))
+        )
+    output_path.write_text(text, encoding="utf-8")
+    return RunnerPrompt(
+        provider=provider,
+        file=output_file,
+        text=text,
+        reference_pack_name=reference_pack_name,
+    )
+
+
+def _extract_text_from_json_event(event: dict[str, Any]) -> str | None:
+    for key in ("message", "text", "output", "final_message"):
+        value = event.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    content = event.get("content")
+    if isinstance(content, str) and content.strip():
+        return content.strip()
+    if isinstance(content, list):
+        chunks = [
+            item.get("text", "")
+            for item in content
+            if isinstance(item, dict) and isinstance(item.get("text"), str)
+        ]
+        text = "\n".join(chunk for chunk in chunks if chunk.strip())
+        if text.strip():
+            return text.strip()
+    return None
+
+
+def _parse_jsonl_output(raw_output: str) -> tuple[list[str], list[str]]:
+    messages: list[str] = []
+    errors: list[str] = []
+    parsed_any = False
+    for line in raw_output.splitlines():
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        parsed_any = True
+        event_type = str(event.get("type") or event.get("status") or "").lower()
+        text = _extract_text_from_json_event(event)
+        if "error" in event_type or event.get("error"):
+            error_value = event.get("error")
+            nested_error = (
+                _extract_text_from_json_event(error_value)
+                if isinstance(error_value, dict)
+                else None
+            )
+            direct_error = error_value.strip() if isinstance(error_value, str) else None
+            errors.append(direct_error or nested_error or text or json.dumps(event, sort_keys=True))
+        elif text:
+            messages.append(text)
+    if not parsed_any:
+        return [], []
+    return messages, errors
+
+
+def parse_runner_output(provider: str, raw_output: str) -> RunnerResult:
+    """Parse raw Codex/Claude output into a common result shape."""
+    provider = _validate_provider(provider)
+    if provider not in PROMPT_PROVIDERS:
+        raise ValueError(f"provider does not support output parsing: {provider}")
+    raw = raw_output or ""
+    truncated = len(raw) > 64000 or bool(re.search(r"\btruncated\b", raw, re.IGNORECASE))
+    clipped = raw[:64000] if len(raw) > 64000 else raw
+
+    messages, errors = _parse_jsonl_output(clipped) if provider == "codex" else ([], [])
+    final_message = errors[0] if errors else (messages[-1] if messages else clipped.strip())
+
+    if not errors and re.search(
+        r"(^::error::|\bTraceback\b|\bError:|\bException\b)",
+        clipped,
+        re.MULTILINE,
+    ):
+        first = next(
+            (
+                line.strip()
+                for line in clipped.splitlines()
+                if re.search(r"^::error::|\bTraceback\b|\bError:|\bException\b", line)
+            ),
+            "",
+        )
+        errors.append(first or "runner output indicates an error")
+
+    if not final_message:
+        final_message = "No output captured"
+
+    summary = re.sub(r"\s+", " ", final_message).strip()[:500] or "No output captured"
+    return RunnerResult(
+        provider=provider,
+        success=not errors,
+        final_message=final_message,
+        summary=summary,
+        error=errors[0] if errors else None,
+        truncated=truncated,
+    )
+
+
+_CODEX_HEADER_MODEL_RE = re.compile(r"^\s*model:\s*(\S+)\s*$", re.MULTILINE)
+
+
+def _json_lines(raw_output: str) -> Iterator[dict[str, Any]]:
+    for line in raw_output.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(event, dict):
+            yield event
+
+
+def _codex_reported_model(raw_output: str) -> str:
+    """Last model codex recorded for a turn.
+
+    Sources, all written by the codex CLI itself: the rollout file under
+    ``$CODEX_HOME/sessions`` (``turn_context`` events carry ``payload.model``), the legacy
+    ``--json`` config line (top-level ``model``), and the human session header (``model: <id>``).
+    The current ``codex exec --json`` event stream carries no model, so it yields "".
+    """
+    found = ""
+    for event in _json_lines(raw_output):
+        payload = event.get("payload")
+        if event.get("type") == "turn_context" and isinstance(payload, dict):
+            found = _model_id(payload.get("model")) or found
+        elif "model" in event and "type" not in event:
+            found = _model_id(event.get("model")) or found
+    if found:
+        return found
+    headers = [_model_id(match) for match in _CODEX_HEADER_MODEL_RE.findall(raw_output)]
+    headers = [model for model in headers if model]
+    return headers[-1] if headers else ""
+
+
+def _claude_reported_model(raw_output: str) -> str:
+    """Model of the last main-thread assistant message the claude CLI recorded.
+
+    Reads the session transcript (``~/.claude/projects/<cwd>/<session>.jsonl``) or
+    ``--output-format stream-json`` output. A ``--fallback-model`` switch therefore shows up as
+    the fallback model. Sub-agent (sidechain) turns and ``<synthetic>`` placeholder messages are
+    skipped; the ``system``/``init`` model is used only when no assistant message exists.
+    """
+    assistant = ""
+    init = ""
+    for event in _json_lines(raw_output):
+        event_type = event.get("type")
+        message = event.get("message")
+        if event_type == "assistant" and isinstance(message, dict):
+            if event.get("isSidechain") is True:
+                continue
+            assistant = _model_id(message.get("model")) or assistant
+        elif event_type == "system" and event.get("subtype") == "init":
+            init = _model_id(event.get("model")) or init
+    return assistant or init
+
+
+def extract_reported_model(provider: str, raw_output: str) -> str:
+    """Return the model the provider CLI says it ran on, or "" when its output does not say.
+
+    Never infers: cursor, gemini (agy) and muse print plain text with no model, so they yield "".
+    """
+    provider = _validate_provider(provider)
+    raw = raw_output or ""
+    if provider == "codex":
+        return _codex_reported_model(raw)
+    if provider == "claude":
+        return _claude_reported_model(raw)
+    return ""
+
+
+def _marker_re(
+    pr_number: int, provider: str, *, marker_prefix: str = MARKER_PREFIX
+) -> re.Pattern[str]:
+    return re.compile(
+        rf"<!--\s*{marker_prefix}:{provider}:{pr_number}:{MARKER_VERSION}\s+([\s\S]*?)\s*-->",
+        re.DOTALL,
+    )
+
+
+def _build_marker(
+    pr_number: int, provider: str, record: dict[str, Any], *, marker_prefix: str = MARKER_PREFIX
+) -> str:
+    payload = base64.b64encode(
+        json.dumps(record, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).decode("ascii")
+    return (
+        f"Runner dispatch state for {provider} on PR #{pr_number}. Do not edit.\n\n"
+        f"<!-- {marker_prefix}:{provider}:{pr_number}:{MARKER_VERSION} base64:{payload} -->"
+    )
+
+
+def _decode_record_candidate(candidate: str) -> str:
+    value = candidate.strip()
+    if value.startswith("base64:"):
+        return base64.b64decode(value.removeprefix("base64:"), validate=True).decode("utf-8")
+    return value
+
+
+def _marker_safe_text(value: Any, limit: int = 1000) -> str:
+    text = "" if value is None else str(value)
+    if len(text) > limit:
+        text = f"{text[:limit]}...[truncated {len(text) - limit} chars]"
+    return text.replace("-->", "--\\u003e")
+
+
+# A model id as a CLI accepts or reports it: gpt-6.1-sol, claude-opus-5-5, composer-2.5,
+# gemini-3-pro[1m], provider/model@rev. Anything else (prose, JSON, a multi-line blob) is not a
+# model id and is recorded as "" rather than stored in a receipt.
+MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@+\[\]-]{0,199}$")
+
+
+def _model_id(value: Any) -> str:
+    text = "" if value is None else str(value).strip()
+    return text if MODEL_ID_RE.fullmatch(text) else ""
+
+
+def _compact_runner_result_payload(result_payload: dict[str, Any]) -> dict[str, Any]:
+    final_message_value = result_payload.get("final_message")
+    final_message = "" if final_message_value is None else str(final_message_value)
+    compact: dict[str, Any] = {
+        "schema": "runner-result-summary/v1",
+        "provider": str(result_payload.get("provider") or ""),
+        "success": bool(result_payload.get("success")),
+        "summary": _marker_safe_text(result_payload.get("summary")),
+        "error": _marker_safe_text(result_payload.get("error")),
+        "truncated": bool(result_payload.get("truncated")),
+        # requested_model: what the runner asked the CLI for ("" = unpinned run).
+        # reported_model: what the CLI itself recorded it ran on ("" = not determinable).
+        # They differ when the CLI fell back; reported is never copied from requested.
+        "requested_model": _model_id(result_payload.get("requested_model")),
+        "reported_model": _model_id(result_payload.get("reported_model")),
+    }
+    if final_message:
+        compact["final_message_sha256"] = hashlib.sha256(final_message.encode("utf-8")).hexdigest()
+        compact["final_message_chars"] = len(final_message)
+    return compact
+
+
+def _extract_record(
+    value: str | None, pr_number: int, provider: str, *, marker_prefix: str = MARKER_PREFIX
+) -> dict[str, Any] | None:
+    if not value:
+        return None
+    candidates: list[str] = []
+    match = _marker_re(pr_number, provider, marker_prefix=marker_prefix).search(value)
+    if match:
+        candidates.append(match.group(1))
+    stripped = value.strip()
+    if stripped.startswith("{"):
+        candidates.append(stripped)
+    for candidate in candidates:
+        try:
+            payload = json.loads(_decode_record_candidate(candidate))
+        except (binascii.Error, UnicodeDecodeError, ValueError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict) and payload.get("provider") == provider:
+            return payload
+    return None
+
+
+def _reservation_identity(record: dict[str, Any]) -> str:
+    identity = record.get("reservation_id")
+    if isinstance(identity, str) and identity:
+        return identity
+    # Legacy reservations remain readable without mutating their marker to migrate.
+    payload = json.dumps(record, sort_keys=True, separators=(",", ":"))
+    return "legacy:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _variable_name(pr_number: int, provider: str) -> str:
+    digest = hashlib.sha1(f"{provider}:{pr_number}".encode()).hexdigest()[:12]
+    return f"RUNNER_DISPATCH_{provider.upper()}_{pr_number}_{digest}"[:100]
+
+
+def _is_trusted_marker_comment(comment: dict[str, Any]) -> bool:
+    user = comment.get("user")
+    login = user.get("login") if isinstance(user, dict) else None
+    if isinstance(login, str) and login.strip().lower() in TRUSTED_MARKER_AUTHORS:
+        return True
+
+    association = str(comment.get("author_association") or "").upper()
+    if association in TRUSTED_MARKER_ASSOCIATIONS:
+        return True
+
+    # Unit tests and older fixture data omit author metadata.
+    return login is None and not association
+
+
+class PrCommentRunnerStorage:
+    def __init__(self, api: GitHubApi) -> None:
+        self.api = api
+
+    @classmethod
+    def from_environment(cls) -> PrCommentRunnerStorage:
+        repo, token = _github_context()
+        return cls(GitHubApi(repo, token))
+
+    def _iter_comments(self, pr_number: int, *, direction: str = "asc") -> Iterator[dict[str, Any]]:
+        # Offset pages can shift between calls if an ordinary comment is deleted,
+        # concealing an already-written reservation. Cursor pagination walks a
+        # stable boundary and reads only recent pages on a long-lived PR.
+        owner, repo = self.api.repo.split("/", 1)
+        descending = direction.strip().lower() == "desc"
+        window = "last:100,before:$cursor" if descending else "first:100,after:$cursor"
+        has_more = "hasPreviousPage" if descending else "hasNextPage"
+        next_cursor = "startCursor" if descending else "endCursor"
+        query = (
+            "query($owner:String!,$repo:String!,$pr:Int!,$cursor:String){"
+            "repository(owner:$owner,name:$repo){pullRequest(number:$pr){"
+            f"comments({window}){{nodes{{fullDatabaseId body author{{login __typename}} authorAssociation}}"
+            "pageInfo{hasPreviousPage startCursor hasNextPage endCursor}}}}}"
+        )
+        legacy_query = query.replace("fullDatabaseId ", "databaseId ")
+        cursor: str | None = None
+        seen: set[str] = set()
+        boundary_id: int | None = None
+        while True:
+            response = self.api.request(
+                "POST",
+                "/graphql",
+                {
+                    "query": query,
+                    "variables": {"owner": owner, "repo": repo, "pr": pr_number, "cursor": cursor},
+                },
+            )
+            if isinstance(response, dict) and response.get("errors") and query != legacy_query:
+                errors = response["errors"]
+                unsupported_full_id = (
+                    isinstance(errors, list)
+                    and bool(errors)
+                    and all(
+                        isinstance(error, dict)
+                        and "fullDatabaseId" in str(error.get("message") or "")
+                        and any(
+                            phrase in str(error.get("message") or "").lower()
+                            for phrase in ("doesn't exist", "cannot query field", "unknown field")
+                        )
+                        for error in errors
+                    )
+                )
+                if unsupported_full_id:
+                    query = legacy_query
+                    continue
+            if not isinstance(response, dict) or response.get("errors"):
+                raise RuntimeError(f"Cannot read runner comments for PR {pr_number}: GraphQL error")
+            try:
+                connection = response["data"]["repository"]["pullRequest"]["comments"]
+                nodes = connection["nodes"]
+                page_info = connection["pageInfo"]
+            except (KeyError, TypeError) as exc:
+                raise RuntimeError(f"Missing runner comments for PR {pr_number}") from exc
+            if not isinstance(nodes, list) or not isinstance(page_info, dict):
+                raise RuntimeError(f"Invalid runner comments for PR {pr_number}")
+            ids: list[int] = []
+            for node in nodes:
+                if not isinstance(node, dict):
+                    raise RuntimeError(f"Unstable runner comment cursor for PR {pr_number}")
+                raw_id = node.get("fullDatabaseId")
+                if raw_id is None:
+                    raw_id = node.get("databaseId")
+                if isinstance(raw_id, bool) or not (
+                    isinstance(raw_id, int)
+                    and raw_id > 0
+                    or isinstance(raw_id, str)
+                    and raw_id.isascii()
+                    and raw_id.isdecimal()
+                    and int(raw_id) > 0
+                ):
+                    raise RuntimeError(f"Unstable runner comment cursor for PR {pr_number}")
+                ids.append(int(raw_id))
+            if (
+                ids != sorted(set(ids))
+                or (
+                    boundary_id is not None
+                    and ids
+                    and (ids[-1] >= boundary_id if descending else ids[0] <= boundary_id)
+                )
+                or not isinstance(page_info.get(has_more), bool)
+            ):
+                raise RuntimeError(f"Unstable runner comment cursor for PR {pr_number}")
+            if ids:
+                boundary_id = ids[0] if descending else ids[-1]
+            ordered_nodes = (
+                zip(reversed(nodes), reversed(ids), strict=True)
+                if descending
+                else zip(nodes, ids, strict=True)
+            )
+            for node, comment_id in ordered_nodes:
+                author = node.get("author")
+                login = author.get("login") if isinstance(author, dict) else None
+                if (
+                    isinstance(author, dict)
+                    and author.get("__typename") == "Bot"
+                    and login == "github-actions"
+                ):
+                    login = "github-actions[bot]"
+                yield {
+                    "id": comment_id,
+                    "body": node.get("body"),
+                    "user": {"login": login} if isinstance(author, dict) else None,
+                    "author_association": node.get("authorAssociation"),
+                }
+            if not page_info.get(has_more):
+                return
+            following = page_info.get(next_cursor)
+            if not nodes or not isinstance(following, str) or not following or following in seen:
+                raise RuntimeError(f"Unstable runner comment cursor for PR {pr_number}")
+            seen.add(following)
+            cursor = following
+
+    def _find_comment(self, pr_number: int, provider: str) -> dict[str, Any] | None:
+        pattern = _marker_re(pr_number, provider)
+        for comment in self._iter_comments(pr_number, direction="desc"):
+            if not _is_trusted_marker_comment(comment):
+                continue
+            body = comment.get("body")
+            if isinstance(body, str) and pattern.search(body):
+                return comment
+        return None
+
+    def read_record(self, pr_number: int, provider: str) -> dict[str, Any] | None:
+        # Walk newest to oldest. All receipts for an immutable reservation are
+        # newer than it, so stop at the latest one instead of reading old history.
+        latest: tuple[int, dict[str, Any] | None] = (-1, None)
+        legacy: tuple[int, dict[str, Any] | None] = (-1, None)
+        receipts: dict[str, tuple[int, dict[str, Any]]] = {}
+        for comment in self._iter_comments(pr_number, direction="desc"):
+            if not _is_trusted_marker_comment(comment):
+                continue
+            body = comment.get("body")
+            if not isinstance(body, str):
+                continue
+            comment_id = int(comment.get("id") or 0)
+            if _marker_re(pr_number, provider, marker_prefix=RESERVATION_MARKER_PREFIX).search(
+                body
+            ):
+                if comment_id > latest[0]:
+                    latest = (
+                        comment_id,
+                        _extract_record(
+                            body, pr_number, provider, marker_prefix=RESERVATION_MARKER_PREFIX
+                        ),
+                    )
+                break
+            if _marker_re(pr_number, provider).search(body):
+                if comment_id > legacy[0]:
+                    legacy = (comment_id, _extract_record(body, pr_number, provider))
+                continue
+            if not _marker_re(pr_number, provider, marker_prefix=COMPLETION_MARKER_PREFIX).search(
+                body
+            ):
+                continue
+            receipt = _extract_record(
+                body, pr_number, provider, marker_prefix=COMPLETION_MARKER_PREFIX
+            )
+            if not receipt or receipt.get("schema") != "runner-completion-receipt/v1":
+                continue
+            identity = receipt.get("reservation_id")
+            record = receipt.get("record")
+            if (
+                not isinstance(identity, str)
+                or not isinstance(record, dict)
+                or record.get("provider") != provider
+                or record.get("pr_number") != pr_number
+                or record.get("status") not in TERMINAL_STATUSES
+                or record.get("reservation_id") != identity
+            ):
+                continue
+            if comment_id > receipts.get(identity, (-1, {}))[0]:
+                receipts[identity] = (comment_id, record)
+        # New reservations have their own immutable marker. A late legacy client
+        # can still PATCH/POST runner-dispatch, but cannot replace this authority.
+        reservation = latest[1] if latest[0] >= 0 else legacy[1]
+        if latest[0] >= 0 and (
+            reservation is None
+            or reservation.get("pr_number") != pr_number
+            or not isinstance(reservation.get("reservation_id"), str)
+            or not reservation.get("reservation_id")
+        ):
+            raise RuntimeError("Invalid authoritative runner reservation")
+        if reservation is None:
+            return None
+        matching_receipt = receipts.get(_reservation_identity(reservation))
+        return matching_receipt[1] if matching_receipt else reservation
+
+    def write_completion(
+        self, pr_number: int, provider: str, record: dict[str, Any], *, immutable: bool = False
+    ) -> bool:
+        # A completion racing a newer reservation can leave evidence for its old
+        # attempt, but cannot overwrite that newer pending owner.
+        receipt = {
+            "schema": "runner-completion-receipt/v1",
+            "provider": provider,
+            "reservation_id": record["reservation_id"],
+            "record": record,
+        }
+        body = _build_marker(pr_number, provider, receipt, marker_prefix=COMPLETION_MARKER_PREFIX)
+        # Retry the same attempt in-place. This bounds receipt growth without
+        # touching a newer reservation or losing the original receipt identity.
+        for comment in self._iter_comments(pr_number, direction="desc"):
+            if not _is_trusted_marker_comment(comment):
+                continue
+            comment_body = comment.get("body")
+            if not isinstance(comment_body, str):
+                continue
+            if _marker_re(pr_number, provider, marker_prefix=RESERVATION_MARKER_PREFIX).search(
+                comment_body
+            ):
+                if not immutable:
+                    break
+                reservation = _extract_record(
+                    comment_body, pr_number, provider, marker_prefix=RESERVATION_MARKER_PREFIX
+                )
+                if reservation and _reservation_identity(reservation) == record["reservation_id"]:
+                    break
+                continue
+            if not _marker_re(pr_number, provider, marker_prefix=COMPLETION_MARKER_PREFIX).search(
+                comment_body
+            ):
+                continue
+            existing = _extract_record(
+                comment_body,
+                pr_number,
+                provider,
+                marker_prefix=COMPLETION_MARKER_PREFIX,
+            )
+            if (
+                existing
+                and existing.get("schema") == "runner-completion-receipt/v1"
+                and existing.get("reservation_id") == record["reservation_id"]
+            ):
+                if existing == receipt or immutable:
+                    return False
+                self.api.request(
+                    "PATCH",
+                    f"/repos/{self.api.repo}/issues/comments/{comment['id']}",
+                    {"body": body},
+                )
+                return True
+        self.api.request(
+            "POST",
+            f"/repos/{self.api.repo}/issues/{pr_number}/comments",
+            {"body": body},
+        )
+        return True
+
+    def write_record(self, pr_number: int, provider: str, record: dict[str, Any]) -> None:
+        body = _build_marker(pr_number, provider, record, marker_prefix=RESERVATION_MARKER_PREFIX)
+        self.api.request(
+            "POST",
+            f"/repos/{self.api.repo}/issues/{pr_number}/comments",
+            {"body": body},
+        )
+
+
+class RepoVariableRunnerStorage:
+    def __init__(self, api: GitHubApi) -> None:
+        self.api = api
+
+    @classmethod
+    def from_environment(cls) -> RepoVariableRunnerStorage:
+        repo, token = _github_context()
+        return cls(GitHubApi(repo, token))
+
+    def read_record(
+        self, pr_number: int, provider: str, *, require_access: bool = False
+    ) -> dict[str, Any] | None:
+        name = _variable_name(pr_number, provider)
+        try:
+            payload = self.api.request("GET", f"/repos/{self.api.repo}/actions/variables/{name}")
+        except RuntimeError as exc:
+            message = str(exc)
+            # Explicit single-store callers retain their historical best-effort
+            # read. Migration checks must distinguish denied access from absence.
+            if " failed: 404 " in message or (
+                not require_access and (" failed: 401 " in message or " failed: 403 " in message)
+            ):
+                return None
+            raise
+        value = payload.get("value") if isinstance(payload, dict) else None
+        return _extract_record(value if isinstance(value, str) else None, pr_number, provider)
+
+    def write_record(self, pr_number: int, provider: str, record: dict[str, Any]) -> None:
+        name = _variable_name(pr_number, provider)
+        value = json.dumps(record, sort_keys=True, separators=(",", ":"))
+        try:
+            self.api.request(
+                "PATCH",
+                f"/repos/{self.api.repo}/actions/variables/{name}",
+                {"name": name, "value": value},
+            )
+        except RuntimeError as exc:
+            message = str(exc)
+            if " failed: 404 " in message:
+                try:
+                    self.api.request(
+                        "POST",
+                        f"/repos/{self.api.repo}/actions/variables",
+                        {"name": name, "value": value},
+                    )
+                except RuntimeError as create_exc:
+                    raise RuntimeError("Repository-variable creation failed.") from create_exc
+                return
+            # A denied write is not a persisted reservation or completion.
+            # Propagate failure rather than reporting successful progress.
+            raise RuntimeError("Repository-variable write failed.") from exc
+
+
+class FallbackRunnerStorage:
+    def __init__(self, primary: RunnerDispatchStorage, fallback: RunnerDispatchStorage) -> None:
+        self.primary = primary
+        self.fallback = fallback
+        self._use_fallback = False
+
+    def read_record(self, pr_number: int, provider: str) -> dict[str, Any] | None:
+        try:
+            record = self.primary.read_record(pr_number, provider)
+        except Exception as exc:
+            print(f"warning: runner dispatch primary storage unavailable: {exc}", file=sys.stderr)
+            self._use_fallback = True
+            return self.fallback.read_record(pr_number, provider)
+        if record is not None:
+            return record
+        return self.fallback.read_record(pr_number, provider)
+
+    def write_record(self, pr_number: int, provider: str, record: dict[str, Any]) -> None:
+        if not self._use_fallback:
+            try:
+                self.primary.write_record(pr_number, provider, record)
+                return
+            except Exception as exc:
+                print(f"warning: runner dispatch primary write failed: {exc}", file=sys.stderr)
+                self._use_fallback = True
+        self.fallback.write_record(pr_number, provider, record)
+
+
+def _storage_from_name(name: str) -> RunnerDispatchStorage:
+    if name == "pr-comment":
+        return PrCommentRunnerStorage.from_environment()
+    if name == "repo-variable":
+        return RepoVariableRunnerStorage.from_environment()
+    if name == "auto":
+        return FallbackRunnerStorage(
+            PrCommentRunnerStorage.from_environment(),
+            RepoVariableRunnerStorage.from_environment(),
+        )
+    raise ValueError(f"unsupported storage backend: {name}")
+
+
+def _parse_timestamp(value: Any) -> dt.datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    raw = value.strip()
+    if raw.endswith("Z"):
+        raw = f"{raw[:-1]}+00:00"
+    try:
+        parsed = dt.datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=dt.UTC)
+    return parsed.astimezone(dt.UTC)
+
+
+def _pending_record_is_stale(prior: dict[str, Any], *, now: dt.datetime | None = None) -> bool:
+    started_at = _parse_timestamp(prior.get("started_at"))
+    if started_at is None:
+        return True
+    current = now or dt.datetime.now(dt.UTC)
+    return (current - started_at).total_seconds() > PENDING_STALE_AFTER_SECONDS
+
+
+def _authority_pending_is_live(
+    prior: dict[str, Any] | None,
+) -> TypeGuard[dict[str, Any]]:
+    """Fail closed for an authority bypass when another dispatch may still own the slot."""
+    if not prior or str(prior.get("status") or "") != "pending":
+        return False
+    # Ordinary debounce historically treats an unparseable timestamp as stale so work can
+    # recover.  An authority challenge is a privileged bypass, however, and must not overwrite
+    # ownership that it cannot prove has expired.
+    if _parse_timestamp(prior.get("started_at")) is None:
+        return True
+    return not _pending_record_is_stale(prior)
+
+
+def _utc_now_dt() -> dt.datetime:
+    return dt.datetime.now(dt.UTC)
+
+
+def _unproductive_retry_available_at(prior: dict[str, Any] | None) -> dt.datetime | None:
+    """When the cooldown after spent retries expires, or None if it cannot be determined.
+
+    An unreadable or absent ``completed_at`` returns None, which the caller treats as "cooldown
+    cannot be measured, so let the dispatch through". Failing toward motion is the whole point:
+    a gate that cannot measure itself must not hold the loop shut on that basis.
+    """
+    if not prior:
+        return None
+    completed_at = _parse_timestamp(prior.get("completed_at"))
+    if completed_at is None:
+        return None
+    return completed_at + dt.timedelta(seconds=UNPRODUCTIVE_COMPLETION_COOLDOWN_SECONDS)
+
+
+def _completion_was_unproductive(prior: dict[str, Any] | None) -> bool:
+    """True only when a completion explicitly reported that it produced no work.
+
+    Absence of the field means the caller did not measure productivity, which must keep the
+    pre-#3433 behavior (treat the completion as terminal) rather than silently loosening the
+    debounce for every caller that has not been taught to report it.
+    """
+    return prior is not None and prior.get("productive") is False
+
+
+def _unproductive_completion_count(prior: dict[str, Any] | None) -> int:
+    if not prior:
+        return 0
+    try:
+        return int(prior.get("unproductive_completions") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _completion_needs_continuation(prior: dict[str, Any] | None) -> bool:
+    if not prior:
+        return False
+    if prior.get("completion_incomplete") is True:
+        return True
+    # Recover already-persisted partial observations from before this field existed.
+    total = prior.get("tasks_total_after")
+    completed = prior.get("tasks_completed_after")
+    return bool(
+        prior.get("observed_head_sha") == prior.get("head_sha")
+        and isinstance(total, int)
+        and not isinstance(total, bool)
+        and total > 0
+        and isinstance(completed, int)
+        and not isinstance(completed, bool)
+        and completed < total
+    )
+
+
+def _continuation_completion_count(prior: dict[str, Any] | None) -> int:
+    if not prior:
+        return 0
+    try:
+        return max(
+            0, int(prior.get("continuation_completions", _unproductive_completion_count(prior)))
+        )
+    except (TypeError, ValueError):
+        return _unproductive_completion_count(prior)
+
+
+def _workflow_attempt_id() -> str:
+    """Identify the reserving workflow attempt across its jobs, not just the PR head."""
+    repository = os.environ.get("GITHUB_REPOSITORY", "")
+    run_id = os.environ.get("GITHUB_RUN_ID", "")
+    attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "")
+    if repository and run_id and attempt:
+        return f"{repository}:{run_id}:{attempt}"
+    return ""
+
+
+def _unavailable_dispatch(key: str, prior: dict[str, Any] | None = None) -> DebounceDecision:
+    return DebounceDecision(
+        False,
+        "authoritative-storage-unavailable",
+        key,
+        prior_status=str(prior.get("status")) if prior else None,
+        prior_head_sha=str(prior.get("head_sha")) if prior else None,
+        drainable="retry reservation after primary storage and legacy-state reads recover",
+    )
+
+
+def _reserve_dispatch(
+    storage: RunnerDispatchStorage,
+    pr_number: int,
+    head_sha: str,
+    provider: str,
+    key: str,
+    prior: dict[str, Any] | None,
+    *,
+    reason: str,
+    task_progress_before: object = None,
+) -> DebounceDecision:
+    """Write the pending reservation for a granted dispatch and describe the decision."""
+    record = {
+        "provider": provider,
+        "pr_number": pr_number,
+        "head_sha": head_sha,
+        "key": key,
+        "status": "pending",
+        "started_at": _utc_now(),
+        "reservation_id": uuid.uuid4().hex,
+    }
+    attempt_id = _workflow_attempt_id()
+    if attempt_id:
+        record["workflow_attempt_id"] = attempt_id
+    record.update(
+        _task_progress_record_fields(
+            _normalize_task_progress_snapshot(task_progress_before), suffix="before"
+        )
+    )
+    # Carry the unproductive tally across the retry so the allowance is bounded: it is the only
+    # thing that makes "retry an unproductive completion" terminate instead of cycling forever.
+    unproductive = _unproductive_completion_count(prior)
+    continuation_count = _continuation_completion_count(prior)
+    if prior and prior.get("head_sha") == head_sha:
+        if continuation_count:
+            record["continuation_completions"] = continuation_count
+        if _completion_needs_continuation(prior):
+            record["completion_incomplete"] = True
+    if unproductive and prior and prior.get("head_sha") == head_sha:
+        record["unproductive_completions"] = unproductive
+        if _completion_was_unproductive(prior):
+            record["productive"] = False
+    # Auto completions only accept the primary reservation. Never start work
+    # whose ownership would exist only in the fallback and could not complete.
+    reservation_storage = storage.primary if isinstance(storage, FallbackRunnerStorage) else storage
+    try:
+        reservation_storage.write_record(pr_number, provider, record)
+    except Exception as exc:
+        if not isinstance(storage, FallbackRunnerStorage):
+            raise
+        _log_storage_failure("write", exc, phase="reservation")
+        # A POST can commit before the response is lost. Grant only if the
+        # primary now contains this exact reservation, never a different owner.
+        try:
+            persisted = reservation_storage.read_record(pr_number, provider)
+        except Exception as read_exc:
+            _log_storage_failure("read", read_exc, phase="reservation-recheck")
+            return _unavailable_dispatch(key, prior)
+        if persisted != record:
+            return _unavailable_dispatch(key, prior)
+    return DebounceDecision(
+        True,
+        reason,
+        key,
+        prior_status=str(prior.get("status")) if prior else None,
+        prior_head_sha=str(prior.get("head_sha")) if prior else None,
+    )
+
+
+def should_dispatch(
+    pr_number: int,
+    head_sha: str,
+    provider: str,
+    storage: RunnerDispatchStorage | None = None,
+    *,
+    authority_challenge: bool = False,
+    task_progress_before: object = None,
+) -> DebounceDecision:
+    """Reserve dispatch unless the same PR/head SHA completed or is actively pending.
+
+    Error records are retried deliberately: they mean the prior runner attempt did not
+    leave a successful completion marker, so a later Gate pass may try again.
+
+    A completion that produced no work is retried too, up to
+    ``UNPRODUCTIVE_COMPLETION_RETRY_LIMIT`` times on the same head, and after that on a
+    ``UNPRODUCTIVE_COMPLETION_COOLDOWN_SECONDS`` timer. Without that, a runner that exits 0
+    having done nothing latches the loop shut: the refusal could only be cleared by a new head
+    commit, and only the refused agent could push one (#3433). The cooldown matters for the
+    same reason — an allowance that expired into a permanent refusal would just move that latch
+    two runs later.
+    """
+    provider = _validate_provider(provider)
+    storage = storage or _storage_from_name("auto")
+    if authority_challenge and not isinstance(storage, FallbackRunnerStorage):
+        raise ValueError("Authority challenge reservation requires authoritative auto storage.")
+    key = _runner_key(pr_number, head_sha, provider)
+    try:
+        if isinstance(storage, FallbackRunnerStorage):
+            prior = storage.primary.read_record(pr_number, provider)
+            if prior is None:
+                # Respect legacy fallback reservations until they finish/age out,
+                # but any newly granted reservation must be written to primary.
+                if isinstance(storage.fallback, RepoVariableRunnerStorage):
+                    prior = storage.fallback.read_record(pr_number, provider, require_access=True)
+                else:
+                    prior = storage.fallback.read_record(pr_number, provider)
+        else:
+            prior = storage.read_record(pr_number, provider)
+    except Exception as exc:
+        if not isinstance(storage, FallbackRunnerStorage):
+            raise
+        _log_storage_failure("read", exc, phase="reservation")
+        return _unavailable_dispatch(key)
+    continuation_completions = _continuation_completion_count(prior)
+
+    if authority_challenge:
+        # The validation above guarantees this invariant at runtime. Repeat the
+        # narrowing inside the branch so stricter consumer mypy configurations
+        # also know that the authoritative primary/fallback stores are present.
+        if not isinstance(storage, FallbackRunnerStorage):
+            raise AssertionError("authority challenge storage invariant violated")
+        if _authority_pending_is_live(prior):
+            return DebounceDecision(
+                False,
+                "duplicate-pending",
+                key,
+                prior_status="pending",
+                prior_head_sha=str(prior.get("head_sha")),
+                drainable=(
+                    "the in-flight run finishing, or this pending record ageing past "
+                    f"{PENDING_STALE_AFTER_SECONDS}s"
+                ),
+            )
+        preparation = _authority_challenge_command("prepare", pr_number, head_sha, provider)
+        if not preparation or preparation.get("prepared") is not True:
+            return DebounceDecision(False, "invalid-or-consumed-authority-challenge", key)
+        # Preparation does not lock the runner reservation. Re-read immediately before the
+        # write so a dispatch that acquired ownership during preparation is not overwritten.
+        try:
+            prior = storage.primary.read_record(pr_number, provider)
+            if prior is None:
+                if isinstance(storage.fallback, RepoVariableRunnerStorage):
+                    prior = storage.fallback.read_record(pr_number, provider, require_access=True)
+                else:
+                    prior = storage.fallback.read_record(pr_number, provider)
+        except Exception as exc:
+            _log_storage_failure("read", exc, phase="authority-reservation-prewrite")
+            return _unavailable_dispatch(key, prior)
+        if _authority_pending_is_live(prior):
+            # No reservation write occurred, so this prepared receipt can be released safely.
+            released = _authority_challenge_command("release", pr_number, head_sha, provider)
+            if not released or released.get("released") is not True:
+                return _unavailable_dispatch(key, prior)
+            return DebounceDecision(
+                False,
+                "duplicate-pending",
+                key,
+                prior_status="pending",
+                prior_head_sha=str(prior.get("head_sha")),
+                drainable=(
+                    "the in-flight run finishing, or this pending record ageing past "
+                    f"{PENDING_STALE_AFTER_SECONDS}s"
+                ),
+            )
+        decision = _reserve_dispatch(
+            storage,
+            pr_number,
+            head_sha,
+            provider,
+            key,
+            prior,
+            reason="due-authority-challenge",
+            task_progress_before=task_progress_before,
+        )
+        if not decision.should_dispatch:
+            # A write can time out after the primary store has persisted it.  Never refund the
+            # prepared ledger entry on that ambiguous result: doing so could leave a live primary
+            # reservation and a reusable authority generation.  Re-read the authoritative store;
+            # only a confirmed absence permits release, while an exact attempt-bound reservation
+            # lets this same workflow continue safely.
+            try:
+                reservation = storage.primary.read_record(pr_number, provider)
+            except Exception as exc:
+                _log_storage_failure("read", exc, phase="authority-reservation-reconcile")
+                return decision
+            if reservation is None:
+                released = _authority_challenge_command("release", pr_number, head_sha, provider)
+                if not released or released.get("released") is not True:
+                    return _unavailable_dispatch(key, prior)
+                return decision
+            if (
+                reservation.get("status") != "pending"
+                or reservation.get("head_sha") != head_sha
+                or reservation.get("workflow_attempt_id") != _workflow_attempt_id()
+            ):
+                return decision
+            decision = DebounceDecision(True, "due-authority-challenge", key)
+        # Finalize only after preflight succeeds (mark-running job); consuming here
+        # would strand the ledger when agent credentials are missing.
+        return decision
+
+    if prior and prior.get("head_sha") == head_sha:
+        status = str(prior.get("status") or "")
+        if status == "completed" and (
+            _completion_was_unproductive(prior) or _completion_needs_continuation(prior)
+        ):
+            incomplete = _completion_needs_continuation(prior) and not _completion_was_unproductive(
+                prior
+            )
+            retry_count = (
+                continuation_completions
+                if incomplete
+                else max(continuation_completions, _unproductive_completion_count(prior))
+            )
+            if retry_count <= UNPRODUCTIVE_COMPLETION_RETRY_LIMIT:
+                return _reserve_dispatch(
+                    storage,
+                    pr_number,
+                    head_sha,
+                    provider,
+                    key,
+                    prior,
+                    reason=(
+                        "retry-incomplete-completion"
+                        if incomplete
+                        else "retry-unproductive-completion"
+                    ),
+                    task_progress_before=task_progress_before,
+                )
+            retry_at = _unproductive_retry_available_at(prior)
+            if retry_at is not None and _utc_now_dt() < retry_at:
+                return DebounceDecision(
+                    False,
+                    "unproductive-cooldown",
+                    key,
+                    prior_status=status,
+                    prior_head_sha=head_sha,
+                    drainable=(
+                        f"time: retry at {retry_at.isoformat()} "
+                        f"(after {retry_count} same-head continuations)"
+                    ),
+                )
+            return _reserve_dispatch(
+                storage,
+                pr_number,
+                head_sha,
+                provider,
+                key,
+                prior,
+                reason=(
+                    "retry-after-incomplete-cooldown"
+                    if incomplete
+                    else "retry-after-unproductive-cooldown"
+                ),
+                task_progress_before=task_progress_before,
+            )
+        if status == "completed" or (status == "pending" and not _pending_record_is_stale(prior)):
+            return DebounceDecision(
+                False,
+                f"duplicate-{status}",
+                key,
+                prior_status=status,
+                prior_head_sha=head_sha,
+                drainable=(
+                    "a new head commit"
+                    if status == "completed"
+                    else (
+                        "the in-flight run finishing, or this pending record ageing past "
+                        f"{PENDING_STALE_AFTER_SECONDS}s"
+                    )
+                ),
+            )
+
+    if prior is None:
+        reason = "first-dispatch"
+    elif prior.get("head_sha") != head_sha:
+        reason = "head-sha-changed"
+    elif str(prior.get("status") or "") == "pending":
+        reason = "stale-pending"
+    else:
+        reason = f"retry-{str(prior.get('status') or 'unknown')}"
+    return _reserve_dispatch(
+        storage,
+        pr_number,
+        head_sha,
+        provider,
+        key,
+        prior,
+        reason=reason,
+        task_progress_before=task_progress_before,
+    )
+
+
+def finalize_authority_challenge(
+    pr_number: int,
+    head_sha: str,
+    provider: str,
+    storage: RunnerDispatchStorage | None = None,
+) -> DebounceDecision:
+    """Consume a prepared authority challenge after preflight passes."""
+    provider = _validate_provider(provider)
+    storage = storage or _storage_from_name("auto")
+    key = _runner_key(pr_number, head_sha, provider)
+    if not isinstance(storage, FallbackRunnerStorage):
+        return DebounceDecision(False, "authority-storage-invalid", key)
+    finalized = _authority_challenge_command("finalize", pr_number, head_sha, provider)
+    if not finalized or finalized.get("granted") is not True:
+        return DebounceDecision(False, "invalid-or-consumed-authority-challenge", key)
+    try:
+        reservation = storage.primary.read_record(pr_number, provider)
+    except Exception as exc:
+        _log_storage_failure("read", exc, phase="authority-reservation-readback")
+        return _unavailable_dispatch(key)
+    if (
+        not reservation
+        or reservation.get("status") != "pending"
+        or reservation.get("head_sha") != head_sha
+        or reservation.get("workflow_attempt_id") != _workflow_attempt_id()
+    ):
+        return DebounceDecision(False, "authority-reservation-changed", key)
+    return DebounceDecision(True, "due-authority-challenge", key)
+
+
+def release_authority_challenge(
+    pr_number: int,
+    head_sha: str,
+    provider: str,
+    storage: RunnerDispatchStorage | None = None,
+) -> bool:
+    """Terminalize this attempt's reservation, then refund its prepared challenge."""
+    provider = _validate_provider(provider)
+    storage = storage or _storage_from_name("auto")
+    if not isinstance(storage, FallbackRunnerStorage):
+        return False
+    try:
+        reservation = storage.primary.read_record(pr_number, provider)
+    except Exception as exc:
+        _log_storage_failure("read", exc, phase="authority-release-reservation")
+        return False
+    if (
+        not reservation
+        or reservation.get("head_sha") != head_sha
+        or reservation.get("workflow_attempt_id") != _workflow_attempt_id()
+        or reservation.get("key") != _runner_key(pr_number, head_sha, provider)
+    ):
+        return False
+    if reservation.get("status") == "pending":
+        completion = record_completion(
+            pr_number,
+            head_sha,
+            provider,
+            {
+                "provider": provider,
+                "success": False,
+                "summary": "Authority challenge released after runner preflight failure.",
+                "error": "runner-preflight-failed",
+                "truncated": False,
+                "final_message": "",
+            },
+            storage=storage,
+            produced_work=False,
+            observed_head_sha=head_sha,
+        )
+        if completion.get("status") != "error":
+            return False
+    elif not (
+        reservation.get("status") == "error"
+        and isinstance(reservation.get("result"), dict)
+        and reservation["result"].get("error") == "runner-preflight-failed"
+    ):
+        # Only this exact attempt's cleanup completion may resume a failed
+        # release. An arbitrary terminal error must not refund authority.
+        return False
+    released = _authority_challenge_command("release", pr_number, head_sha, provider)
+    return bool(released and released.get("released") is True)
+
+
+def _authority_challenge_command(
+    command: str, pr_number: int, head_sha: str, provider: str
+) -> dict[str, Any] | None:
+    """Run one phase of the conditional PR-wide authority transaction."""
+    if command not in {"prepare", "finalize", "release"}:
+        raise ValueError(f"Unsupported authority challenge command: {command}")
+    if (
+        not _workflow_attempt_id()
+        or os.environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch"
+        or os.environ.get("GITHUB_ACTOR") != "github-actions[bot]"
+    ):
+        return None
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "AUTHORITY_PR_NUMBER": str(pr_number),
+            "AUTHORITY_HEAD_SHA": head_sha,
+            "AUTHORITY_PROVIDER": provider,
+        }
+    )
+    try:
+        result = subprocess.run(
+            ["node", ".github/scripts/keepalive_authority_state.js", command],
+            cwd=Path(__file__).resolve().parents[2],
+            capture_output=True,
+            timeout=30,
+            check=False,
+            env=environment,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(
+            f"warning: authority challenge helper unavailable: {type(exc).__name__}",
+            file=sys.stderr,
+        )
+        return None
+    if result.returncode != 0:
+        print(f"warning: authority challenge helper exited {result.returncode}", file=sys.stderr)
+        return None
+    try:
+        payload = json.loads(result.stdout)
+        return payload if isinstance(payload, dict) else None
+    except (ValueError, AttributeError):
+        print("warning: authority challenge helper emitted invalid JSON", file=sys.stderr)
+        return None
+
+
+STORAGE_FAILURE_MESSAGE_MAX_CHARS = 200
+# API message text is untrusted. Discard credential-bearing diagnostics entirely:
+# guessing value boundaries can leave spaced, quoted or multiword secrets behind.
+# Match marker substrings deliberately: camel-case and underscore/prefixed field
+# names must not evade the policy at a regex word boundary.
+_STORAGE_FAILURE_CREDENTIAL_FIELD_RE = re.compile(
+    r"[=:\"']|(?:token|secret|password|passwd|passphrase|pwd|auth|credential|client[\s_-]*secret|"
+    r"x[\s_-]*access[\s_-]*token|authorization|api[\s_-]*key|"
+    r"access[\s_-]*token|refresh[\s_-]*token|private[\s_-]*key|cookie)",
+    re.IGNORECASE,
+)
+_STORAGE_FAILURE_SECRET_RE = re.compile(
+    r"(?:gh[pousr]_|github_pat_|sk-)[A-Za-z0-9_\-]*|x-access-token:\S*|bearer\s+\S+|https?://\S*",
+    re.IGNORECASE,
+)
+
+
+def _storage_failure_message(exc: Exception) -> str | None:
+    # GitHubApi formats HTTP failures as "... failed: <status> <json body>". Surface only
+    # the body's string `message` field, redacted and bounded, never the raw text.
+    text = str(exc)
+    start = text.find("{")
+    if start < 0:
+        return None
+    try:
+        payload = json.loads(text[start:])
+    except (ValueError, RecursionError):
+        # Malformed API diagnostics must not interrupt the fail-closed path.
+        return None
+    message = payload.get("message") if isinstance(payload, dict) else None
+    if not isinstance(message, str):
+        return None
+    if _STORAGE_FAILURE_CREDENTIAL_FIELD_RE.search(message):
+        return None
+    message = _STORAGE_FAILURE_SECRET_RE.sub("<redacted>", " ".join(message.split()))
+    return message[:STORAGE_FAILURE_MESSAGE_MAX_CHARS] or None
+
+
+def _log_storage_failure(operation: str, exc: Exception, *, phase: str = "completion") -> None:
+    # GitHubApi preserves the HTTP/network exception as its cause. Log diagnostic
+    # metadata, not raw exception text, which can contain URLs or response bodies.
+    cause = exc.__cause__ or exc
+    code = getattr(cause, "code", None)
+    status = str(code) if isinstance(code, int) and 100 <= code <= 599 else "unknown"
+    message = _storage_failure_message(exc)
+    detail = f" http_message={json.dumps(message)}" if message else ""
+    print(
+        f"warning: authoritative {phase} {operation} failed: "
+        f"error_type={type(exc).__name__} cause_type={type(cause).__name__} "
+        f"http_status={status}{detail}",
+        file=sys.stderr,
+    )
+
+
+def _unrecorded_completion(prior: dict[str, Any], key: str, reason: str) -> dict[str, Any]:
+    return {
+        **prior,
+        "status": "unknown",
+        "key": key,
+        "completion_recorded": False,
+        "completion_reason": reason,
+    }
+
+
+def _derive_completion_productivity(
+    prior: dict[str, Any],
+    *,
+    reserved_head_sha: str,
+    observed_head_sha: str,
+    task_progress_after: object,
+    fallback: bool | None,
+) -> tuple[bool | None, dict[str, Any]]:
+    """Combine authoritative head and checklist observations without inventing progress."""
+    if prior.get("status") in TERMINAL_STATUSES and prior.get("head_sha") == reserved_head_sha:
+        # Widen literal key inference for mypy while preserving the stored fields.
+        persisted: dict[str, Any] = {
+            key: prior[key]
+            for key in (
+                "observed_head_sha",
+                "tasks_total_after",
+                "tasks_completed_after",
+                "task_set_fingerprint_after",
+                "tasks_completed_delta",
+                "task_progress_reason",
+            )
+            if key in prior
+        }
+        if "productive" in prior:
+            return bool(prior["productive"]), persisted
+        return None, persisted
+
+    observed_head = str(observed_head_sha or "").strip()
+    after = _normalize_task_progress_snapshot(task_progress_after)
+    fields = _task_progress_record_fields(after, suffix="after")
+    if observed_head:
+        fields["observed_head_sha"] = observed_head
+        if observed_head != reserved_head_sha:
+            fields["task_progress_reason"] = "head-changed"
+            return True, fields
+
+        before = _task_progress_before_from_record(prior)
+        if before is None:
+            fields["task_progress_reason"] = "baseline-missing"
+            return None, fields
+        if after is None:
+            fields["task_progress_reason"] = "after-missing"
+            return None, fields
+        if before["fingerprint"] != after["fingerprint"]:
+            fields["task_progress_reason"] = "task-set-changed"
+            return None, fields
+        delta = after["completed"] - before["completed"]
+        fields["tasks_completed_delta"] = delta
+        fields["task_progress_reason"] = "measured"
+        return delta > 0, fields
+
+    if after is not None:
+        fields["task_progress_reason"] = "head-unmeasured"
+        return None, fields
+    return fallback, fields
+
+
+def record_completion(
+    pr_number: int,
+    head_sha: str,
+    provider: str,
+    result: RunnerResult | dict[str, Any],
+    storage: RunnerDispatchStorage | None = None,
+    produced_work: bool | None = None,
+    *,
+    observed_head_sha: str = "",
+    task_progress_after: object = None,
+    completion_reason: str = "",
+    requested_model: str = "",
+    reported_model: str = "",
+) -> dict[str, Any]:
+    """Persist terminal runner state after a dispatch finishes.
+
+    When ``observed_head_sha`` is supplied, productivity is derived from the authoritative
+    reservation plus that live head and a comparable task snapshot. A changed head or positive
+    completed-task delta is productive. Unknown/mismatched task progress stays unmeasured.
+    Legacy callers may still supply ``produced_work`` directly.
+
+    ``requested_model`` / ``reported_model`` (or the same keys in a dict ``result``) land in
+    the compact result summary; absent values are recorded as "".
+    """
+    provider = _validate_provider(provider)
+    storage = storage or _storage_from_name("auto")
+    key = _runner_key(pr_number, head_sha, provider)
+    result_payload = (
+        dataclasses.asdict(result) if dataclasses.is_dataclass(result) else dict(result)
+    )
+    if requested_model:
+        result_payload["requested_model"] = requested_model
+    if reported_model:
+        result_payload["reported_model"] = reported_model
+    status = "completed" if result_payload.get("success") else "error"
+    compact_result = _compact_runner_result_payload(result_payload)
+    # Dispatch and completion both require the authoritative reservation.
+    # An empty/stale fallback cannot prove that a newer attempt does not own the
+    # primary, even if caller identity is absent.
+    uses_fallback = isinstance(storage, FallbackRunnerStorage)
+    completion_storage = storage.primary if isinstance(storage, FallbackRunnerStorage) else storage
+    try:
+        prior_record = completion_storage.read_record(pr_number, provider)
+    except Exception as exc:
+        if not uses_fallback:
+            raise
+        _log_storage_failure("read", exc)
+        return _unrecorded_completion({}, key, "authoritative-storage-unavailable")
+    if (
+        uses_fallback or isinstance(completion_storage, PrCommentRunnerStorage)
+    ) and prior_record is None:
+        return _unrecorded_completion({}, key, "authoritative-reservation-missing")
+    prior = prior_record or {}
+    if prior.get("workflow_attempt_id") and (
+        prior.get("workflow_attempt_id") != _workflow_attempt_id()
+        or (prior.get("key") != key and produced_work is not True)
+    ):
+        # A completion rerun from an earlier attempt must not overwrite a newer reservation,
+        # including when both attempts target the same head. The owning attempt may report
+        # a new head only when it explicitly measured productive work. Return an observation only.
+        return _unrecorded_completion(prior, key, "stale-attempt")
+    produced_work, productivity_fields = _derive_completion_productivity(
+        prior,
+        reserved_head_sha=head_sha,
+        observed_head_sha=observed_head_sha,
+        task_progress_after=task_progress_after,
+        fallback=produced_work,
+    )
+    if completion_reason not in {"", "rate_limited", "failed", "progressed", "no_progress"}:
+        raise ValueError("Invalid runner completion reason")
+    # Only measured branch/checklist progress clears a provider backoff marker.
+    # The JS classifier supplies provider failures; productivity is reconciled here.
+    if produced_work is True:
+        completion_reason = "progressed"
+    elif completion_reason not in {"rate_limited", "failed"}:
+        completion_reason = "no_progress" if result_payload.get("success") else "failed"
+    if produced_work is None and prior.get("key") == key and _completion_was_unproductive(prior):
+        produced_work = False
+    completed_at = (
+        prior.get("completed_at")
+        if prior.get("key") == key and prior.get("status") in TERMINAL_STATUSES
+        else _utc_now()
+    )
+    record = {
+        **prior,
+        "provider": provider,
+        "pr_number": pr_number,
+        "head_sha": head_sha,
+        "key": key,
+        "status": status,
+        "completed_at": completed_at,
+        "result": compact_result,
+        "completion": {"reason": completion_reason},
+        **productivity_fields,
+    }
+    if completion_reason == "rate_limited":
+        ttl_config = json.loads(
+            (
+                Path(__file__).resolve().parents[2] / ".github/scripts/rate_limit_receipt.json"
+            ).read_text(encoding="utf-8")
+        )
+        # A replayed terminal record may preserve a malformed completed_at; fall
+        # back to now so expiry is still written instead of aborting the receipt.
+        base = _parse_timestamp(completed_at) or _utc_now_dt()
+        record["completion"]["expires_at"] = (
+            base + dt.timedelta(hours=ttl_config["RATE_LIMIT_RECEIPT_TTL_HOURS"])
+        ).isoformat()
+    same_terminal_attempt = prior.get("key") == key and prior.get("status") in TERMINAL_STATUSES
+    if status == "completed" and same_terminal_attempt:
+        # Completion replays cannot change the first attempt's disposition.
+        if "completion_incomplete" in prior:
+            record["completion_incomplete"] = prior["completion_incomplete"]
+        elif _completion_needs_continuation(prior):
+            record["completion_incomplete"] = True
+    elif status == "completed" and observed_head_sha and observed_head_sha != head_sha:
+        record["completion_incomplete"] = False
+    elif (
+        status == "completed"
+        and observed_head_sha == head_sha
+        and (task_progress_after is not None or "tasks_total_before" in prior)
+    ):
+        after = _normalize_task_progress_snapshot(task_progress_after)
+        record["completion_incomplete"] = bool(
+            after is None
+            or after["total"] <= 0
+            or after["completed"] < after["total"]
+            or productivity_fields.get("task_progress_reason") == "task-set-changed"
+        )
+    if status == "completed" and record.get("completion_incomplete") is True:
+        record["continuation_completions"] = (
+            _continuation_completion_count(prior)
+            if same_terminal_attempt
+            else min(
+                _continuation_completion_count(prior) + 1, UNPRODUCTIVE_COMPLETION_RETRY_LIMIT + 1
+            )
+        )
+    elif status == "completed" and record.get("completion_incomplete") is False:
+        record["continuation_completions"] = 0
+    if status == "completed" and produced_work is not None:
+        record["productive"] = bool(produced_work)
+        if produced_work:
+            record["unproductive_completions"] = 0
+        elif prior.get("key") == key and prior.get("status") in TERMINAL_STATUSES:
+            # This completion is already recorded; re-running the completion job for the same
+            # dispatch key must not spend another retry. record_completion is idempotent for a
+            # key by contract (see completed_at above, which is preserved the same way), and a
+            # counter that advanced on a rerun would quietly exhaust the allowance without any
+            # additional agent run having happened.
+            record["unproductive_completions"] = _unproductive_completion_count(prior) or 1
+        else:
+            previous = _unproductive_completion_count(prior)
+            # Past the allowance the streak stops climbing: the cooldown is re-armed from this
+            # completion's timestamp instead, so each new zero-output run buys one fresh window
+            # rather than an ever-growing count that means nothing.
+            record["unproductive_completions"] = min(
+                previous + 1, UNPRODUCTIVE_COMPLETION_RETRY_LIMIT + 1
+            )
+    if status == "completed" and "completion_incomplete" not in record and produced_work is False:
+        record["continuation_completions"] = record.get("unproductive_completions", 0)
+    try:
+        if isinstance(completion_storage, PrCommentRunnerStorage):
+            record["reservation_id"] = _reservation_identity(prior)
+            completion_storage.write_completion(pr_number, provider, record)
+        else:
+            completion_storage.write_record(pr_number, provider, record)
+    except Exception as exc:
+        if not uses_fallback:
+            raise
+        _log_storage_failure("write", exc)
+        # Never redirect a checked primary reservation into an unchecked fallback.
+        # A failed response may be ambiguous; a retry re-reads primary state first.
+        return _unrecorded_completion(prior, key, "authoritative-storage-unavailable")
+    return record
+
+
+def _github_output_value(value: str) -> str:
+    return value.replace("%", "%25").replace("\n", "%0A").replace("\r", "%0D")
+
+
+def _write_github_output(outputs: dict[str, str]) -> None:
+    output_path = os.environ.get("GITHUB_OUTPUT")
+    if not output_path:
+        return
+    with open(output_path, "a", encoding="utf-8") as handle:
+        for key, value in outputs.items():
+            handle.write(f"{key}={_github_output_value(value)}\n")
+
+
+def _parse_optional_bool(raw: str) -> bool | None:
+    normalized = (raw or "").strip().lower()
+    if not normalized:
+        return None
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError("orchestrator skill enabled override must be true or false")
+
+
+def _cmd_assemble(args: argparse.Namespace) -> int:
+    # The effect producer is source-disabled. Preserve pure assembly fixtures,
+    # but refuse an untransported typed sidecar at the actual provider intake.
+    if os.environ.get("CORRECTION_CONTEXT_FILE"):
+        raise ValueError("typed_correction_effects_not_deployed: collection-only source release")
+    context = {
+        "workspace": args.workspace,
+        "base_prompt_file": args.base_prompt,
+        "appendix": args.appendix or "",
+        "mode": args.mode,
+        "pr_number": args.pr_number,
+        "output_file": args.output,
+        "task_appendix_file": args.task_appendix_file,
+        "correction_context_file": os.environ.get("CORRECTION_CONTEXT_FILE"),
+        "correction_token_budget": os.environ.get("ISSUE_PR_CONTEXT_TOKEN_BUDGET"),
+        "materialize_reference_packs": args.materialize_reference_packs,
+        "materialize_orchestrator_skill": args.materialize_orchestrator_skill,
+        "orchestrator_skill_pack": args.orchestrator_skill_pack or None,
+        "orchestrator_skill_enabled": _parse_optional_bool(args.orchestrator_skill_enabled),
+        "orchestrator_skill_summary_path": os.environ.get("ORCHESTRATOR_SKILL_SUMMARY_PATH"),
+        "github_token": os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"),
+    }
+    prompt = assemble_prompt(args.reference_pack_name, context, args.provider)
+    outputs = {"file": prompt.file, "provider": prompt.provider}
+    _write_github_output(outputs)
+    print(json.dumps({**outputs, "chars": len(prompt.text)}, sort_keys=True))
+    return 0
+
+
+def _cmd_parse(args: argparse.Namespace) -> int:
+    raw = (
+        Path(args.raw_output_file).read_text(encoding="utf-8")
+        if args.raw_output_file
+        else sys.stdin.read()
+    )
+    result = parse_runner_output(args.provider, raw)
+    outputs = {
+        "success": "true" if result.success else "false",
+        "summary": result.summary,
+        "final-message-summary": result.summary,
+        "error": result.error or "",
+        "error-summary": result.error or result.summary,
+        "truncated": "true" if result.truncated else "false",
+        "final-message": base64.b64encode(result.final_message.encode("utf-8")).decode("ascii"),
+    }
+    _write_github_output(outputs)
+    print(json.dumps(dataclasses.asdict(result), sort_keys=True))
+    return 0
+
+
+def _cmd_finalize_authority_challenge(args: argparse.Namespace) -> int:
+    decision = finalize_authority_challenge(
+        int(args.pr_number),
+        args.head_sha,
+        args.provider,
+        storage=_storage_from_name(args.storage),
+    )
+    outputs = {
+        "finalized": "true" if decision.should_dispatch else "false",
+        "reason": decision.reason,
+        "key": decision.key,
+    }
+    _write_github_output(outputs)
+    print(json.dumps(outputs, sort_keys=True))
+    return 0 if decision.should_dispatch else 1
+
+
+def _cmd_release_authority_challenge(args: argparse.Namespace) -> int:
+    released = release_authority_challenge(
+        int(args.pr_number),
+        args.head_sha,
+        args.provider,
+        storage=_storage_from_name(args.storage),
+    )
+    outputs = {"released": "true" if released else "false"}
+    _write_github_output(outputs)
+    print(json.dumps(outputs, sort_keys=True))
+    return 0 if released else 1
+
+
+def _cmd_should_dispatch(args: argparse.Namespace) -> int:
+    decision = should_dispatch(
+        int(args.pr_number),
+        args.head_sha,
+        args.provider,
+        storage=_storage_from_name(args.storage),
+        authority_challenge=args.authority_challenge,
+        task_progress_before=args.task_progress_before,
+    )
+    outputs = {
+        "should_dispatch": "true" if decision.should_dispatch else "false",
+        "reason": decision.reason,
+        "key": decision.key,
+        "prior_status": decision.prior_status or "",
+        "prior_head_sha": decision.prior_head_sha or "",
+        # Always emitted, including as "" for a granted dispatch, so "no drainable path stated"
+        # can never be confused with "nothing is blocking" — one sentinel, one meaning.
+        "drainable": decision.drainable,
+    }
+    _write_github_output(outputs)
+    print(json.dumps(outputs, sort_keys=True))
+    return 0
+
+
+def _parse_produced_work(raw: str) -> bool | None:
+    """Parse the caller's productivity verdict, treating anything unrecognized as unmeasured.
+
+    Legacy callers retain the unmeasured behavior for unknown values rather than raising
+    through ``_parse_optional_bool``. Native autofix has a separate observation requirement:
+    its METRICS_JSON must prove the head was observed before this fallback can be used.
+    """
+    normalized = (raw or "").strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return None
+
+
+def _cmd_record_completion(args: argparse.Namespace) -> int:
+    # Native autofix already passes METRICS_JSON to this command. Its fallback
+    # head/fix values are telemetry, not evidence that the PR head was read.
+    # Enforce this before opening storage, even while an older workflow still
+    # uses inline validation that accepts those defaults. Other runner callers
+    # do not provide this autofix-specific environment variable.
+    if "METRICS_JSON" in os.environ:
+        message = "Autofix completion measurement is incomplete; retain reservation."
+        try:
+            metrics = json.loads(os.environ["METRICS_JSON"])
+        except (ValueError, TypeError):
+            raise ValueError(message) from None
+        if (
+            not isinstance(metrics, dict)
+            or metrics.get("head_observed") is not True
+            or metrics.get("head_sha_before") != args.head_sha
+            or re.fullmatch(r"[0-9a-f]{40}", args.head_sha) is None
+            or not isinstance(metrics.get("head_sha_after"), str)
+            or re.fullmatch(r"[0-9a-f]{40}", metrics["head_sha_after"]) is None
+            or not isinstance(metrics.get("fix_applied"), bool)
+            or metrics["fix_applied"] != (metrics["head_sha_after"] != args.head_sha)
+            or metrics.get("autofix_result") not in ("success", "failure", "cancelled")
+            or _parse_produced_work(args.produced_work) is not metrics["fix_applied"]
+            or args.observed_head_sha
+            != (metrics["head_sha_after"] if metrics["fix_applied"] else "")
+            or args.exit_code != ("0" if metrics["autofix_result"] == "success" else "1")
+        ):
+            raise ValueError(message)
+    raw = ""
+    if args.raw_output_file:
+        path = Path(args.raw_output_file)
+        if path.is_file():
+            raw = path.read_text(encoding="utf-8")
+    provider = _validate_provider(args.provider)
+    if provider in PROMPT_PROVIDERS:
+        result = parse_runner_output(provider, raw or args.summary or "")
+    else:
+        summary = args.summary or raw or "No output captured"
+        result = RunnerResult(
+            provider=provider,
+            success=args.exit_code is None or int(args.exit_code) == 0,
+            final_message=summary,
+            summary=re.sub(r"\s+", " ", summary).strip()[:500] or "No output captured",
+        )
+    if args.exit_code is not None and int(args.exit_code) != 0 and result.success:
+        result = dataclasses.replace(result, success=False, error=result.summary)
+    record = record_completion(
+        int(args.pr_number),
+        args.head_sha,
+        args.provider,
+        result,
+        storage=_storage_from_name(args.storage),
+        produced_work=_parse_produced_work(args.produced_work),
+        observed_head_sha=args.observed_head_sha,
+        task_progress_after=args.task_progress_after,
+        completion_reason=args.completion_reason,
+        requested_model=args.requested_model,
+        reported_model=args.reported_model,
+    )
+    outputs = {
+        "recorded": "false" if record.get("completion_recorded") is False else "true",
+        "reason": str(record.get("completion_reason", "")),
+        "status": str(record["status"]),
+        "key": str(record["key"]),
+        "productive": "" if "productive" not in record else str(record["productive"]).lower(),
+    }
+    _write_github_output(outputs)
+    print(json.dumps(outputs, sort_keys=True))
+    return 0
+
+
+def _cmd_detect_model(args: argparse.Namespace) -> int:
+    """Print the model the provider CLI reported, reading its own session/output files."""
+    raw_parts: list[str] = []
+    for source in args.source_file or []:
+        path = Path(source)
+        if source and path.is_file():
+            raw_parts.append(path.read_text(encoding="utf-8", errors="replace"))
+    reported = extract_reported_model(args.provider, "\n".join(raw_parts))
+    outputs = {"reported-model": reported}
+    _write_github_output(outputs)
+    print(json.dumps(outputs, sort_keys=True))
+    return 0
+
+
+def _cmd_normalize_evidence(args: argparse.Namespace) -> int:
+    evidence = normalize_capability_effect_evidence(
+        capability_id=args.capability_id,
+        effect_fingerprint=args.effect_fingerprint,
+        evidence_artifact_ref=args.evidence_artifact_ref,
+        supervision_mode=args.supervision_mode,
+        capability_evidence_status=args.capability_evidence_status,
+        terminal_disposition=args.terminal_disposition,
+    )
+    outputs = evidence.github_outputs()
+    _write_github_output(outputs)
+    print(json.dumps(outputs, sort_keys=True))
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    assemble = subparsers.add_parser("assemble-prompt", help="assemble provider prompt")
+    assemble.add_argument("--provider", choices=sorted(PROMPT_PROVIDERS), required=True)
+    assemble.add_argument("--base-prompt", required=True)
+    assemble.add_argument("--workspace", default=".")
+    assemble.add_argument("--appendix", default="")
+    assemble.add_argument("--mode", default="")
+    assemble.add_argument("--pr-number", default="")
+    assemble.add_argument("--output", default="")
+    assemble.add_argument("--task-appendix-file", default="")
+    assemble.add_argument("--reference-pack-name", default="")
+    assemble.add_argument("--materialize-reference-packs", action="store_true")
+    assemble.add_argument("--orchestrator-skill-pack", default="")
+    assemble.add_argument("--orchestrator-skill-enabled", default="")
+    assemble.add_argument("--materialize-orchestrator-skill", action="store_true")
+    assemble.set_defaults(func=_cmd_assemble)
+
+    parse = subparsers.add_parser("parse-output", help="parse provider output")
+    parse.add_argument("--provider", choices=sorted(PROVIDERS), required=True)
+    parse.add_argument("--raw-output-file", default="")
+    parse.set_defaults(func=_cmd_parse)
+
+    dispatch = subparsers.add_parser("should-dispatch", help="reserve a runner dispatch")
+    dispatch.add_argument("--provider", choices=sorted(PROVIDERS), required=True)
+    dispatch.add_argument("--pr-number", required=True)
+    dispatch.add_argument("--head-sha", required=True)
+    dispatch.add_argument(
+        "--storage", choices=["auto", "pr-comment", "repo-variable"], default="auto"
+    )
+    dispatch.set_defaults(func=_cmd_should_dispatch)
+    dispatch.add_argument(
+        "--authority-challenge",
+        action="store_true",
+        help="reserve a signed authority challenge before bypassing ordinary debounce",
+    )
+    dispatch.add_argument(
+        "--task-progress-before",
+        default="",
+        help="validated JSON checklist snapshot captured when reserving the dispatch",
+    )
+
+    finalize_authority = subparsers.add_parser(
+        "finalize-authority-challenge",
+        help="consume a prepared authority challenge after preflight succeeds",
+    )
+    finalize_authority.add_argument("--provider", choices=sorted(PROVIDERS), required=True)
+    finalize_authority.add_argument("--pr-number", required=True)
+    finalize_authority.add_argument("--head-sha", required=True)
+    finalize_authority.add_argument(
+        "--storage", choices=["auto", "pr-comment", "repo-variable"], default="auto"
+    )
+    finalize_authority.set_defaults(func=_cmd_finalize_authority_challenge)
+
+    release_authority = subparsers.add_parser(
+        "release-authority-challenge",
+        help="refund a prepared authority challenge when dispatch cannot run",
+    )
+    release_authority.add_argument("--provider", choices=sorted(PROVIDERS), required=True)
+    release_authority.add_argument("--pr-number", required=True)
+    release_authority.add_argument("--head-sha", required=True)
+    release_authority.add_argument(
+        "--storage", choices=["auto", "pr-comment", "repo-variable"], default="auto"
+    )
+    release_authority.set_defaults(func=_cmd_release_authority_challenge)
+
+    complete = subparsers.add_parser("record-completion", help="persist runner completion")
+    complete.add_argument("--provider", choices=sorted(PROVIDERS), required=True)
+    complete.add_argument("--pr-number", required=True)
+    complete.add_argument("--head-sha", required=True)
+    complete.add_argument(
+        "--storage", choices=["auto", "pr-comment", "repo-variable"], default="auto"
+    )
+    complete.add_argument(
+        "--observed-head-sha",
+        default="",
+        help="live PR head observed after the runner and summary reconciliation",
+    )
+    complete.add_argument(
+        "--task-progress-after",
+        default="",
+        help="validated JSON checklist snapshot observed after the runner",
+    )
+    complete.add_argument("--raw-output-file", default="")
+    complete.add_argument("--summary", default="")
+    complete.add_argument("--exit-code", default=None)
+    complete.add_argument(
+        "--completion-reason",
+        choices=["rate_limited", "failed", "progressed", "no_progress"],
+        default="",
+        help="provider completion classification from keepalive_loop.classifyCompletion",
+    )
+    complete.add_argument(
+        "--produced-work",
+        default="",
+        help=(
+            "whether the run actually moved the branch (true/false). Anything else, including "
+            "the default, means unmeasured and preserves an existing unproductive retry streak."
+        ),
+    )
+    complete.add_argument(
+        "--requested-model",
+        default="",
+        help="model the runner asked the CLI for; empty when the run was unpinned",
+    )
+    complete.add_argument(
+        "--reported-model",
+        default="",
+        help="model the CLI reported it ran on (detect-model); empty when undeterminable",
+    )
+    complete.set_defaults(func=_cmd_record_completion)
+
+    detect = subparsers.add_parser(
+        "detect-model", help="read the model a provider CLI reported from its own output"
+    )
+    detect.add_argument("--provider", choices=sorted(PROVIDERS), required=True)
+    detect.add_argument(
+        "--source-file",
+        action="append",
+        default=[],
+        help="CLI session/output file to read (repeatable; missing files are skipped)",
+    )
+    detect.set_defaults(func=_cmd_detect_model)
+
+    evidence = subparsers.add_parser(
+        "normalize-evidence", help="validate optional capability/effect evidence"
+    )
+    evidence.add_argument("--capability-id", default="")
+    evidence.add_argument("--effect-fingerprint", default="")
+    evidence.add_argument("--evidence-artifact-ref", default="")
+    evidence.add_argument("--supervision-mode", default="")
+    evidence.add_argument("--capability-evidence-status", default="")
+    evidence.add_argument("--terminal-disposition", default="")
+    evidence.set_defaults(func=_cmd_normalize_evidence)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        return args.func(args)
+    except Exception as exc:
+        print(str(exc), file=sys.stderr)
+        return 1

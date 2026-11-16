@@ -1,0 +1,66 @@
+{
+  "session": {
+    "session_state_id": "session-state:client-summit-review",
+    "trip_id": "trip-client-summit-q2",
+    "user_id": "user:consulting-team",
+    "owner_profile_id": "traveler-profile:consulting-lead",
+    "mode": "business",
+    "started_at": "2026-04-02T07:30:00Z",
+    "updated_at": "2026-04-02T10:05:00Z",
+    "interaction_state": {
+      "interaction_style": "guided",
+      "initiative_level": "planner_led",
+      "checkpoint_frequency": "phase",
+      "option_preview_timing": "balanced",
+      "summary_granularity": "detailed",
+      "auto_advance_research_passes": 2,
+      "ask_before_major_change": true,
+      "notes": [
+        "Planner may explore compliant options before the next check-in."
+      ]
+    },
+    "recent_option_presentations": [
+      {
+        "presentation_id": "presentation:client-summit-v2",
+        "option_set_id": "option-set:client-summit-v2",
+        "shown_at": "2026-04-02T09:50:00Z",
+        "surface_kind": "scenario_comparison",
+        "surfaced_option_ids": [
+          "option:compliant-red-eye",
+          "option:exception-direct"
+        ],
+        "highlighted_option_id": "option:exception-direct",
+        "summary": "Compared the compliant and exception-oriented business itineraries."
+      }
+    ],
+    "pending_decisions": [
+      {
+        "decision_id": "decision:policy-path",
+        "title": "Choose policy path",
+        "prompt": "Should the trip stay compliant or request an exception for the direct option?",
+        "created_at": "2026-04-02T09:55:00Z",
+        "choices": [
+          "stay compliant",
+          "request exception"
+        ],
+        "blocking": true,
+        "related_option_set_id": "option-set:client-summit-v2",
+        "notes": [
+          "Finance approval is pending."
+        ]
+      }
+    ],
+    "status": "paused",
+    "current_checkpoint_id": "checkpoint:client-summit-policy-review",
+    "current_saved_scenario_id": "saved-scenario:client-summit-compliant",
+    "active_budget_plan_id": "budget-plan:client-summit",
+    "activity_log_id": "activity-log:client-summit",
+    "tags": [
+      "business",
+      "policy-review"
+    ],
+    "notes": [
+      "Paused pending approval-path choice."
+    ]
+  }
+}

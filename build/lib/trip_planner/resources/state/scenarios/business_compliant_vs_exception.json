@@ -1,0 +1,93 @@
+{
+  "records": [
+    {
+      "saved_scenario_id": "saved-scenario:compliant-first",
+      "trip_id": "trip-business-client-summit",
+      "current_version_id": "saved-scenario:compliant-first-v1",
+      "versions": [
+        {
+          "version_id": "saved-scenario:compliant-first-v1",
+          "saved_scenario_id": "saved-scenario:compliant-first",
+          "trip_id": "trip-business-client-summit",
+          "title": "Compliant-first client summit plan",
+          "label": "compliant_first",
+          "created_at": "2026-04-02T10:00:00Z",
+          "created_by": "policy-planner",
+          "scope": "route",
+          "snapshot_refs": {
+            "objective_id": "objective:client-summit",
+            "scenario_search_id": "scenario-search:client-summit",
+            "source_result_set_id": "ranked-result-set:client-summit",
+            "itinerary_scenario_id": "scenario:trip-business-client-summit:1",
+            "ranked_result_set_id": "ranked-result-set:client-summit",
+            "option_set_ids": [
+              "option-set:air:approved",
+              "option-set:hotel:approved"
+            ],
+            "policy_state_id": "policy-state:q2-client-summit",
+            "business_profile_id": "business-profile-consulting",
+            "notes": [
+              "Primary approval-ready path with compliant booking channels."
+            ]
+          },
+          "summary": "Primary scenario retains approved vendors and schedule protection.",
+          "tags": ["business", "approval-ready"],
+          "notes": ["Used as the baseline for business policy review."]
+        }
+      ],
+      "comparisons": [],
+      "tags": ["business", "policy"],
+      "notes": ["Primary scenario for approval review."]
+    },
+    {
+      "saved_scenario_id": "saved-scenario:exception-nearest",
+      "trip_id": "trip-business-client-summit",
+      "current_version_id": "saved-scenario:exception-nearest-v1",
+      "versions": [
+        {
+          "version_id": "saved-scenario:exception-nearest-v1",
+          "saved_scenario_id": "saved-scenario:exception-nearest",
+          "trip_id": "trip-business-client-summit",
+          "title": "Exception-nearest contingency route",
+          "label": "exception_nearest",
+          "created_at": "2026-04-02T10:10:00Z",
+          "created_by": "policy-planner",
+          "scope": "route",
+          "snapshot_refs": {
+            "objective_id": "objective:client-summit",
+            "scenario_search_id": "scenario-search:client-summit",
+            "source_result_set_id": "ranked-result-set:client-summit",
+            "itinerary_scenario_id": "scenario:trip-business-client-summit:2",
+            "ranked_result_set_id": "ranked-result-set:client-summit",
+            "option_set_ids": [
+              "option-set:air:exception",
+              "option-set:hotel:flex"
+            ],
+            "policy_state_id": "policy-state:q2-client-summit-exception",
+            "business_profile_id": "business-profile-consulting",
+            "notes": [
+              "Fallback path remains inspectable for policy exception review."
+            ]
+          },
+          "summary": "Exception-nearest route stays durable when the compliant path breaks.",
+          "tags": ["business", "exception"],
+          "notes": ["Comparison metadata should explain why the fallback exists."]
+        }
+      ],
+      "comparisons": [],
+      "tags": ["business", "fallback"],
+      "notes": ["Fallback remains explicit for later approval escalation."]
+    }
+  ],
+  "comparison": {
+    "comparison_id": "comparison:compliant-vs-exception",
+    "trip_id": "trip-business-client-summit",
+    "baseline_scenario_id": "saved-scenario:compliant-first",
+    "candidate_scenario_id": "saved-scenario:exception-nearest",
+    "compared_at": "2026-04-02T10:15:00Z",
+    "outcome": "tradeoff",
+    "summary": "Compliant-first stays primary while the exception-nearest path preserves schedule recovery.",
+    "focus_areas": ["policy", "schedule_protection", "exception_handling"],
+    "notes": ["Later review can trace why the exception path was retained."]
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "user_id": "user-leisure-1",
+  "email": "leisure@example.com",
+  "display_name": "Avery Leisure",
+  "traveler_profiles": [
+    {
+      "traveler_profile_id": "traveler-leisure-primary",
+      "display_name": "Primary leisure profile",
+      "profile_kind": "personal",
+      "supported_modes": ["leisure"],
+      "leisure_profile_id": "leisure-profile-paris",
+      "default_origin_airports": ["ORD"],
+      "regional_defaults": {
+        "locale": "en-US",
+        "currency": "USD",
+        "timezone": "America/Chicago",
+        "home_airport": "ORD",
+        "departure_region": "US-MIDWEST"
+      },
+      "traveler_tags": ["art-museums", "rail"],
+      "notes": ["Prefers off-peak leisure travel."]
+    }
+  ],
+  "account_preferences": {
+    "default_traveler_profile_id": "traveler-leisure-primary",
+    "default_interaction_style": "guided",
+    "default_summary_granularity": "balanced",
+    "default_trip_mode": "leisure",
+    "auto_save_checkpoints": true,
+    "regional_defaults": {
+      "locale": "en-US",
+      "currency": "USD",
+      "timezone": "America/Chicago",
+      "home_airport": "ORD",
+      "departure_region": "US-MIDWEST"
+    },
+    "notification_preferences": [
+      {"channel": "email", "cadence": "digest", "enabled": true}
+    ],
+    "preferred_languages": ["en-US"],
+    "planning_tags": ["leisure-defaults"]
+  },
+  "status": "active",
+  "schema_version": "0.1.0",
+  "external_refs": {
+    "crm_contact_id": "crm-1001"
+  },
+  "account_tags": ["beta-user"],
+  "notes": ["Owns leisure trip drafts and saved itineraries."]
+}

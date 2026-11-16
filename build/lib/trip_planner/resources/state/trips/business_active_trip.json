@@ -1,0 +1,84 @@
+{
+  "trip": {
+    "trip_id": "trip-business-client-summit",
+    "user_id": "user-biz-1",
+    "mode": "business",
+    "status": "active",
+    "trip_frame": {
+      "start_date": "2026-05-12",
+      "end_date": "2026-05-16",
+      "duration_days": 4,
+      "primary_regions": [
+        "US-IL"
+      ],
+      "traveler_party": {
+        "kind": "solo",
+        "traveler_count": 1,
+        "notes": "Client summit and partner meetings."
+      }
+    },
+    "profile_refs": {
+      "business_profile_id": "business-profile-consulting"
+    },
+    "artifacts": {
+      "objective_id": "objective:client-summit",
+      "option_set_ids": [
+        "option-set:business-hotel",
+        "option-set:policy-compliant-rail"
+      ],
+      "itinerary_state_id": "itinerary-state:client-summit",
+      "budget_state_id": "budget-state:client-summit",
+      "policy_state_id": "policy-state:q2-client-summit"
+    },
+    "title": "Q2 client summit",
+    "summary": "Active business trip coordinating rail, lodging, and policy approvals."
+  },
+  "owner_profile_id": "traveler-business",
+  "lifecycle": {
+    "created_at": "2026-03-28T15:10:00Z",
+    "updated_at": "2026-04-02T02:10:00Z"
+  },
+  "artifact_refs": {
+    "objective_id": "objective:client-summit",
+    "option_set_ids": [
+      "option-set:business-hotel",
+      "option-set:policy-compliant-rail"
+    ],
+    "ranked_result_set_id": "ranked-results:client-summit",
+    "scenario_search_id": "scenario-search:client-summit",
+    "saved_scenario_ids": [
+      "saved-scenario:compliant-primary"
+    ],
+    "itinerary_state_id": "itinerary-state:client-summit",
+    "budget_state_id": "budget-state:client-summit",
+    "policy_state_id": "policy-state:q2-client-summit",
+    "session_state_id": "session-state:client-summit",
+    "activity_log_id": "activity-log:client-summit"
+  },
+  "status_history": [
+    {
+      "to_status": "draft",
+      "changed_at": "2026-03-28T15:10:00Z",
+      "reason": "Trip request created",
+      "actor": "planner"
+    },
+    {
+      "from_status": "draft",
+      "to_status": "active",
+      "changed_at": "2026-04-02T02:10:00Z",
+      "reason": "Repository activated trip after policy precheck",
+      "actor": "planner"
+    }
+  ],
+  "revision": 3,
+  "external_refs": {
+    "erp_trip_id": "erp-trip-8842"
+  },
+  "tags": [
+    "client-summit",
+    "q2"
+  ],
+  "notes": [
+    "Business trip keeps policy state separate from saved scenario state."
+  ]
+}
