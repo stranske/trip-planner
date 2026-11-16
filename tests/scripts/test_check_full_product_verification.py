@@ -808,6 +808,86 @@ def test_tp3_probe_rejects_incorrect_persisted_price_totals(monkeypatch, corrupt
 
 
 @pytest.mark.parametrize("corrupt_amount", [250.0, 700.0])
+@pytest.mark.parametrize("corruption", ["none", "missing", "stale", "empty"])
+def test_tp3_probe_checks_compare_tab_response(monkeypatch, corrupt_amount, corruption):
+    import json
+
+    import httpx
+
+    trips = {}
+    prices = {}
+    corrupted_paths = []
+
+    def create_trip(_client, **kwargs):
+        trip_id = f"trip-{len(trips)}"
+        trips[trip_id] = kwargs
+        return trip_id
+
+    def respond(request):
+        path = request.url.path
+        trip_id = path.split("/")[3]
+        if path.endswith("/prices"):
+            if request.method == "PUT":
+                prices[trip_id] = json.loads(request.content)["amount"]
+            return httpx.Response(
+                200, json={"total": {"currency": "USD", "typical_amount": prices[trip_id]}}
+            )
+        minutes = 120 if trips[trip_id]["region"] == "Reykjavik, Iceland" else 60
+        scenarios = [
+            {
+                "rank": rank,
+                "metrics": {
+                    "estimated_total": {
+                        "currency": "USD",
+                        "typical_amount": prices.get(trip_id),
+                    },
+                    "travel_minutes": minutes,
+                    "transfers": 0,
+                },
+            }
+            for rank in (1, 2)
+        ]
+        if path.endswith("/scenarios/compare"):
+            return httpx.Response(200, json={"scenarios": scenarios})
+        assert path == f"/api/workspace/{trip_id}"
+        assert request.method == "GET"
+        if prices[trip_id] == corrupt_amount and corruption != "none":
+            if corruption == "empty":
+                scenarios.clear()
+            else:
+                # One bad displayed total must invalidate the price determinant
+                # even though persistence and the remaining scenario are correct.
+                scenarios[0]["metrics"]["estimated_total"] = (
+                    None
+                    if corruption == "missing"
+                    else {"currency": "USD", "typical_amount": 999.0}
+                )
+            corrupted_paths.append(path)
+        return httpx.Response(200, json={"route_comparison": {"scenarios": scenarios}})
+
+    monkeypatch.setattr(verifier, "_create_trip", create_trip)
+    evidence = {}
+    with httpx.Client(
+        transport=httpx.MockTransport(respond), base_url="http://testserver"
+    ) as client:
+        verdict = verifier._probe_comparison(client, evidence)
+    assert len(corrupted_paths) == (0 if corruption == "none" else 1)
+    assert [item["entered_total"] for item in evidence["pairs"]["price"]] == [250.0, 700.0]
+    price_requests = [
+        request for request in evidence["requests"] if request["path"].endswith("/prices")
+    ]
+    assert [request["method"] for request in price_requests] == ["PUT", "GET", "PUT", "GET"]
+    assert [request["body"]["total"]["typical_amount"] for request in price_requests] == [
+        250.0,
+        250.0,
+        700.0,
+        700.0,
+    ]
+    assert all(request["status"] == 200 for request in evidence["requests"])
+    assert verdict == ("WORKS" if corruption == "none" else "PARTIAL"), evidence
+
+
+@pytest.mark.parametrize("corrupt_amount", [250.0, 700.0])
 @pytest.mark.parametrize("displayed_total", [None, 999.0], ids=["missing", "stale"])
 def test_tp3_probe_rejects_one_incorrect_scenario_total(
     monkeypatch, corrupt_amount, displayed_total
