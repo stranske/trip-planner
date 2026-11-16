@@ -168,8 +168,7 @@ def run_frontend_runtime_smoke() -> CheckResult:
             command,
             cwd=REPO_ROOT,
             check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             timeout=180,
         )
@@ -591,7 +590,7 @@ def _wait_for_http(url: str, *, timeout_seconds: float = 20.0) -> None:
                 last_status = response.status
                 if 200 <= response.status < 400:
                     return
-        except Exception as exc:  # pragma: no cover - exercised by integration use
+        except Exception as exc:  # noqa: BLE001 # pragma: no cover - exercised by integration use
             last_error = exc
             status_code = getattr(exc, "code", None)
             if isinstance(status_code, int):
@@ -687,8 +686,13 @@ def _started_tpp_service(
         "TPP_ACCESS_TOKEN": env["TPP_ACCESS_TOKEN"],
         "TPP_OIDC_PROVIDER": env["TPP_OIDC_PROVIDER"],
     }
-    stdout_file = tempfile.NamedTemporaryFile(prefix="tpp-service-", suffix=".stdout", delete=False)
-    stderr_file = tempfile.NamedTemporaryFile(prefix="tpp-service-", suffix=".stderr", delete=False)
+    # These files must remain addressable after their handles close so readiness failures can tail them.
+    stdout_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
+        prefix="tpp-service-", suffix=".stdout", delete=False
+    )
+    stderr_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
+        prefix="tpp-service-", suffix=".stderr", delete=False
+    )
     stdout_path = Path(stdout_file.name)
     stderr_path = Path(stderr_file.name)
     command = [
@@ -747,7 +751,7 @@ def _run_live_tpp_journey(
     expected_evaluation_status: str = EXPECTED_BUSINESS_EVALUATION_STATUS,
 ) -> dict[str, Any]:
     evaluation_fixture_name = _evaluation_fixture_name(expected_evaluation_status)
-    with _started_tpp_service(env) as (base_url, _process):
+    with _started_tpp_service(env) as (base_url, _process):  # noqa: SIM117
         with _temporary_tpp_client_environment(base_url, env):
             policy_request = _prepared_policy_request(trip_id)
             policy_response = client.put(
@@ -1077,9 +1081,11 @@ def run_product_journeys(
 
             if tpp_status.status == "READY":
                 live_tpp_env = {key: str(value) for key, value in tpp_status.details.items()}
-                with _started_tpp_service(live_tpp_env) as (base_url, _process):
-                    with _temporary_tpp_client_environment(base_url, live_tpp_env):
-                        refresh = client.post(f"/api/workspace/{business_trip_id}/proposal/refresh")
+                with (
+                    _started_tpp_service(live_tpp_env) as (base_url, _process),
+                    _temporary_tpp_client_environment(base_url, live_tpp_env),
+                ):
+                    refresh = client.post(f"/api/workspace/{business_trip_id}/proposal/refresh")
             else:
                 refresh = client.post(f"/api/workspace/{business_trip_id}/proposal/refresh")
             _require(
@@ -1545,7 +1551,7 @@ def run_contract_report() -> list[dict[str, Any]]:
                 evidence: dict[str, Any] = {"transport": "TestClient; local TPP fixture envelopes"}
                 try:
                     verdict = probe(client, evidence)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - each probe must report independently.
                     verdict = "BROKEN"
                     evidence["exception"] = {"type": type(exc).__name__, "message": str(exc)}
                 rows.append({"id": f"TP{index}", "verdict": verdict, "evidence": evidence})
@@ -1603,7 +1609,7 @@ def main(argv: list[str] | None = None) -> int:
         # must never prevent the independent contract observations from being collected.
         try:
             _print_results(run_product_journeys(live_tpp=args.live_tpp))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - report mode preserves contract observations.
             print(f"Existing product journey failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         rows = run_contract_report()
         args.contract_report.parent.mkdir(parents=True, exist_ok=True)
@@ -1618,7 +1624,7 @@ def main(argv: list[str] | None = None) -> int:
     except VerificationFailure as exc:
         print(f"Full-product verification failed: {exc}", file=sys.stderr)
         return 1
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - CLI boundary reports unexpected failures.
         print(
             "Full-product verification failed due to an unexpected error: "
             f"{type(exc).__name__}: {exc}. Check repository/configuration paths "

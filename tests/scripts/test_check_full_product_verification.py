@@ -194,15 +194,17 @@ def test_started_tpp_service_readiness_failure_includes_captured_stderr(
     )
     monkeypatch.setattr(verifier, "_free_local_port", lambda _preferred: 43123)
 
-    with pytest.raises(verifier.VerificationFailure) as exc_info:
-        with verifier._started_tpp_service(
+    with (
+        pytest.raises(verifier.VerificationFailure) as exc_info,
+        verifier._started_tpp_service(
             {
                 "TPP_REPO_PATH": str(repo_path),
                 "TPP_ACCESS_TOKEN": "token",
                 "TPP_OIDC_PROVIDER": "google",
             }
-        ):
-            pass
+        ),
+    ):
+        pass
 
     message = str(exc_info.value)
     assert str(venv_python) in message
@@ -233,15 +235,17 @@ def test_started_tpp_service_launch_failure_cleans_temp_files(monkeypatch, tmp_p
     monkeypatch.setattr(verifier.subprocess, "Popen", fail_popen)
     monkeypatch.setattr(verifier, "_free_local_port", lambda _preferred: 43125)
 
-    with pytest.raises(OSError, match="cannot start"):
-        with verifier._started_tpp_service(
+    with (
+        pytest.raises(OSError, match="cannot start"),
+        verifier._started_tpp_service(
             {
                 "TPP_REPO_PATH": str(repo_path),
                 "TPP_ACCESS_TOKEN": "token",
                 "TPP_OIDC_PROVIDER": "google",
             }
-        ):
-            pass
+        ),
+    ):
+        pass
 
     assert len(created_paths) == 2
     assert all(not path.exists() for path in created_paths)
@@ -294,15 +298,17 @@ def test_started_tpp_service_readiness_failure_quotes_command(monkeypatch, tmp_p
     )
     monkeypatch.setattr(verifier, "_free_local_port", lambda _preferred: 43126)
 
-    with pytest.raises(verifier.VerificationFailure) as exc_info:
-        with verifier._started_tpp_service(
+    with (
+        pytest.raises(verifier.VerificationFailure) as exc_info,
+        verifier._started_tpp_service(
             {
                 "TPP_REPO_PATH": str(repo_path),
                 "TPP_ACCESS_TOKEN": "token",
                 "TPP_OIDC_PROVIDER": "google",
             }
-        ):
-            pass
+        ),
+    ):
+        pass
 
     message = str(exc_info.value)
     assert f"'{venv_python}'" in message
@@ -321,15 +327,17 @@ def test_started_tpp_service_missing_deps_failure_includes_stderr(
 
     monkeypatch.setattr(verifier, "_wait_for_http", fail_readiness_after_process_boot)
 
-    with pytest.raises(verifier.VerificationFailure) as exc_info:
-        with verifier._started_tpp_service(
+    with (
+        pytest.raises(verifier.VerificationFailure) as exc_info,
+        verifier._started_tpp_service(
             {
                 "TPP_REPO_PATH": str(repo_path),
                 "TPP_ACCESS_TOKEN": "token",
                 "TPP_OIDC_PROVIDER": "google",
             }
-        ):
-            pass
+        ),
+    ):
+        pass
 
     message = str(exc_info.value)
     assert str(venv_python) in message
