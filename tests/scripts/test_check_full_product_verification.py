@@ -733,9 +733,18 @@ def test_tp3_probe_price_request_failures_are_broken(monkeypatch, failed_method,
 
 
 @pytest.mark.parametrize("control_failure", ["malformed", "interrupted"])
-@pytest.mark.parametrize("vary_figures", [True, False], ids=["working", "fabricated"])
+@pytest.mark.parametrize(
+    ("vary_destination", "vary_price", "expected"),
+    [
+        (True, True, "WORKS"),
+        (True, False, "PARTIAL"),
+        (False, True, "PARTIAL"),
+        (False, False, "FABRICATED"),
+    ],
+    ids=["working", "destination-only", "price-only", "fabricated"],
+)
 def test_tp3_control_errors_do_not_change_determinant_verdict(
-    monkeypatch, control_failure, vary_figures
+    monkeypatch, control_failure, vary_destination, vary_price, expected
 ):
     import httpx
 
@@ -756,9 +765,9 @@ def test_tp3_control_errors_do_not_change_determinant_verdict(
                     {
                         "estimated_total": {
                             "currency": "USD",
-                            "typical_amount": amount if vary_figures else 100.0,
+                            "typical_amount": amount if vary_price else 100.0,
                         },
-                        "travel_minutes": 120 if vary_figures and "Iceland" in region else 60,
+                        "travel_minutes": 120 if vary_destination and "Iceland" in region else 60,
                     }
                 ],
             }
@@ -767,7 +776,7 @@ def test_tp3_control_errors_do_not_change_determinant_verdict(
 
     monkeypatch.setattr(verifier, "_comparison_pair", observe_pair)
     evidence = {}
-    assert verifier._probe_comparison(None, evidence) == ("WORKS" if vary_figures else "FABRICATED")
+    assert verifier._probe_comparison(None, evidence) == expected
     assert evidence["controls"] == {"party_error": str(error)}
     assert set(evidence["pairs"]) == {"destination", "price"}
 
