@@ -1,0 +1,80 @@
+{
+  "trip": {
+    "trip_id": "trip-leisure-kyoto-draft",
+    "user_id": "user-leisure-1",
+    "mode": "leisure",
+    "status": "draft",
+    "trip_frame": {
+      "start_date": "2026-04-10",
+      "end_date": "2026-04-24",
+      "duration_days": 14,
+      "primary_regions": [
+        "JP-26",
+        "JP-27"
+      ],
+      "traveler_party": {
+        "kind": "pair",
+        "traveler_count": 2,
+        "notes": "Anniversary trip with moderate pace."
+      }
+    },
+    "profile_refs": {
+      "leisure_profile_id": "leisure-profile-paris"
+    },
+    "artifacts": {
+      "objective_id": "objective:kyoto-spring",
+      "option_set_ids": [
+        "option-set:route-compare",
+        "option-set:lodging-shortlist"
+      ],
+      "itinerary_state_id": "itinerary-state:kyoto-spring",
+      "budget_state_id": "budget-state:kyoto-spring"
+    },
+    "title": "Spring Kyoto anniversary draft",
+    "summary": "Initial leisure trip shell with routing and lodging options."
+  },
+  "owner_profile_id": "traveler-leisure",
+  "lifecycle": {
+    "created_at": "2026-04-02T03:45:00Z",
+    "updated_at": "2026-04-02T04:00:00Z"
+  },
+  "artifact_refs": {
+    "objective_id": "objective:kyoto-spring",
+    "option_set_ids": [
+      "option-set:route-compare",
+      "option-set:lodging-shortlist"
+    ],
+    "ranked_result_set_id": "ranked-results:kyoto-spring",
+    "scenario_search_id": "scenario-search:kyoto-spring",
+    "saved_scenario_ids": [
+      "saved-scenario:baseline-kyoto",
+      "saved-scenario:fallback-osaka"
+    ],
+    "itinerary_state_id": "itinerary-state:kyoto-spring",
+    "budget_state_id": "budget-state:kyoto-spring",
+    "session_state_id": "session-state:kyoto-spring",
+    "activity_log_id": "activity-log:kyoto-spring",
+    "notes": [
+      "Scenario snapshots stay out-of-line so later issue #540 can version them explicitly."
+    ]
+  },
+  "status_history": [
+    {
+      "to_status": "draft",
+      "changed_at": "2026-04-02T03:45:00Z",
+      "reason": "Trip container created",
+      "actor": "planner"
+    }
+  ],
+  "revision": 2,
+  "external_refs": {
+    "crm_account_id": "acct-kyoto-001"
+  },
+  "tags": [
+    "anniversary",
+    "japan-2026"
+  ],
+  "notes": [
+    "Trip record references ranked and saved scenario artifacts without inlining them."
+  ]
+}

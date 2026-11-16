@@ -1,0 +1,62 @@
+{
+  "budget_plan_id": "budget-plan:client-summit",
+  "trip_id": "trip-business-client-summit",
+  "owner_profile_id": "traveler-profile:consulting-team",
+  "title": "Client summit policy-aware budget",
+  "mode": "business",
+  "created_at": "2026-04-02T06:00:00Z",
+  "updated_at": "2026-04-02T06:20:00Z",
+  "current_scenario_budget_id": "budget-scenario:client-summit-compliant",
+  "currency": "USD",
+  "tags": ["business", "policy"],
+  "notes": ["Protected workspace and client meal categories align with reimbursement review."],
+  "scenario_budgets": [
+    {
+      "scenario_budget_id": "budget-scenario:client-summit-compliant",
+      "trip_id": "trip-business-client-summit",
+      "title": "Compliant booking budget",
+      "created_at": "2026-04-02T06:00:00Z",
+      "saved_scenario_id": "saved-scenario:client-summit-compliant",
+      "currency": "USD",
+      "summary": "Preferred suppliers and policy-safe meal posture.",
+      "tags": ["compliant_first"],
+      "allocations": [
+        {
+          "category_key": "lodging",
+          "label": "Preferred hotel block",
+          "planned_amount": 940.0,
+          "currency": "USD",
+          "flexibility": "protected"
+        },
+        {
+          "category_key": "transport",
+          "label": "Preferred carrier airfare and airport transfers",
+          "planned_amount": 690.0,
+          "currency": "USD",
+          "flexibility": "fixed"
+        },
+        {
+          "category_key": "food",
+          "label": "Daily meals within policy caps",
+          "planned_amount": 260.0,
+          "currency": "USD",
+          "flexibility": "flexible"
+        },
+        {
+          "category_key": "workspace",
+          "label": "Coworking meeting room buffer",
+          "planned_amount": 180.0,
+          "currency": "USD",
+          "flexibility": "protected"
+        },
+        {
+          "category_key": "client_hospitality",
+          "label": "Hosted client dinner",
+          "planned_amount": 220.0,
+          "currency": "USD",
+          "flexibility": "protected"
+        }
+      ]
+    }
+  ]
+}

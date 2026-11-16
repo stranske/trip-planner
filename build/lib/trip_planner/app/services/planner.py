@@ -1,0 +1,2388 @@
+"""Trip-scoped planner conversation services."""
+
+from __future__ import annotations
+
+import json
+import math
+import re
+import secrets
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any, Protocol
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from trip_planner.app.services import policy_codes
+from trip_planner.app.services.auth import AuthenticatedUser
+from trip_planner.app.services.planner_memory import (
+    build_planner_memory_payload,
+    ensure_planner_memory_persisted,
+    refresh_planner_memory,
+)
+from trip_planner.app.services.planner_routing import (
+    TASK_CLASSES,
+    IntentClassifier,
+    IntentResult,
+    route_planner_turn,
+)
+from trip_planner.app.services.planner_runtime_config import (
+    PlannerRuntimeConfig,
+    build_intent_classifier,
+    get_planner_runtime_config,
+)
+from trip_planner.app.services.planner_tools import (
+    execute_planner_tool_call,
+    get_cached_workspace_payload,
+    list_planner_tools,
+)
+from trip_planner.app.services.workspace import (
+    WORKSPACE_ACTIVITY_LOG_LIMIT,
+    _add_planning_ledger_entry,
+    _append_activity_event,
+    _get_or_create_workspace_session_record,
+    _get_owned_trip_record,
+    _isoformat,
+    _record_planner_action,
+    _serialize_activity_record,
+    _serialize_session_record,
+)
+from trip_planner.geo.resolver import country_code_for_name, resolve_place
+from trip_planner.observability.langsmith_fleet import (
+    PlannerFleetContext,
+    append_fleet_records,
+    build_langsmith_run_config,
+    build_planner_fleet_records,
+    default_fleet_artifact_path,
+)
+from trip_planner.persistence.models.activity import (
+    PersistedActivityLogEvent,
+    PersistedPlannerAction,
+)
+from trip_planner.preferences.autonomy import AutonomyGuardrails
+from trip_planner.state.sessions import PlanningSessionState
+
+
+class WorkspacePlannerTripNotFoundError(ValueError):
+    """Raised when the planner conversation targets an unknown trip."""
+
+
+@dataclass(frozen=True, slots=True)
+class PlannerConversationRequest:
+    trip_id: str
+    message: str
+    planner_panel_state: dict[str, Any]
+    session: PlanningSessionState
+    runtime_context: dict[str, Any]
+    intent_classifier: IntentClassifier | None = None
+    langsmith_run_config: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PlannerConversationReply:
+    content: str
+    refs: list[str]
+    tool_calls: list[dict[str, Any]]
+    requested_tool_calls: list[dict[str, Any]] | None = None
+    structured_blocks: list[dict[str, Any]] | None = None
+    turn_metadata: dict[str, Any] | None = None
+
+
+@dataclass(slots=True)
+class _PlannerTurnRuntime:
+    normalized_message: str
+    session: PlanningSessionState
+    occurred_at: str
+    workspace_payload: dict[str, Any]
+    runtime_context: dict[str, Any]
+    runtime_config: PlannerRuntimeConfig
+    intent_classifier: IntentClassifier
+    chat_model: PlannerChatModel | None
+    fleet_context: PlannerFleetContext
+    activity_log: list[dict[str, Any]]
+    executed_tool_calls: list[dict[str, Any]]
+
+
+class PlannerChatModel(Protocol):
+    def invoke(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Return planner content and optional tool call requests."""
+
+
+PlannerChatModelFactory = Callable[[PlannerRuntimeConfig], PlannerChatModel]
+PlannerPromptRedactor = Callable[[dict[str, Any]], dict[str, Any]]
+IntentClassifierFactory = Callable[[PlannerRuntimeConfig], IntentClassifier]
+
+_PLANNER_CHAT_MODEL_FACTORY: PlannerChatModelFactory | None = None
+_PLANNER_PROMPT_REDACTOR: PlannerPromptRedactor | None = None
+_INTENT_CLASSIFIER_FACTORY: IntentClassifierFactory | None = None
+_GROUNDING_TOOL_NAMES: tuple[str, ...] = (
+    "read_workspace_state",
+    "refresh_inventory",
+    "refresh_scenarios",
+    "read_budget_state",
+    "read_policy_state",
+    "read_proposal_state",
+)
+_NOTEBOOK_COMMAND_CATEGORIES: tuple[str, ...] = (
+    "route",
+    "lodging",
+    "activities",
+    "budget",
+    "documents",
+    "policy",
+)
+_NOTEBOOK_CATEGORY_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "lodging": (
+        "hotel",
+        "hotels",
+        "lodging",
+        "stay",
+        "stays",
+        "accommodation",
+        "accommodations",
+        "room",
+        "rooms",
+        "apartment",
+        "apartments",
+    ),
+    "route": (
+        "route",
+        "routes",
+        "flight",
+        "flights",
+        "airfare",
+        "train",
+        "trains",
+        "transfer",
+        "transfers",
+        "arrival",
+        "airport",
+        "transit",
+        "transport",
+    ),
+    "activities": (
+        "restaurant",
+        "restaurants",
+        "museum",
+        "museums",
+        "activity",
+        "activities",
+        "sightseeing",
+        "tour",
+        "tours",
+        "attraction",
+        "attractions",
+        "things to do",
+    ),
+    "budget": (
+        "budget",
+        "cost",
+        "costs",
+        "price",
+        "prices",
+        "fare",
+        "fares",
+        "expense",
+        "expenses",
+    ),
+    "documents": (
+        "passport",
+        "passports",
+        "visa",
+        "visas",
+        "document",
+        "documents",
+        "paperwork",
+        "form",
+        "forms",
+    ),
+    "policy": (
+        "policy",
+        "policies",
+        "approval",
+        "approvals",
+        "exception",
+        "exceptions",
+        "permission",
+        "permissions",
+    ),
+}
+_NOTEBOOK_FOCUS_INTENT_MARKERS = (
+    "working on",
+    "focus on",
+    "focusing on",
+    "focused on",
+    "switch to",
+    "switched to",
+    "looking at",
+    "checking on",
+    "checking out",
+    "reorient to",
+    "back to",
+)
+_NOTEBOOK_AMBIGUOUS_REFERENCE_MARKERS = (
+    "future list",
+    "later ideas",
+    "put this aside",
+    "aside for later",
+    "for later",
+)
+_NOTEBOOK_SESSION_RESUME_MARKERS = (
+    "pick up where",
+    "where we left off",
+    "what were we working on",
+    "what was i working on",
+    "resume planning",
+    "resume where we",
+    "catch me up",
+)
+
+_DATE_MARKERS = (
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+    "weekend",
+    "week",
+    "days",
+    "nights",
+)
+_MONTH_ABBREVIATIONS = (
+    "jan",
+    "feb",
+    "mar",
+    "apr",
+    "jun",
+    "jul",
+    "aug",
+    "sep",
+    "sept",
+    "oct",
+    "nov",
+    "dec",
+)
+_CONSTRAINT_MARKERS = (
+    "budget",
+    "hotel",
+    "flight",
+    "train",
+    "museum",
+    "food",
+    "kids",
+    "family",
+    "business",
+    "approval",
+    "accessible",
+    "walking",
+    "transfer",
+)
+_SYNTHESIS_MARKERS = (
+    "compare",
+    "option",
+    "route",
+    "itinerary",
+    "plan",
+    "summary",
+    "decide",
+)
+_PREFERENCE_MARKERS = (
+    "prefer",
+    "want",
+    "like",
+    "love",
+    "avoid",
+    "interested",
+    "priority",
+    "important",
+    "pace",
+    "quiet",
+    "scenic",
+    "food",
+    "museum",
+    "nature",
+)
+_UNCERTAINTY_MARKERS = (
+    "maybe",
+    "not sure",
+    "unsure",
+    "could",
+    "might",
+    "probably",
+    "possibly",
+    "depends",
+    "?",
+)
+_NOTE_MARKERS = (
+    "also",
+    "note",
+    "remember",
+    "remind",
+    "later",
+    "future",
+    "unrelated",
+    "parking",
+    "passport",
+    "visa",
+)
+_NON_DESTINATION_CAPITALIZED_TOKENS = {
+    "i",
+    "i'd",
+    "i'll",
+    "i'm",
+    "we",
+    "we'd",
+    "we'll",
+    "we're",
+    "can",
+    "could",
+    "help",
+    "maybe",
+    "not",
+    "please",
+}
+_CLARIFYING_SKIP_AFFORDANCE = (
+    "You can skip any of these and we'll proceed with reasonable defaults."
+)
+_LOW_CONFIDENCE_LABELS = {"sparse", "uncertain"}
+_LOW_CONFIDENCE_UNCERTAINTY_LINE = (
+    "Source coverage is thin, so treat these options as uncertain until more evidence is attached."
+)
+_PLANNER_SYSTEM_PROMPT = (
+    "You are a trip-scoped planner. Use only the listed app tools for "
+    "workspace, inventory, scenario, budget, policy, or proposal facts. "
+    "Do not invent persisted state. Keep answers concise, lead with concrete "
+    "options before discussion, and explicitly state uncertainty when source "
+    "coverage is thin."
+)
+
+
+def _structured_block(
+    *,
+    kind: str,
+    title: str,
+    body: str = "",
+    items: list[str] | None = None,
+    metadata: dict[str, Any] | None = None,
+    hidden: bool = False,
+) -> dict[str, Any]:
+    return {
+        "kind": kind,
+        "title": title,
+        "body": body,
+        "items": list(items or []),
+        "metadata": dict(metadata or {}),
+        "hidden": hidden,
+    }
+
+
+def _bounded_clarifying_items(items: list[str]) -> list[str]:
+    return [*items[:2], _CLARIFYING_SKIP_AFFORDANCE]
+
+
+def _looks_like_destination_token(token: str, index: int) -> bool:
+    if not token[:1].isupper():
+        return False
+    lowered = token.lower()
+    if lowered in _DATE_MARKERS or lowered in _MONTH_ABBREVIATIONS:
+        return False
+    return index > 0 or lowered not in _NON_DESTINATION_CAPITALIZED_TOKENS
+
+
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
+    return [item for item in dict.fromkeys(item.strip() for item in items if item.strip()) if item]
+
+
+def _split_user_clauses(message: str) -> list[str]:
+    clauses = re.split(r"(?:\n+|[.;]|(?:\s+-\s+))", message)
+    return [clause.strip(" ,") for clause in clauses if clause.strip(" ,")]
+
+
+def _extract_destination_mentions(message: str) -> list[str]:
+    """Capitalised phrases that name a real place.
+
+    Any capitalised word used to count, so "My approval was blocked ... What is the
+    lowest fare" was heard as "Destinations: My, What" (issue 1845). A mention now has
+    to name a real city or country; single letters never do ("I" matches an alternate
+    city name).
+    """
+
+    mentions: list[str] = []
+    for match in re.finditer(r"\b[A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*){0,3}\b", message):
+        words = match.group(0).split()
+        while words and words[0].lower() in _NON_DESTINATION_CAPITALIZED_TOKENS:
+            words = words[1:]
+        if not words:
+            continue
+        if any(
+            word.lower() in _DATE_MARKERS or word.lower() in _MONTH_ABBREVIATIONS for word in words
+        ):
+            continue
+        if any(
+            word.lower()
+            in _CONSTRAINT_MARKERS + _PREFERENCE_MARKERS + _UNCERTAINTY_MARKERS + _NOTE_MARKERS
+            for word in words
+        ):
+            continue
+        mention = " ".join(words)
+        if len(mention) < 2 or (
+            resolve_place(mention) is None and country_code_for_name(mention) is None
+        ):
+            continue
+        mentions.append(mention)
+    return _dedupe_preserve_order(mentions)
+
+
+def _extract_date_mentions(message: str) -> list[str]:
+    lowered = message.lower()
+    date_mentions = [
+        marker for marker in _DATE_MARKERS if re.search(rf"\b{re.escape(marker)}\b", lowered)
+    ]
+    date_mentions.extend(
+        match.group(0).rstrip(".")
+        for match in re.finditer(
+            rf"\b(?:{'|'.join(_MONTH_ABBREVIATIONS)})(?:\.)?(?=\s|\d|$|[,;/:-])",
+            lowered,
+        )
+    )
+    date_mentions.extend(re.findall(r"\b\d{4}-\d{2}-\d{2}\b", message))
+    date_mentions.extend(re.findall(r"\b\d+\s+(?:days|nights|weeks)\b", lowered))
+    return _dedupe_preserve_order(date_mentions)
+
+
+def _trip_frame_has_timing(trip_frame: Mapping[str, Any] | None) -> bool:
+    if not trip_frame:
+        return False
+    if str(trip_frame.get("start_date") or "").strip():
+        return True
+    if str(trip_frame.get("end_date") or "").strip():
+        return True
+    try:
+        return int(trip_frame.get("duration_days") or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _trip_frame_from_panel(panel: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    trip = panel.get("trip")
+    if not isinstance(trip, Mapping):
+        return None
+    trip_frame = trip.get("trip_frame")
+    return trip_frame if isinstance(trip_frame, Mapping) else None
+
+
+def _matching_clauses(message: str, markers: tuple[str, ...]) -> list[str]:
+    matches: list[str] = []
+    for clause in _split_user_clauses(message):
+        lowered = clause.lower()
+        if any(marker in lowered for marker in markers):
+            matches.append(clause)
+    return _dedupe_preserve_order(matches)
+
+
+def _should_summarize_traveler_message(message: str, summary: dict[str, list[str]]) -> bool:
+    signal_count = sum(len(items) for items in summary.values())
+    return len(message.split()) >= 28 or "\n" in message or ";" in message or signal_count >= 4
+
+
+def _traveler_input_summary_blocks(message: str) -> list[dict[str, Any]]:
+    summary = {
+        "destinations": _extract_destination_mentions(message),
+        "dates": _extract_date_mentions(message),
+        "constraints": _matching_clauses(message, _CONSTRAINT_MARKERS),
+        "preferences": _matching_clauses(message, _PREFERENCE_MARKERS),
+        "uncertainties": _matching_clauses(message, _UNCERTAINTY_MARKERS),
+        "notebook_notes": _matching_clauses(message, _NOTE_MARKERS),
+    }
+    if not _should_summarize_traveler_message(message, summary):
+        return []
+
+    items: list[str] = []
+    labels = {
+        "destinations": "Destinations",
+        "dates": "Timing",
+        "constraints": "Constraints",
+        "preferences": "Preferences",
+        "uncertainties": "Open questions",
+        "notebook_notes": "Notes to remember",
+    }
+    for key, label in labels.items():
+        values = summary[key]
+        if values:
+            items.append(f"{label}: {', '.join(values[:3])}")
+
+    return [
+        _structured_block(
+            kind="traveler_input_summary",
+            title="Traveler input summary",
+            body="Key details pulled out of the message so the next planner turn can keep them in view.",
+            items=items,
+            metadata=summary,
+        )
+    ]
+
+
+def _record_traveler_message_ledger_entries(
+    db_session: Session,
+    *,
+    trip_id: str,
+    session_state_id: str,
+    message: str,
+    activity_event_id: str,
+    structured_blocks: list[dict[str, Any]],
+) -> None:
+    lowered = message.lower()
+    metadata = (
+        structured_blocks[0].get("metadata", {})
+        if structured_blocks and structured_blocks[0].get("kind") == "traveler_input_summary"
+        else {}
+    )
+    for constraint in list(metadata.get("constraints") or [])[:3]:
+        _add_planning_ledger_entry(
+            db_session,
+            trip_id=trip_id,
+            session_state_id=session_state_id,
+            item_type="constraint",
+            summary=str(constraint),
+            source_refs=[activity_event_id],
+            metadata={"source": "planner_turn"},
+        )
+    for question in list(metadata.get("uncertainties") or [])[:3]:
+        _add_planning_ledger_entry(
+            db_session,
+            trip_id=trip_id,
+            session_state_id=session_state_id,
+            item_type="open_question",
+            summary=str(question),
+            source_refs=[activity_event_id],
+            metadata={"source": "planner_turn"},
+        )
+    for note in list(metadata.get("notebook_notes") or [])[:3]:
+        _add_planning_ledger_entry(
+            db_session,
+            trip_id=trip_id,
+            session_state_id=session_state_id,
+            item_type="assumption",
+            summary=str(note),
+            source_refs=[activity_event_id],
+            metadata={"source": "planner_turn"},
+        )
+    if "decide" in lowered or "decision" in lowered:
+        _add_planning_ledger_entry(
+            db_session,
+            trip_id=trip_id,
+            session_state_id=session_state_id,
+            item_type="decision",
+            summary=_first_sentence(message)[:280],
+            source_refs=[activity_event_id],
+            metadata={"source": "planner_turn"},
+        )
+    if "source" in lowered or "link" in lowered or "reference" in lowered:
+        _add_planning_ledger_entry(
+            db_session,
+            trip_id=trip_id,
+            session_state_id=session_state_id,
+            item_type="source_reference",
+            summary=_first_sentence(message)[:280],
+            source_refs=[activity_event_id],
+            metadata={"source": "planner_turn"},
+        )
+
+
+def _planner_turn_metadata(
+    *,
+    message: str,
+    runtime_config: PlannerRuntimeConfig,
+    turn_index: int,
+    planning_mode: str | None = None,
+    intent_classifier: IntentClassifier | None = None,
+    trip_frame: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    lowered = message.lower()
+    raw_tokens = [token.strip(".,!?;:()[]{}\"'") for token in message.split()]
+    tokens = [token.lower() for token in raw_tokens]
+    destination_hits = sum(
+        1 for index, token in enumerate(raw_tokens) if _looks_like_destination_token(token, index)
+    )
+    date_hits = len(_extract_date_mentions(message))
+    timing_known = date_hits > 0 or _trip_frame_has_timing(trip_frame)
+    constraint_hits = sum(1 for marker in _CONSTRAINT_MARKERS if marker in lowered)
+    synthesis_hits = sum(1 for marker in _SYNTHESIS_MARKERS if marker in lowered)
+    question_hits = lowered.count("?")
+
+    if lowered in {"help", "plan a trip", "vacation ideas"}:
+        plan_maturity = "open_ended"
+        task_class = "first_turn_triage"
+        blocks = [
+            {
+                "kind": "guidance",
+                "title": "Start with a direction",
+                "items": [
+                    "Choose a destination or region.",
+                    "Add timing, trip length, and traveler constraints.",
+                    "Name one priority such as food, pace, budget, or business approval.",
+                ],
+            },
+            {
+                "kind": "clarifying_questions",
+                "title": "Quick questions",
+                "items": _bounded_clarifying_items(
+                    [
+                        "Where are you considering going?",
+                        *([] if timing_known else ["When would you like to travel?"]),
+                        "What would make this trip feel successful?",
+                    ]
+                ),
+            },
+        ]
+    elif constraint_hits >= 5 or question_hits >= 3 or len(tokens) >= 45:
+        plan_maturity = "overloaded_constraints"
+        task_class = "planning_synthesis"
+        blocks = [
+            {
+                "kind": "summary",
+                "title": "Organize the constraints",
+                "items": [
+                    "Group timing, budget, traveler needs, and approval constraints before generating routes.",
+                    "Separate firm requirements from preferences so tradeoffs are visible.",
+                ],
+            },
+            {
+                "kind": "next_steps",
+                "title": "Next planning moves",
+                "items": [
+                    "Confirm must-haves.",
+                    "Rank the top tradeoff areas.",
+                    "Generate fewer, clearer options after the constraints are sorted.",
+                ],
+            },
+        ]
+    elif destination_hits >= 1 and date_hits >= 1 and constraint_hits >= 1:
+        plan_maturity = "coherent_plan"
+        task_class = "route_comparison" if synthesis_hits else "planning_synthesis"
+        blocks = [
+            {
+                "kind": "summary",
+                "title": "Understood plan",
+                "items": [
+                    "You have enough destination, timing, and constraint detail to start shaping options.",
+                    "The next turn can compare routes, pace, stays, or approval needs instead of restarting intake.",
+                ],
+            },
+            {
+                "kind": "next_steps",
+                "title": "Next planning moves",
+                "items": [
+                    "Confirm the most important tradeoff.",
+                    "Compare a small set of route or stay options.",
+                    "Preserve open decisions for the workspace checklist.",
+                ],
+            },
+        ]
+    else:
+        plan_maturity = "partial_plan"
+        task_class = "first_turn_triage"
+        blocks = [
+            {
+                "kind": "summary",
+                "title": "Partial plan",
+                "items": [
+                    "There is enough context to continue, but a few planning decisions are still missing.",
+                    "Targeted questions should close the largest gaps before deeper synthesis.",
+                ],
+            },
+            {
+                "kind": "clarifying_questions",
+                "title": "Targeted questions",
+                "items": _bounded_clarifying_items(
+                    [
+                        *(
+                            []
+                            if timing_known
+                            else ["What dates or trip length should the planner assume?"]
+                        ),
+                        "Which tradeoff matters most: budget, pace, lodging, route, or approvals?",
+                    ]
+                ),
+            },
+        ]
+
+    classifier = intent_classifier or _intent_classifier(runtime_config)
+    intent_result = classifier.classify(
+        message,
+        {
+            "base_task_class": task_class,
+            "planning_mode": planning_mode,
+            "turn_index": turn_index,
+            "runtime_mode": runtime_config.mode,
+            "runtime_provider": runtime_config.provider,
+            "runtime_model": runtime_config.model,
+        },
+    )
+    if intent_result.task_class not in TASK_CLASSES:
+        intent_result = IntentResult(task_class=task_class, intent=task_class)
+    provider_state = "model" if runtime_config.mode == "model" else "fallback"
+    routing_decision = route_planner_turn(
+        message=message,
+        base_task_class=intent_result.task_class,
+        planning_mode=planning_mode,
+        provider_state=provider_state,
+        fallback_reason=runtime_config.fallback_reason,
+    )
+    return {
+        "plan_maturity": plan_maturity,
+        "task_class": routing_decision.task_class,
+        "effort_class": routing_decision.effort_class,
+        "base_effort_class": routing_decision.base_effort_class,
+        "selected_planning_mode": planning_mode,
+        "intent": intent_result.intent,
+        "provider_state": provider_state,
+        "fallback_reason": routing_decision.fallback_reason,
+        "visible_response_blocks": blocks,
+        "debug_routing_details": {
+            "runtime_mode": runtime_config.mode,
+            "runtime_provider": runtime_config.provider,
+            "runtime_model": runtime_config.model,
+            "turn_index": turn_index,
+            "routing_reasoning": routing_decision.reasoning,
+            "base_task_class": task_class,
+            "classifier_task_class": intent_result.task_class,
+            "classifier_intent": intent_result.intent,
+            "selected_planning_mode": planning_mode,
+            "signals": {
+                "token_count": len(tokens),
+                "date_hits": date_hits,
+                "constraint_hits": constraint_hits,
+                "synthesis_hits": synthesis_hits,
+                "question_hits": question_hits,
+            },
+        },
+    }
+
+
+def _contains_notebook_marker(message: str, marker: str) -> bool:
+    if " " in marker:
+        return marker in message
+    return re.search(rf"\b{re.escape(marker)}\b", message) is not None
+
+
+def _match_notebook_category(phrase: str) -> tuple[str | None, bool]:
+    lowered = phrase.lower()
+    matches = {
+        category
+        for category, markers in _NOTEBOOK_CATEGORY_SYNONYMS.items()
+        if any(_contains_notebook_marker(lowered, marker) for marker in markers)
+    }
+    if len(matches) == 1:
+        return next(iter(matches)), False
+    if len(matches) > 1:
+        return None, True
+    if any(marker in lowered for marker in _NOTEBOOK_AMBIGUOUS_REFERENCE_MARKERS):
+        return None, True
+    return None, False
+
+
+def _infer_notebook_category(message: str) -> str:
+    category, _ = _match_notebook_category(message)
+    return category or "other"
+
+
+def _notebook_focus_clarification(message: str) -> str | None:
+    lowered = message.lower()
+    if any(
+        marker in lowered
+        for marker in (
+            "remember this for later",
+            "remember that",
+            "save this",
+            "note this",
+        )
+    ):
+        return None
+    has_focus_intent = any(marker in lowered for marker in _NOTEBOOK_FOCUS_INTENT_MARKERS)
+    category, is_ambiguous = _match_notebook_category(lowered)
+    if category or not is_ambiguous:
+        return None
+    if not has_focus_intent and not any(
+        marker in lowered for marker in _NOTEBOOK_AMBIGUOUS_REFERENCE_MARKERS
+    ):
+        return None
+    return (
+        "Which planning area did you mean: route, lodging, activities, budget, documents, "
+        "or policy?"
+    )
+
+
+def _extract_remember_note(message: str) -> str:
+    cleaned = message.strip()
+    match = re.search(
+        r"\b(?:remember this for later|remember that|save this|note this)\b[:\s-]*(?P<note>.+)",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        cleaned = match.group("note").strip()
+    return _first_sentence(cleaned)[:240]
+
+
+def _implicit_notebook_tool_calls(message: str) -> list[dict[str, Any]]:
+    lowered = message.lower()
+    calls: list[dict[str, Any]] = []
+    if any(
+        marker in lowered
+        for marker in (
+            "remember this for later",
+            "remember that",
+            "save this",
+            "note this",
+        )
+    ):
+        note = _extract_remember_note(message)
+        calls.append(
+            {
+                "tool_name": "capture_notebook_item",
+                "arguments": {
+                    "title": note,
+                    "note": note,
+                    "category": _infer_notebook_category(note),
+                    "priority": "normal",
+                    "tags": ["planner-command"],
+                },
+            }
+        )
+    has_focus_intent = any(marker in lowered for marker in _NOTEBOOK_FOCUS_INTENT_MARKERS)
+    category, is_ambiguous = _match_notebook_category(lowered)
+    if has_focus_intent and category and not is_ambiguous:
+        calls.append(
+            {
+                "tool_name": "set_notebook_focus",
+                "arguments": {"category": category},
+            }
+        )
+    if "completed" in lowered and any(marker in lowered for marker in ("tasks", "items", "notes")):
+        arguments: dict[str, Any] = {"status": "completed"}
+        for category in _NOTEBOOK_COMMAND_CATEGORIES:
+            if category in lowered:
+                arguments["category"] = category
+                break
+        calls.append({"tool_name": "read_planning_notebook", "arguments": arguments})
+    if any(marker in lowered for marker in _NOTEBOOK_SESSION_RESUME_MARKERS):
+        calls.append({"tool_name": "read_notebook_context", "arguments": {}})
+    return calls
+
+
+_CANCEL_INTENT_PATTERN = re.compile(
+    r"\b(?:cancel(?:led|lation)?|stop (?:this|the)? trip|do(?:n't| not) want to travel|"
+    r"abort|call off|don't travel)\b",
+    re.IGNORECASE,
+)
+_COST_QUESTION_PATTERN = re.compile(
+    r"\b(?:cost|cheapest|budget|price|how much|afford|expensive)\b",
+    re.IGNORECASE,
+)
+_POLICY_QUESTION_PATTERN = re.compile(
+    r"\b(?:polic(?:y|ies)|complian(?:t|ce)|approval|approved)\b",
+    re.IGNORECASE,
+)
+
+
+def _format_transfer_count(count: int | None) -> str:
+    if count is None:
+        return "transfer count pending"
+    if count == 1:
+        return "1 transfer"
+    return f"{count} transfers"
+
+
+def _format_estimated_total(estimated_total: dict[str, Any] | None) -> str | None:
+    if not isinstance(estimated_total, dict):
+        return None
+    amount = estimated_total.get("typical_amount")
+    currency = str(estimated_total.get("currency") or "USD").strip()
+    if amount is None:
+        return None
+    try:
+        numeric = float(amount)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(numeric):
+        return None
+    return f"{currency} {numeric:,.0f}"
+
+
+def _format_choice_list(choices: list[Any]) -> str:
+    labels = [str(choice).strip().rstrip(".") for choice in choices if str(choice).strip()]
+    if not labels:
+        return ""
+    if len(labels) == 1:
+        return f"{labels[0]}."
+    if len(labels) == 2:
+        return f"{labels[0]} or {labels[1]}."
+    return ", ".join(labels[:-1]) + f", or {labels[-1]}."
+
+
+def _token_is_gibberish(token: str) -> bool:
+    alpha = [character.lower() for character in token if character.isalpha()]
+    if len(alpha) < 3:
+        return False
+    if len(set(alpha)) == 1:
+        return True
+    return len(alpha) >= 4 and len(set(alpha)) <= 2
+
+
+def _message_looks_like_nonsense(message: str) -> bool:
+    tokens = [token.strip(".,!?;:()[]{}\"'") for token in message.split()]
+    if not tokens:
+        return True
+    alpha_tokens = [token for token in tokens if any(character.isalpha() for character in token)]
+    gibberish_tokens = [token for token in alpha_tokens if _token_is_gibberish(token)]
+    if len(gibberish_tokens) >= 2:
+        return True
+    if len(alpha_tokens) >= 3 and len(gibberish_tokens) / len(alpha_tokens) >= 0.5:
+        return True
+    if len(alpha_tokens) < 2 and len(tokens) <= 4:
+        return True
+    unique_lower = {token.lower() for token in alpha_tokens}
+    if len(alpha_tokens) >= 3 and len(unique_lower) <= 2:
+        return True
+    return False
+
+
+def _planning_mode_guidance(planning_mode: str | None) -> str:
+    mode = str(planning_mode or "collaborative").strip().lower()
+    guidance = {
+        "delegated": "Delegated mode: I will recommend a direction when you ask.",
+        "collaborative": "Collaborative mode: I will compare options with you.",
+        "revealed_preference": "Revealed-preference mode: I will surface tradeoffs for you to weigh.",
+        "in_trip": "In-trip mode: I will focus on adjustments for the active trip.",
+    }.get(mode)
+    if guidance:
+        return f"{guidance} Offline this adjusts tone only."
+    return "Planning mode is preference-only offline and does not change routing yet."
+
+
+def _scenario_cost_summary(scenarios: list[dict[str, Any]]) -> str | None:
+    if not scenarios:
+        return None
+    parts: list[str] = []
+    for scenario in scenarios[:4]:
+        metrics = scenario.get("metrics") or {}
+        cost = _format_estimated_total(metrics.get("estimated_total"))
+        title = str(scenario.get("title") or "Scenario")
+        transfers = _format_transfer_count(metrics.get("transfers"))
+        if cost:
+            parts.append(f"{title}: {cost}, {transfers}")
+    if not parts:
+        return None
+    return "Scenario costs: " + "; ".join(parts) + "."
+
+
+def _policy_preview_summary(scenarios: list[dict[str, Any]]) -> str | None:
+    for scenario in scenarios:
+        preview = scenario.get("policy_preview")
+        if not isinstance(preview, dict):
+            continue
+        label = str(
+            preview.get("posture_label") or preview.get("summary") or preview.get("label") or ""
+        ).strip()
+        if label:
+            return f"Policy preview for {scenario.get('title')}: {label}."
+    return None
+
+
+OFFLINE_NOTE = (
+    "The planner is offline: it answers from this trip's own data (costs you entered, "
+    "routes, the policy result, what to do next) and cannot answer other questions."
+)
+
+
+def _saved_verdict_line(trip_title: str, proposal_state: dict[str, Any] | None) -> str | None:
+    saved = policy_codes.saved_verdict(proposal_state)
+    if saved is None:
+        return None
+    if saved["verdict"] == "compliant":
+        return (
+            f"{trip_title} passed the travel policy check. Print the approval packet from the "
+            "Policy tab and give it to your approver."
+        )
+    if saved["outcome"] == "blocked_by_policy" or saved["verdict"] == "non_compliant":
+        reasons = [
+            policy_codes.explain(code, saved["messages"].get(code)) for code in saved["codes"]
+        ]
+        detail = " ".join(reasons) if reasons else "The policy service did not say which rules."
+        return f"The travel policy blocked {trip_title}. {detail}"
+    if saved["outcome"] == "failed":
+        return (
+            f"{trip_title} has not been reviewed: the last submission did not reach the policy "
+            "service. Submit it again from the Policy tab."
+        )
+    if saved["outcome"] not in {"", "not_submitted"}:
+        return (
+            f"{trip_title} has been submitted to the travel policy check. Refresh the Policy tab "
+            "to read the result."
+        )
+    return None
+
+
+def _fallback_content_from_metadata(
+    *,
+    trip_title: str,
+    message: str,
+    metadata: dict[str, Any],
+    planning_mode: str | None = None,
+    scenarios: list[dict[str, Any]] | None = None,
+    proposal_state: dict[str, Any] | None = None,
+) -> str:
+    lowered = message.lower()
+    scenario_rows = list(scenarios or [])
+
+    if _CANCEL_INTENT_PATTERN.search(lowered):
+        return (
+            f"I read your message as wanting to stop or rethink {trip_title}. "
+            "I am in offline deterministic mode, so I cannot process a real cancellation yet, "
+            "but I will not pretend the trip still has a useful starting point if you want to end it."
+        )
+
+    if _COST_QUESTION_PATTERN.search(lowered):
+        cost_line = _scenario_cost_summary(scenario_rows)
+        if cost_line:
+            return f"You asked about cost for {trip_title}. {cost_line}"
+        return (
+            f"You asked about cost for {trip_title}, but no priced scenarios are loaded yet. "
+            "I cannot quote figures until ranking finishes."
+        )
+
+    if _POLICY_QUESTION_PATTERN.search(lowered):
+        # The saved verdict answers before any preview: the planner used to say "No policy
+        # preview is available" two minutes after TPP had blocked the trip (issue 1845).
+        verdict_line = _saved_verdict_line(trip_title, proposal_state)
+        if verdict_line:
+            return verdict_line
+        policy_line = _policy_preview_summary(scenario_rows)
+        if policy_line:
+            return f"You asked about policy or compliance for {trip_title}. {policy_line}"
+        return (
+            f"You asked about policy or compliance for {trip_title}. "
+            "No policy preview is available in the current workspace data yet."
+        )
+
+    if _message_looks_like_nonsense(message):
+        return (
+            f"I could not extract a clear planning request from your message for {trip_title}. "
+            "Offline I use keyword matching only — try a concrete question about cost, "
+            "routes, policy, or whether to continue planning this trip."
+        )
+
+    maturity = metadata["plan_maturity"]
+    mode_prefix = _planning_mode_guidance(planning_mode)
+    if maturity == "coherent_plan":
+        return (
+            f"{mode_prefix} I can use the details you gave for {trip_title} to move into option shaping. "
+            "The next useful step is to compare a small set of routes, stays, or pacing tradeoffs "
+            "instead of asking broad intake questions again."
+        )
+    if maturity == "open_ended":
+        return (
+            f"{mode_prefix} Let's narrow {trip_title} before building options. Share a destination "
+            "or region, rough timing, and one priority, and I will turn it into a focused planning path."
+        )
+    if maturity == "overloaded_constraints":
+        return (
+            f"{mode_prefix} I will organize the constraints for {trip_title} before generating options. "
+            "First I would separate firm requirements from preferences, then compare only the "
+            "routes or stays that satisfy the must-haves."
+        )
+    return (
+        f"{trip_title} has a useful starting point. I would close the biggest missing decision "
+        "from your note, then move into targeted planning."
+    )
+
+
+def _first_sentence(content: str) -> str:
+    sentence = re.split(r"(?<=[.!?])\s+", content.strip(), maxsplit=1)[0].strip()
+    return sentence or content.strip()
+
+
+def _visible_block_items(
+    metadata: dict[str, Any],
+    *,
+    kinds: set[str],
+) -> list[str]:
+    items: list[str] = []
+    for block in list(metadata.get("visible_response_blocks") or []):
+        if str(block.get("kind") or "") in kinds:
+            items.extend(str(item) for item in list(block.get("items") or []))
+    return _dedupe_preserve_order(items)
+
+
+def _build_summary_block(
+    *,
+    content: str,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    summary_items = _visible_block_items(metadata, kinds={"summary", "guidance"})
+    return _structured_block(
+        kind="summary",
+        title="Planner summary",
+        body=_first_sentence(content),
+        items=summary_items[:3],
+    )
+
+
+def _confidence_label_from_runtime_context(runtime_context: dict[str, Any]) -> str:
+    for value in (
+        runtime_context.get("confidence_label"),
+        (
+            (runtime_context.get("source_confidence") or {}).get("confidence_label")
+            if isinstance(runtime_context.get("source_confidence"), dict)
+            else None
+        ),
+        (
+            (runtime_context.get("source_confidence_summary") or {}).get("confidence_label")
+            if isinstance(runtime_context.get("source_confidence_summary"), dict)
+            else None
+        ),
+    ):
+        label = str(value or "").strip().lower()
+        if label:
+            return label
+    return ""
+
+
+def _surface_low_confidence_uncertainty(
+    *,
+    blocks: list[dict[str, Any]],
+    runtime_context: dict[str, Any],
+) -> None:
+    if _confidence_label_from_runtime_context(runtime_context) not in _LOW_CONFIDENCE_LABELS:
+        return
+    for block in blocks:
+        if str(block.get("kind") or "") != "summary":
+            continue
+        items = list(block.get("items") or [])
+        if _LOW_CONFIDENCE_UNCERTAINTY_LINE not in items:
+            block["items"] = [_LOW_CONFIDENCE_UNCERTAINTY_LINE, *items[:2]]
+        return
+
+
+def _build_question_block(
+    *,
+    metadata: dict[str, Any],
+    decisions: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    question_items = _visible_block_items(
+        metadata,
+        kinds={"clarifying_questions", "question", "questions"},
+    )
+    if decisions:
+        active_decision = decisions[0]
+        question_items.insert(
+            0, str(active_decision.get("prompt") or active_decision.get("title") or "")
+        )
+    if not question_items:
+        return None
+    question_items = _dedupe_preserve_order(question_items)
+    if len(question_items) > 4 and _CLARIFYING_SKIP_AFFORDANCE in question_items:
+        question_items.remove(_CLARIFYING_SKIP_AFFORDANCE)
+    return _structured_block(
+        kind="question",
+        title="Questions to settle",
+        items=question_items[:4],
+    )
+
+
+def _build_planning_ledger_block(
+    *,
+    ledger_summary: dict[str, Any],
+) -> dict[str, Any] | None:
+    ledger_items: list[str] = []
+    ledger_entry_ids: list[str] = []
+    for label, key in (
+        ("Decision", "active_decisions"),
+        ("Open question", "open_questions"),
+        ("Option in view", "active_options"),
+        ("Rejected option", "rejected_options"),
+        ("Constraint", "constraints"),
+        ("Assumption", "assumptions"),
+        ("Source", "source_references"),
+    ):
+        for entry in list(ledger_summary.get(key) or [])[:2]:
+            summary = str(entry.get("summary") or "").strip()
+            if not summary:
+                continue
+            ledger_items.append(f"{label}: {summary}")
+            ledger_entry_ids.append(str(entry.get("ledger_entry_id") or ""))
+    if not ledger_items:
+        return None
+    return _structured_block(
+        kind="planning_ledger",
+        title="Planning memory",
+        items=_dedupe_preserve_order(ledger_items)[:6],
+        metadata={
+            "ledger_entry_ids": [item for item in _dedupe_preserve_order(ledger_entry_ids) if item][
+                :6
+            ]
+        },
+    )
+
+
+def _build_decision_block(*, decisions: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not decisions:
+        return None
+    decision_items: list[str] = []
+    for decision in decisions[:3]:
+        prompt = str(decision.get("prompt") or decision.get("title") or "")
+        choices = _format_choice_list(list(decision.get("choices") or []))
+        decision_items.append(f"{prompt} Choices: {choices}" if choices else prompt)
+    return _structured_block(
+        kind="decision",
+        title="Open decisions",
+        items=_dedupe_preserve_order(decision_items),
+        metadata={"decision_ids": [item.get("decision_id") for item in decisions[:3]]},
+    )
+
+
+def _build_route_option_block(*, options: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not options:
+        return None
+    option_items = [
+        f"{option.get('label')}: {option.get('summary')}"
+        for option in options[:4]
+        if option.get("label") or option.get("summary")
+    ]
+    return _structured_block(
+        kind="route_option",
+        title="Route options in view",
+        items=_dedupe_preserve_order(option_items),
+        metadata={"option_ids": [item.get("option_id") for item in options[:4]]},
+    )
+
+
+def _build_comparison_block(
+    *,
+    scenarios: list[dict[str, Any]],
+    options: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    comparison_items: list[str] = []
+    if len(scenarios) > 1:
+        for scenario in scenarios[:4]:
+            metrics = scenario.get("metrics") or {}
+            route_summary = scenario.get("route_summary") or "route details pending"
+            cost = _format_estimated_total(metrics.get("estimated_total"))
+            cost_fragment = f"{cost}; " if cost else ""
+            comparison_items.append(
+                f"{scenario.get('title')}: {route_summary}; "
+                f"{cost_fragment}"
+                f"{metrics.get('travel_minutes', 'pending')} travel minutes; "
+                f"{_format_transfer_count(metrics.get('transfers'))}."
+            )
+    elif len(options) > 1:
+        comparison_items = [
+            f"{option.get('label')}: {option.get('summary')}"
+            for option in options[:4]
+            if option.get("label") or option.get("summary")
+        ]
+    if not comparison_items:
+        return None
+    return _structured_block(
+        kind="comparison",
+        title="Comparison frame",
+        items=_dedupe_preserve_order(comparison_items),
+    )
+
+
+def _build_assumption_block(
+    *,
+    metadata: dict[str, Any],
+    runtime_context: dict[str, Any],
+) -> dict[str, Any]:
+    assumption_items = [
+        f"Planning maturity: {str(metadata.get('plan_maturity') or '').replace('_', ' ')}",
+        f"Current work type: {str(metadata.get('task_class') or '').replace('_', ' ')}",
+    ]
+    context_readiness = runtime_context.get("context_readiness") or {}
+    missing_sections = list(context_readiness.get("missing_sections") or [])
+    if missing_sections:
+        assumption_items.append(f"Missing workspace context: {', '.join(missing_sections)}")
+    return _structured_block(
+        kind="assumption",
+        title="Working assumptions",
+        items=_dedupe_preserve_order([item for item in assumption_items if item.strip(": ")]),
+    )
+
+
+def _build_next_action_block(
+    *,
+    metadata: dict[str, Any],
+    next_step_actions: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    next_action_items = _visible_block_items(metadata, kinds={"next_steps", "next_action"})
+    next_action_items.extend(
+        str(action.get("description") or action.get("label") or "")
+        for action in next_step_actions[:3]
+    )
+    if not next_action_items:
+        return None
+    return _structured_block(
+        kind="next_action",
+        title="Next actions",
+        items=_dedupe_preserve_order(next_action_items)[:4],
+    )
+
+
+def _planner_response_structured_blocks(
+    *,
+    content: str,
+    metadata: dict[str, Any],
+    panel: dict[str, Any],
+    runtime_context: dict[str, Any],
+    tool_calls: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    blocks: list[dict[str, Any]] = []
+    decisions = list(panel.get("pending_decisions") or [])
+    options = list((panel.get("option_set") or {}).get("options") or [])
+    next_step_actions = list(panel.get("next_step_actions") or [])
+    runtime_comparison = runtime_context.get("runtime_scenario_comparison") or {}
+    scenarios = list(runtime_comparison.get("scenarios") or [])
+    planning_ledger = runtime_context.get("planning_ledger") or {}
+    ledger_summary = planning_ledger.get("summary") or {}
+
+    for block in (
+        _build_summary_block(content=content, metadata=metadata),
+        _build_question_block(metadata=metadata, decisions=decisions),
+        _build_planning_ledger_block(ledger_summary=ledger_summary),
+        _build_decision_block(decisions=decisions),
+        _build_route_option_block(options=options),
+        _build_comparison_block(scenarios=scenarios, options=options),
+        _build_assumption_block(metadata=metadata, runtime_context=runtime_context),
+        _build_next_action_block(metadata=metadata, next_step_actions=next_step_actions),
+    ):
+        if block is not None:
+            blocks.append(block)
+
+    _surface_low_confidence_uncertainty(blocks=blocks, runtime_context=runtime_context)
+    return blocks
+
+
+def _ensure_top_level_planner_blocks(
+    *,
+    blocks: list[dict[str, Any]],
+    metadata: dict[str, Any],
+    tool_calls: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    normalized_blocks = [
+        block
+        for block in blocks
+        if str(block.get("kind") or "") not in {"visible_sections", "diagnostic", "debug"}
+    ]
+    visible_blocks = [block for block in normalized_blocks if not bool(block.get("hidden"))]
+    hidden_blocks = [block for block in normalized_blocks if bool(block.get("hidden"))]
+
+    section_items: list[str] = []
+    for block in visible_blocks:
+        title = str(block.get("title") or block.get("kind") or "").strip()
+        body = str(block.get("body") or "").strip()
+        first_item = str((block.get("items") or [""])[0]).strip()
+        summary = body or first_item
+        section_items.append(f"{title}: {summary}" if summary else title)
+
+    section_block = _structured_block(
+        kind="visible_sections",
+        title="Planner response sections",
+        body="Traveler-visible planning sections for this reply.",
+        items=_dedupe_preserve_order(section_items)[:6],
+        metadata={
+            "section_kinds": [str(block.get("kind") or "") for block in visible_blocks],
+            "section_count": len(visible_blocks),
+        },
+    )
+
+    diagnostic_block = _structured_block(
+        kind="diagnostic",
+        title="Planner diagnostics",
+        body="Routing details and tool traces are hidden from the normal traveler view.",
+        metadata={
+            "routing": metadata.get("debug_routing_details") or {},
+            "tool_call_count": len(tool_calls),
+            "tool_names": [item.get("tool_name") for item in tool_calls],
+            "hidden_block_kinds": [str(block.get("kind") or "") for block in hidden_blocks],
+        },
+        hidden=True,
+    )
+    return [section_block, *visible_blocks, *hidden_blocks, diagnostic_block]
+
+
+def set_planner_chat_model_factory_for_tests(
+    factory: PlannerChatModelFactory | None,
+) -> None:
+    global _PLANNER_CHAT_MODEL_FACTORY
+    _PLANNER_CHAT_MODEL_FACTORY = factory
+
+
+def set_planner_prompt_redactor_for_tests(
+    redactor: PlannerPromptRedactor | None,
+) -> None:
+    global _PLANNER_PROMPT_REDACTOR
+    _PLANNER_PROMPT_REDACTOR = redactor
+
+
+def set_intent_classifier_factory_for_tests(
+    factory: IntentClassifierFactory | None,
+) -> None:
+    global _INTENT_CLASSIFIER_FACTORY
+    _INTENT_CLASSIFIER_FACTORY = factory
+
+
+def _planner_chat_model(runtime_config: PlannerRuntimeConfig) -> PlannerChatModel:
+    if runtime_config.provider == "fake":
+        return _FakePlannerChatModel()
+    factory = _PLANNER_CHAT_MODEL_FACTORY or (lambda config: _OpenAIPlannerChatModel(config))
+    return factory(runtime_config)
+
+
+def _intent_classifier(
+    runtime_config: PlannerRuntimeConfig,
+    *,
+    chat_model: PlannerChatModel | None = None,
+) -> IntentClassifier:
+    if _INTENT_CLASSIFIER_FACTORY is not None:
+        return _INTENT_CLASSIFIER_FACTORY(runtime_config)
+    return build_intent_classifier(runtime_config, model=chat_model)
+
+
+def _redact_openai_planner_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    redactor = _PLANNER_PROMPT_REDACTOR or (lambda item: item)
+    return redactor(payload)
+
+
+class PlannerConversationRunnable(Protocol):
+    """LangChain-style runnable abstraction for planner conversation turns."""
+
+    def invoke(self, request: PlannerConversationRequest) -> PlannerConversationReply:
+        """Return one planner response for the provided turn."""
+
+
+def _fallback_panel_context_lines(
+    panel: dict[str, Any],
+    scenarios: list[dict[str, Any]],
+    lines: list[str],
+    refs: list[str],
+) -> None:
+    outputs = list(panel.get("outputs") or [])
+    decisions = list(panel.get("pending_decisions") or [])
+    options = list((panel.get("option_set") or {}).get("options") or [])
+
+    tradeoff_line = _scenario_cost_summary(scenarios)
+    if tradeoff_line and tradeoff_line not in lines[0]:
+        lines.append(tradeoff_line)
+
+    if decisions:
+        active = decisions[0]
+        choice_labels = _format_choice_list(list(active.get("choices") or []))
+        lines.append(
+            f"Current blocking decision: {active['prompt']} Choices: {choice_labels}"
+            if choice_labels
+            else f"Current blocking decision: {active['prompt']}"
+        )
+        refs.append(active["decision_id"])
+    elif options:
+        lead = options[0]
+        lines.append(f"Current lead option: {lead['label']}. {lead['summary']}")
+        if len(options) > 1:
+            lines.append(f"Alternative to compare next: {options[1]['label']}.")
+        refs.append(lead["option_id"])
+    else:
+        lines.append(
+            "No ranked planner options exist yet, so the session should stay focused on refining trip scope."
+        )
+
+    if outputs:
+        latest_titles = ", ".join(output["title"] for output in outputs[:2])
+        lines.append(f"Latest workspace signals: {latest_titles}.")
+        refs.extend(output["output_id"] for output in outputs[:2])
+
+
+def _fallback_ledger_focus_line(
+    ledger_summary: dict[str, Any],
+    refs: list[str],
+) -> str | None:
+    ledger_focus: list[str] = []
+    for label, key in (
+        ("decision", "active_decisions"),
+        ("open question", "open_questions"),
+        ("option in view", "active_options"),
+        ("rejected option", "rejected_options"),
+        ("constraint", "constraints"),
+        ("assumption", "assumptions"),
+    ):
+        entries = list(ledger_summary.get(key) or [])
+        if not entries:
+            continue
+        first = entries[0]
+        summary = str(first.get("summary") or "").strip()
+        if not summary:
+            continue
+        ledger_focus.append(f"{label}: {summary}")
+        refs.append(str(first.get("ledger_entry_id") or ""))
+    if not ledger_focus:
+        return None
+    return "Planning ledger remembers " + "; ".join(_dedupe_preserve_order(ledger_focus)[:3]) + "."
+
+
+class DeterministicPlannerConversationRunnable:
+    """Provider-neutral fallback when planner model configuration is absent."""
+
+    def invoke(self, request: PlannerConversationRequest) -> PlannerConversationReply:
+        panel = request.planner_panel_state
+        trip = panel["trip"]
+        runtime_comparison = request.runtime_context.get("runtime_scenario_comparison") or {}
+        scenarios = list(runtime_comparison.get("scenarios") or [])
+        metadata = _planner_turn_metadata(
+            message=request.message,
+            runtime_config=get_planner_runtime_config(),
+            turn_index=len(request.runtime_context.get("recent_activity") or []),
+            planning_mode=request.session.selected_planning_mode,
+            intent_classifier=request.intent_classifier,
+            trip_frame=_trip_frame_from_panel(panel),
+        )
+        ledger_summary = (request.runtime_context.get("planning_ledger") or {}).get("summary") or {}
+
+        lines = [
+            _fallback_content_from_metadata(
+                trip_title=trip["title"],
+                message=request.message,
+                metadata=metadata,
+                planning_mode=request.session.selected_planning_mode,
+                scenarios=scenarios,
+                proposal_state=request.runtime_context.get("proposal_state") or None,
+            )
+        ]
+        refs = [request.session.session_state_id]
+
+        _fallback_panel_context_lines(panel, scenarios, lines, refs)
+
+        ledger_line = _fallback_ledger_focus_line(ledger_summary, refs)
+        if ledger_line:
+            lines.append(ledger_line)
+
+        # The limit comes first, so a traveller reads it before the answer, not after a
+        # route listing (issue 1845).
+        lines.insert(0, OFFLINE_NOTE)
+
+        deduped_refs = list(dict.fromkeys(refs))
+        return PlannerConversationReply(
+            content=" ".join(lines),
+            refs=deduped_refs,
+            tool_calls=[],
+            turn_metadata=metadata,
+        )
+
+
+class _OpenAIPlannerChatModel:
+    def __init__(self, config: PlannerRuntimeConfig) -> None:
+        if not config.model:
+            raise ValueError("Planner model name is required.")
+        from langchain_openai import ChatOpenAI
+
+        self._model = ChatOpenAI(model=config.model, temperature=0)
+
+    def invoke(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if payload.get("task") == "classify_planner_intent":
+            response = self._model.invoke(
+                [
+                    (
+                        "system",
+                        "Classify the traveler planner intent. Return only JSON with "
+                        "`task_class` and `intent` keys. `task_class` must be one of "
+                        "the supplied allowed_task_classes.",
+                    ),
+                    ("human", json.dumps(payload, default=str)),
+                ]
+            )
+            return {"content": str(response.content)}
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": tool["tool_name"],
+                    "description": tool["description"],
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": True,
+                    },
+                },
+            }
+            for tool in payload["available_tools"]
+        ]
+        model = self._model.bind_tools(tools)
+        invoke_kwargs: dict[str, Any] = {}
+        langsmith_run_config = payload.get("langsmith_run_config")
+        if isinstance(langsmith_run_config, dict):
+            invoke_kwargs["config"] = langsmith_run_config
+        response = model.invoke(
+            [
+                (
+                    "system",
+                    _PLANNER_SYSTEM_PROMPT,
+                ),
+                (
+                    "human",
+                    json.dumps(
+                        {
+                            "message": payload["message"],
+                            "context": payload["runtime_context"],
+                        },
+                        default=str,
+                    ),
+                ),
+            ],
+            **invoke_kwargs,
+        )
+        tool_calls: list[dict[str, Any]] = []
+        for call in getattr(response, "tool_calls", []) or []:
+            tool_calls.append(
+                {
+                    "tool_name": call.get("name") or call.get("tool_name") or "",
+                    "arguments": call.get("args") or call.get("arguments") or {},
+                }
+            )
+        return {"content": str(response.content), "tool_calls": tool_calls}
+
+
+class _FakePlannerChatModel:
+    """In-process deterministic model used by the explicit ``fake`` provider."""
+
+    def invoke(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if payload.get("task") == "classify_planner_intent":
+            base_task_class = str(payload.get("base_task_class") or "first_turn_triage")
+            return {
+                "content": json.dumps({"task_class": base_task_class, "intent": base_task_class})
+            }
+        message = str(payload.get("message") or "").strip()
+        return {
+            "content": (
+                "The deterministic planner received your request"
+                + (f": {message}" if message else ".")
+            ),
+            "tool_calls": [],
+        }
+
+
+class ModelBackedPlannerConversationRunnable:
+    def __init__(self, config: PlannerRuntimeConfig, chat_model: PlannerChatModel) -> None:
+        self._config = config
+        self._chat_model = chat_model
+
+    def invoke(self, request: PlannerConversationRequest) -> PlannerConversationReply:
+        model_payload = {
+            "message": request.message,
+            "trip_id": request.trip_id,
+            "available_tools": list_planner_tools(),
+            "runtime_context": request.runtime_context,
+            "provider": self._config.provider,
+            "model": self._config.model,
+            "langsmith_run_config": request.langsmith_run_config,
+            "data_zone": self._config.data_zone,
+        }
+        if self._config.provider == "openai":
+            model_payload = _redact_openai_planner_payload(model_payload)
+        raw = self._chat_model.invoke(model_payload)
+        content = str(raw.get("content") or "").strip()
+        if not content:
+            content = (
+                "Planner model returned an empty response after reading the current trip context."
+            )
+        requested_tool_calls = [
+            {
+                "tool_name": str(item.get("tool_name") or item.get("name") or ""),
+                "arguments": item.get("arguments") or item.get("args") or {},
+            }
+            for item in list(raw.get("tool_calls") or [])
+        ]
+        return PlannerConversationReply(
+            content=content,
+            refs=[request.session.session_state_id],
+            tool_calls=[],
+            requested_tool_calls=requested_tool_calls,
+            turn_metadata=_planner_turn_metadata(
+                message=request.message,
+                runtime_config=self._config,
+                turn_index=len(request.runtime_context.get("recent_activity") or []),
+                planning_mode=request.session.selected_planning_mode,
+                intent_classifier=request.intent_classifier,
+                trip_frame=_trip_frame_from_panel(request.planner_panel_state),
+            ),
+        )
+
+
+def _planner_runnable(
+    config: PlannerRuntimeConfig,
+    *,
+    chat_model: PlannerChatModel | None = None,
+) -> PlannerConversationRunnable:
+    if config.mode != "model":
+        return DeterministicPlannerConversationRunnable()
+    return ModelBackedPlannerConversationRunnable(
+        config,
+        chat_model or _planner_chat_model(config),
+    )
+
+
+def _conversation_id(trip_id: str) -> str:
+    return f"planner-conversation:{trip_id}"
+
+
+def _message_payload(
+    *,
+    message_id: str,
+    role: str,
+    content: str,
+    created_at: str,
+    refs: list[str] | None = None,
+    tool_calls: list[dict[str, Any]] | None = None,
+    structured_blocks: list[dict[str, Any]] | None = None,
+    turn_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "message_id": message_id,
+        "role": role,
+        "content": content,
+        "created_at": created_at,
+        "refs": list(refs or []),
+        "tool_calls": list(tool_calls or []),
+        "structured_blocks": list(structured_blocks or []),
+        "turn_metadata": turn_metadata,
+    }
+
+
+def _conversation_messages(
+    db_session: Session,
+    *,
+    session_state_id: str,
+) -> list[dict[str, Any]]:
+    records = db_session.scalars(
+        select(PersistedPlannerAction)
+        .where(PersistedPlannerAction.session_state_id == session_state_id)
+        .where(PersistedPlannerAction.action_type.in_(["planner_user_turn", "planner_response"]))
+        .order_by(
+            PersistedPlannerAction.created_at.asc(),
+            PersistedPlannerAction.planner_action_id.asc(),
+        )
+    ).all()
+    messages: list[dict[str, Any]] = []
+    for record in records:
+        role = record.payload.get("role") or (
+            "user" if record.action_type == "planner_user_turn" else "planner"
+        )
+        raw_refs = record.payload.get("refs", "")
+        refs = [item for item in raw_refs.split(",") if item]
+        tool_calls = list(record.payload.get("tool_calls") or [])
+        structured_blocks = list(record.payload.get("structured_blocks") or [])
+        turn_metadata = record.payload.get("turn_metadata")
+        if not isinstance(turn_metadata, dict):
+            turn_metadata = None
+        messages.append(
+            _message_payload(
+                message_id=record.planner_action_id,
+                role=role,
+                content=record.payload.get("content", ""),
+                created_at=record.occurred_at,
+                refs=refs,
+                tool_calls=tool_calls,
+                structured_blocks=structured_blocks,
+                turn_metadata=turn_metadata,
+            )
+        )
+    return messages
+
+
+def _activity_log(
+    db_session: Session,
+    *,
+    trip_id: str,
+) -> list[dict[str, Any]]:
+    records = db_session.scalars(
+        select(PersistedActivityLogEvent)
+        .where(PersistedActivityLogEvent.trip_id == trip_id)
+        .order_by(PersistedActivityLogEvent.occurred_at.desc())
+        .limit(WORKSPACE_ACTIVITY_LOG_LIMIT)
+    ).all()
+    return [_serialize_activity_record(record) for record in records]
+
+
+def _planner_runtime_context(
+    workspace_payload: dict[str, Any],
+    *,
+    session: PlanningSessionState,
+    planner_memory: dict[str, Any],
+    activity_log: list[dict[str, Any]],
+) -> dict[str, Any]:
+    panel = workspace_payload["planner_panel_state"]
+    required_sections = {
+        "inventory_summary": workspace_payload.get("inventory_summary") or {},
+        "scenario_search": workspace_payload.get("scenario_search") or {},
+        "runtime_scenario_comparison": workspace_payload.get("runtime_scenario_comparison") or {},
+        "budget_state": workspace_payload.get("budget_state") or {},
+        "planner_memory": planner_memory,
+    }
+    planning_ledger = workspace_payload.get("planning_ledger") or {}
+    missing_sections = [key for key, value in required_sections.items() if not value]
+    return {
+        "trip": panel["trip"],
+        "pending_decisions": panel.get("pending_decisions") or [],
+        "option_set": panel.get("option_set") or {},
+        "outputs": panel.get("outputs") or [],
+        "planning_ledger": planning_ledger,
+        **required_sections,
+        "policy_state": workspace_payload.get("policy_state") or {},
+        "proposal_state": workspace_payload.get("proposal_state") or {},
+        "autonomy_preferences": {
+            "interaction_state": session.interaction_state.to_dict(),
+            "guardrails": AutonomyGuardrails().to_dict(),
+            "planner_behavior": panel.get("planner_behavior") or {},
+        },
+        "recent_activity": activity_log[:8],
+        "context_readiness": {
+            "status": "partial" if missing_sections else "ready",
+            "missing_sections": missing_sections,
+        },
+    }
+
+
+def _planner_session_payload(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    resumed_at: str | None = None,
+) -> dict[str, Any]:
+    try:
+        workspace_payload = get_cached_workspace_payload(db_session, user=user, trip_id=trip_id)
+    except ValueError as error:
+        raise WorkspacePlannerTripNotFoundError(str(error)) from error
+
+    session = workspace_payload["session"]
+    session_state_id = session["session_state_id"]
+    planner_memory = build_planner_memory_payload(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session_state_id,
+    )
+    activity_log = _activity_log(db_session, trip_id=trip_id)
+    return {
+        "trip_id": trip_id,
+        "session_state_id": session_state_id,
+        "conversation_id": _conversation_id(trip_id),
+        "resumed_at": resumed_at,
+        "runtime": get_planner_runtime_config().to_payload(),
+        "session": session,
+        "planner_panel_state": workspace_payload["planner_panel_state"],
+        "planning_ledger": workspace_payload.get("planning_ledger") or {},
+        "planner_memory": planner_memory,
+        "available_tools": list_planner_tools(),
+        "activity_log": activity_log,
+        "messages": _conversation_messages(db_session, session_state_id=session_state_id),
+    }
+
+
+def _tool_call_error(tool_name: str, message: str) -> dict[str, Any]:
+    return {
+        "tool_name": tool_name or "unknown",
+        "status": "error",
+        "summary": message,
+        "mutates_state": False,
+        "refs": [],
+        "output": {"error": message},
+    }
+
+
+def _planner_model_error_reply(
+    *,
+    session_state_id: str,
+    error: Exception,
+) -> PlannerConversationReply:
+    message = (
+        "Planner model runtime failed before it could complete the turn. "
+        "The traveler message was saved, and the visible error state is available for retry."
+    )
+    return PlannerConversationReply(
+        content=f"{message} Error: {error}",
+        refs=[session_state_id],
+        tool_calls=[_tool_call_error("planner_model", str(error))],
+    )
+
+
+def _execute_model_tool_calls(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    tool_calls: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    executed: list[dict[str, Any]] = []
+    for tool_call in tool_calls or []:
+        tool_name = str(tool_call.get("tool_name") or "")
+        try:
+            result = execute_planner_tool_call(
+                db_session,
+                user=user,
+                trip_id=trip_id,
+                tool_name=tool_name,
+                arguments=tool_call.get("arguments") or {},
+            )
+        except Exception as error:
+            executed.append(_tool_call_error(tool_name, str(error)))
+        else:
+            executed.append(result.to_dict())
+    return executed
+
+
+def _missing_grounding_tool_calls(
+    executed_tool_calls: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    seen = {
+        str(item.get("tool_name") or "")
+        for item in executed_tool_calls
+        if str(item.get("status") or "") == "completed"
+    }
+    return [
+        {"tool_name": tool_name, "arguments": {}}
+        for tool_name in _GROUNDING_TOOL_NAMES
+        if tool_name not in seen
+    ]
+
+
+def get_planner_session_payload(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+) -> dict[str, Any]:
+    try:
+        record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    except ValueError as error:
+        raise WorkspacePlannerTripNotFoundError(str(error)) from error
+    _get_or_create_workspace_session_record(db_session, record=record)
+    db_session.commit()
+    return _planner_session_payload(db_session, user=user, trip_id=trip_id)
+
+
+def resume_planner_session_payload(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+) -> dict[str, Any]:
+    try:
+        record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    except ValueError as error:
+        raise WorkspacePlannerTripNotFoundError(str(error)) from error
+    session_record = _get_or_create_workspace_session_record(db_session, record=record)
+    resumed_at = _isoformat(datetime.now(UTC))
+    session_record.last_updated_at = resumed_at
+    record.updated_at = datetime.now(UTC)
+    ensure_planner_memory_persisted(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session_record.session_state_id,
+        occurred_at=resumed_at,
+    )
+    db_session.commit()
+    return _planner_session_payload(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        resumed_at=resumed_at,
+    )
+
+
+def _prepare_planner_turn_runtime(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    message: str,
+    tool_calls: list[dict[str, Any]] | None = None,
+) -> _PlannerTurnRuntime:
+    normalized_message = message.strip()
+    if not normalized_message:
+        raise ValueError("Planner turn message is required.")
+
+    try:
+        record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    except ValueError as error:
+        raise WorkspacePlannerTripNotFoundError(str(error)) from error
+    session_record = _get_or_create_workspace_session_record(db_session, record=record)
+    now = datetime.now(UTC)
+    occurred_at = _isoformat(now)
+    session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
+
+    session.updated_at = occurred_at
+    session.notes.append(f"planner-turn:{occurred_at}")
+    session_record.last_updated_at = occurred_at
+    session_record.notes = list(session.notes)
+    record.updated_at = now
+    traveler_structured_blocks = _traveler_input_summary_blocks(normalized_message)
+
+    user_activity_event_id = f"activity:{trip_id}:{secrets.token_hex(4)}"
+    _append_activity_event(
+        db_session,
+        activity_event_id=user_activity_event_id,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        occurred_at=occurred_at,
+        event_kind="planner_message",
+        summary="Traveler submitted a planner conversation turn.",
+        metadata={
+            "message_length": str(len(normalized_message)),
+            "structured_block_count": str(len(traveler_structured_blocks)),
+        },
+    )
+    _record_planner_action(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        activity_event_id=user_activity_event_id,
+        occurred_at=occurred_at,
+        action_type="planner_user_turn",
+        payload={
+            "role": "user",
+            "content": normalized_message,
+            "refs": session.session_state_id,
+            "tool_calls": [],
+            "structured_blocks": traveler_structured_blocks,
+            "selected_planning_mode": session.selected_planning_mode,
+        },
+    )
+    _record_traveler_message_ledger_entries(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        message=normalized_message,
+        activity_event_id=user_activity_event_id,
+        structured_blocks=traveler_structured_blocks,
+    )
+
+    executed_tool_calls: list[dict[str, Any]] = []
+    for tool_call in [
+        *(tool_calls or []),
+        *_implicit_notebook_tool_calls(normalized_message),
+    ]:
+        result = execute_planner_tool_call(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            tool_name=str(tool_call.get("tool_name") or ""),
+            arguments=tool_call.get("arguments") or {},
+        )
+        executed_tool_calls.append(result.to_dict())
+
+    try:
+        workspace_payload = get_cached_workspace_payload(db_session, user=user, trip_id=trip_id)
+    except ValueError as error:
+        raise WorkspacePlannerTripNotFoundError(str(error)) from error
+    session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
+    planner_memory = build_planner_memory_payload(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+    )
+    activity_log = _activity_log(db_session, trip_id=trip_id)
+    runtime_config = get_planner_runtime_config()
+    chat_model = _planner_chat_model(runtime_config) if runtime_config.mode == "model" else None
+    intent_classifier = _intent_classifier(runtime_config, chat_model=chat_model)
+    fleet_context = PlannerFleetContext(
+        run_id=f"planner-turn:{secrets.token_hex(8)}",
+        session_id=session.session_state_id,
+        trip_id=trip_id,
+        planning_mode=session.selected_planning_mode,
+        provider=runtime_config.provider,
+        model=runtime_config.model,
+        trace_id=f"planner-trace:{secrets.token_hex(8)}",
+        recorded_at=occurred_at,
+    )
+    runtime_context = _planner_runtime_context(
+        workspace_payload,
+        session=session,
+        planner_memory=planner_memory,
+        activity_log=activity_log,
+    )
+    return _PlannerTurnRuntime(
+        normalized_message=normalized_message,
+        session=session,
+        occurred_at=occurred_at,
+        workspace_payload=workspace_payload,
+        runtime_context=runtime_context,
+        runtime_config=runtime_config,
+        intent_classifier=intent_classifier,
+        chat_model=chat_model,
+        fleet_context=fleet_context,
+        activity_log=activity_log,
+        executed_tool_calls=executed_tool_calls,
+    )
+
+
+def _invoke_planner_runtime(runtime: _PlannerTurnRuntime) -> PlannerConversationReply:
+    runnable = _planner_runnable(runtime.runtime_config, chat_model=runtime.chat_model)
+    langsmith_run_config = build_langsmith_run_config(
+        context=runtime.fleet_context,
+        metadata=_planner_turn_metadata(
+            message=runtime.normalized_message,
+            runtime_config=runtime.runtime_config,
+            turn_index=len(runtime.activity_log),
+            planning_mode=runtime.session.selected_planning_mode,
+            intent_classifier=runtime.intent_classifier,
+            trip_frame=_trip_frame_from_panel(runtime.workspace_payload["planner_panel_state"]),
+        ),
+    )
+    try:
+        reply = runnable.invoke(
+            PlannerConversationRequest(
+                trip_id=runtime.fleet_context.trip_id,
+                message=runtime.normalized_message,
+                planner_panel_state=runtime.workspace_payload["planner_panel_state"],
+                session=runtime.session,
+                runtime_context=runtime.runtime_context,
+                intent_classifier=runtime.intent_classifier,
+                langsmith_run_config=langsmith_run_config,
+            )
+        )
+    except Exception as error:
+        reply = _planner_model_error_reply(
+            session_state_id=runtime.session.session_state_id,
+            error=error,
+        )
+    notebook_clarification = _notebook_focus_clarification(runtime.normalized_message)
+    if notebook_clarification and notebook_clarification not in reply.content:
+        reply = PlannerConversationReply(
+            content=f"{reply.content} {notebook_clarification}",
+            refs=reply.refs,
+            tool_calls=reply.tool_calls,
+            requested_tool_calls=reply.requested_tool_calls,
+            structured_blocks=reply.structured_blocks,
+            turn_metadata={
+                **(reply.turn_metadata or {}),
+                "visible_response_blocks": [
+                    *((reply.turn_metadata or {}).get("visible_response_blocks") or []),
+                    {
+                        "kind": "clarifying_questions",
+                        "title": "Notebook focus clarification",
+                        "items": [notebook_clarification],
+                    },
+                ],
+            },
+        )
+    if reply.turn_metadata is None:
+        reply = PlannerConversationReply(
+            content=reply.content,
+            refs=reply.refs,
+            tool_calls=reply.tool_calls,
+            requested_tool_calls=reply.requested_tool_calls,
+            structured_blocks=reply.structured_blocks,
+            turn_metadata=_planner_turn_metadata(
+                message=runtime.normalized_message,
+                runtime_config=runtime.runtime_config,
+                turn_index=len(runtime.activity_log),
+                planning_mode=runtime.session.selected_planning_mode,
+                intent_classifier=runtime.intent_classifier,
+                trip_frame=_trip_frame_from_panel(runtime.workspace_payload["planner_panel_state"]),
+            ),
+        )
+    return reply
+
+
+def _assemble_planner_reply(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    runtime: _PlannerTurnRuntime,
+    reply: PlannerConversationReply,
+) -> PlannerConversationReply:
+    model_tool_calls = _execute_model_tool_calls(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        tool_calls=reply.requested_tool_calls,
+    )
+    executed_tool_calls = [*runtime.executed_tool_calls, *model_tool_calls]
+    model_runtime_failed = any(
+        item.get("tool_name") == "planner_model" and item.get("status") == "error"
+        for item in reply.tool_calls
+    )
+    if runtime.runtime_config.mode == "model" and not model_runtime_failed:
+        grounding_tool_calls = _missing_grounding_tool_calls(executed_tool_calls)
+        if grounding_tool_calls:
+            executed_tool_calls.extend(
+                _execute_model_tool_calls(
+                    db_session,
+                    user=user,
+                    trip_id=trip_id,
+                    tool_calls=grounding_tool_calls,
+                )
+            )
+    if executed_tool_calls:
+        reply = PlannerConversationReply(
+            content=reply.content,
+            refs=list(
+                dict.fromkeys(
+                    reply.refs + [ref for item in executed_tool_calls for ref in item["refs"]]
+                )
+            ),
+            tool_calls=executed_tool_calls,
+            requested_tool_calls=reply.requested_tool_calls,
+            structured_blocks=reply.structured_blocks,
+            turn_metadata=reply.turn_metadata,
+        )
+    if not reply.structured_blocks:
+        reply = PlannerConversationReply(
+            content=reply.content,
+            refs=reply.refs,
+            tool_calls=reply.tool_calls,
+            requested_tool_calls=reply.requested_tool_calls,
+            structured_blocks=_planner_response_structured_blocks(
+                content=reply.content,
+                metadata=reply.turn_metadata or {},
+                panel=runtime.workspace_payload["planner_panel_state"],
+                runtime_context=runtime.runtime_context,
+                tool_calls=reply.tool_calls,
+            ),
+            turn_metadata=reply.turn_metadata,
+        )
+    return PlannerConversationReply(
+        content=reply.content,
+        refs=reply.refs,
+        tool_calls=reply.tool_calls,
+        requested_tool_calls=reply.requested_tool_calls,
+        structured_blocks=_ensure_top_level_planner_blocks(
+            blocks=reply.structured_blocks or [],
+            metadata=reply.turn_metadata or {},
+            tool_calls=reply.tool_calls,
+        ),
+        turn_metadata=reply.turn_metadata,
+    )
+
+
+def _persist_planner_reply(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    runtime: _PlannerTurnRuntime,
+    reply: PlannerConversationReply,
+) -> dict[str, Any]:
+    planner_activity_event_id = f"activity:{trip_id}:{secrets.token_hex(4)}"
+    _append_activity_event(
+        db_session,
+        activity_event_id=planner_activity_event_id,
+        trip_id=trip_id,
+        session_state_id=runtime.session.session_state_id,
+        occurred_at=runtime.occurred_at,
+        event_kind="planner_message",
+        summary="Planner conversation service generated the next trip-scoped reply.",
+        actor="planner",
+        metadata={"ref_count": str(len(reply.refs))},
+    )
+    fleet_artifact_path = default_fleet_artifact_path()
+    fleet_records = build_planner_fleet_records(
+        context=runtime.fleet_context,
+        runtime_mode=runtime.runtime_config.mode,
+        turn_metadata=reply.turn_metadata or {},
+        tool_calls=reply.tool_calls,
+        context_readiness=runtime.runtime_context["context_readiness"],
+        artifact_ref=str(fleet_artifact_path),
+    )
+    fleet_write_status = "failed"
+    fleet_write_error: str | None = None
+    fleet_record_count = 0
+    try:
+        append_fleet_records(fleet_artifact_path, fleet_records)
+        fleet_write_status = "written"
+        fleet_record_count = len(fleet_records)
+    except Exception as error:  # pragma: no cover - defensive metadata path
+        fleet_write_error = type(error).__name__
+    _record_planner_action(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=runtime.session.session_state_id,
+        activity_event_id=planner_activity_event_id,
+        occurred_at=runtime.occurred_at,
+        action_type="planner_response",
+        payload={
+            "role": "planner",
+            "content": reply.content,
+            "refs": ",".join(reply.refs),
+            "tool_calls": reply.tool_calls,
+            "structured_blocks": reply.structured_blocks,
+            "turn_metadata": reply.turn_metadata,
+            "selected_planning_mode": runtime.session.selected_planning_mode,
+            "planning_stage": (
+                runtime.workspace_payload["planner_panel_state"]
+                .get("planner_behavior", {})
+                .get("trip_stage")
+            ),
+            "runtime_mode": runtime.runtime_config.mode,
+            "context_readiness": runtime.runtime_context["context_readiness"],
+            "langsmith_fleet": {
+                "artifact_path": (
+                    str(fleet_artifact_path) if fleet_write_status == "written" else ""
+                ),
+                "run_id": runtime.fleet_context.run_id,
+                "trace_id": runtime.fleet_context.trace_id,
+                "record_count": fleet_record_count,
+                "write_status": fleet_write_status,
+                "write_error": fleet_write_error,
+            },
+        },
+    )
+    refresh_planner_memory(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=runtime.session.session_state_id,
+        occurred_at=runtime.occurred_at,
+    )
+
+    db_session.commit()
+    return _planner_session_payload(db_session, user=user, trip_id=trip_id)
+
+
+def submit_planner_turn(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    message: str,
+    tool_calls: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    runtime = _prepare_planner_turn_runtime(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        message=message,
+        tool_calls=tool_calls,
+    )
+    reply = _invoke_planner_runtime(runtime)
+    reply = _assemble_planner_reply(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        runtime=runtime,
+        reply=reply,
+    )
+    return _persist_planner_reply(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        runtime=runtime,
+        reply=reply,
+    )

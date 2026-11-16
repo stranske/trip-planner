@@ -1,0 +1,68 @@
+{
+  "user_id": "user-mixed-1",
+  "email": "mixed@example.com",
+  "display_name": "Jordan Hybrid",
+  "traveler_profiles": [
+    {
+      "traveler_profile_id": "traveler-leisure",
+      "display_name": "Personal weekends",
+      "profile_kind": "personal",
+      "supported_modes": ["leisure"],
+      "leisure_profile_id": "leisure-profile-weekend",
+      "default_origin_airports": ["SEA"],
+      "regional_defaults": {
+        "locale": "en-US",
+        "currency": "USD",
+        "timezone": "America/Los_Angeles",
+        "home_airport": "SEA",
+        "departure_region": "US-WEST"
+      },
+      "traveler_tags": ["food", "walkable-city"],
+      "notes": ["Lightweight personal travel defaults."]
+    },
+    {
+      "traveler_profile_id": "traveler-business",
+      "display_name": "Consulting travel",
+      "profile_kind": "business",
+      "supported_modes": ["business"],
+      "business_profile_id": "business-profile-consulting",
+      "default_origin_airports": ["SEA", "SFO"],
+      "regional_defaults": {
+        "locale": "en-US",
+        "currency": "USD",
+        "timezone": "America/Los_Angeles",
+        "home_airport": "SEA",
+        "departure_region": "US-WEST"
+      },
+      "traveler_tags": ["client-facing", "carry-on-only"],
+      "notes": ["Uses stricter notification defaults for work travel."]
+    }
+  ],
+  "account_preferences": {
+    "default_traveler_profile_id": "traveler-business",
+    "default_interaction_style": "concise",
+    "default_summary_granularity": "brief",
+    "default_trip_mode": "business",
+    "auto_save_checkpoints": true,
+    "regional_defaults": {
+      "locale": "en-US",
+      "currency": "USD",
+      "timezone": "America/Los_Angeles",
+      "home_airport": "SEA",
+      "departure_region": "US-WEST"
+    },
+    "notification_preferences": [
+      {"channel": "email", "cadence": "important_only", "enabled": true},
+      {"channel": "push", "cadence": "realtime", "enabled": true}
+    ],
+    "preferred_languages": ["en-US"],
+    "planning_tags": ["mixed-mode"]
+  },
+  "status": "active",
+  "schema_version": "0.1.0",
+  "external_refs": {
+    "account_id": "acct-210"
+  },
+  "account_tags": ["mixed-travel"],
+  "notes": ["Switches between personal and consulting travel."]
+}
