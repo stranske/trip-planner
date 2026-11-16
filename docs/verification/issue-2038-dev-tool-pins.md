@@ -65,7 +65,8 @@ Command:
 python -m pytest tests/scripts/test_cross_repo_dev_pins.py -q
 ```
 
-- Green baseline: **112 passed, 2 skipped** (~12–14s, keepalive round 4/12) including `test_repaired_workflow_pins_agree_across_repo`.
+- Green baseline: **112 passed, 2 skipped** (~15s, keepalive round 5/12, 2026-11-16) including `test_repaired_workflow_pins_agree_across_repo`.
+- Keepalive round 5/12 (orchestrator had `tests_skipped`): re-ran green baseline and deliberate-break on `tests/fixtures/issue_2038_dev_pins/trip-planner.toml` `ruff==0.17.4` → **8 failed** in `-k issue-2038`; fixture restored to `0.17.5`.
 - `TPP_PINNED_REF` → `5c9ec6e…`: **12 failed** (ruff conflict; re-run 2026-11-16); workflow file restored immediately after.
 - `tests/fixtures/issue_2038_dev_pins/trip-planner.toml` `ruff==0.17.4` (repaired `0.17.5` restored after): **8 failed** in `-k issue-2038` (recorded on prior head).
 - After restoration: **112 passed** again.
@@ -95,4 +96,4 @@ make test
 | `.github/workflows/cross-repo-smoke.yml` | `TPP_PINNED_REF: 50992156…` |
 | `docs/design-coverage-map.md` | documents `50992156…` |
 
-CI readback on head (GitHub Actions): **Cross-Repo Smoke / cross-repo-full-product** success (run `43933724418`); **Python CI** and **Gate** were in progress at task start.
+CI readback on head (GitHub Actions, round 5/12): **Cross-Repo Smoke / cross-repo-full-product** and **Python CI / python 3.14** pass (run `43943342466`); **Gate** pass.
