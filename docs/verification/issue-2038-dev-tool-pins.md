@@ -1,6 +1,6 @@
 # Issue #2038: dev-tool pin verification
 
-Check date: 2026-11-16 (UTC). Branch `cursor/issue-2038`, head `783d769fb58865f755ad31f67167dd1679bea56e`.
+Check date: 2026-11-16 (UTC). Branch `cursor/issue-2038`.
 Outcome: reproduce the `#2037` pin conflict on main, review closed PR `#2039` (`cfe14d89e8a6`), and
 confirm the paired pin repair on this branch.
 
@@ -47,7 +47,7 @@ Restoring `TPP_PINNED_REF: 50992156e4a1f97c1115b6c7af84a219a3b9aae7` yields **11
 
 Fetched `refs/pull/2039/head` and compared trees.
 
-| Concern / thread theme | What was checked on `#2039` | Disposition on this PR (`783d769f`) |
+| Concern / thread theme | What was checked on `#2039` | Disposition on this PR (branch tip) |
 | --- | --- | --- |
 | Scope creep (`PRODUCT_CONTRACT`, `check_full_product_verification`) | Merge commit `cfe14d89` **dropped** those files relative to parent `aee71a92`; pin repair files match the narrowed diff vs `main` | Same pin-only scope; no product-probe or ledger files on this branch |
 | Live vs snapshot TPP guards | `test_live_tpp_checkout_matches_workflow_snapshot`, workflow snapshot under `tests/fixtures/tpp_dev_pins/50992156…` | Present; `TPP_PINNED_REF` and fixture agree on `50992156` |
@@ -65,8 +65,8 @@ Command:
 python -m pytest tests/scripts/test_cross_repo_dev_pins.py -q
 ```
 
-- Green baseline: **112 passed, 2 skipped** (~12s) including `test_repaired_workflow_pins_agree_across_repo`.
-- `TPP_PINNED_REF` → `5c9ec6e…`: **12 failed** (ruff conflict); workflow file restored immediately after.
+- Green baseline: **112 passed, 2 skipped** (~12–14s, keepalive round 4/12) including `test_repaired_workflow_pins_agree_across_repo`.
+- `TPP_PINNED_REF` → `5c9ec6e…`: **12 failed** (ruff conflict; re-run 2026-11-16); workflow file restored immediately after.
 - `tests/fixtures/issue_2038_dev_pins/trip-planner.toml` `ruff==0.17.4` (repaired `0.17.5` restored after): **8 failed** in `-k issue-2038` (recorded on prior head).
 - After restoration: **112 passed** again.
 
