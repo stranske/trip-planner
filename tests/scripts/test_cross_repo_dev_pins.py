@@ -325,32 +325,39 @@ def test_workflow_tpp_pin_resolves_with_planner_dev_pins(
     test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
 
 
-@pytest.mark.parametrize("restored_tool", ["all", "ruff", "mypy", "pytest"])
+@pytest.mark.parametrize(
+    "restored_pins",
+    [
+        pytest.param({"ruff": "0.17.2", "mypy": "2.4.0", "pytest": "9.1.1"}, id="all"),
+        pytest.param({"ruff": "0.17.2"}, id="ruff"),
+        pytest.param({"mypy": "2.4.0"}, id="mypy"),
+        pytest.param({"pytest": "9.1.1"}, id="pytest"),
+        pytest.param({"ruff": "0.17.4"}, id="issue-2038-stale-ruff"),
+    ],
+)
 def test_offline_workflow_guard_rejects_original_producer_pins(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, restored_tool: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, restored_pins: dict[str, str]
 ) -> None:
     """The actual offline gate must catch an unpaired sync without a live checkout."""
+    test_workflow_tpp_pin_resolves_with_planner_dev_pins(monkeypatch)
+
     workflow = yaml.safe_load(
         (REPO_ROOT / ".github" / "workflows" / "cross-repo-smoke.yml").read_text()
     )
     pinned_ref = workflow["env"]["TPP_PINNED_REF"]
     producer = REPO_ROOT / "tests" / "fixtures" / "tpp_dev_pins" / pinned_ref / "pyproject.toml"
     metadata = producer.read_text(encoding="utf-8")
-    requirements = _requirements(producer)
-    old_versions = {"ruff": "0.17.2", "mypy": "2.4.0", "pytest": "9.1.1"}
-    restored = (
-        old_versions if restored_tool == "all" else {restored_tool: old_versions[restored_tool]}
-    )
-    for tool, version in restored.items():
-        current = str(requirements[tool][0])
+    producer_requirements = _requirements(producer)
+    planner = REPO_ROOT / "pyproject.toml"
+    planner_requirements = _requirements(planner)
+    for tool, version in restored_pins.items():
+        current = str(producer_requirements[tool][0])
         assert current in metadata
         metadata = metadata.replace(current, f"{tool}=={version}")
 
     # Preserve real planner requirements and the workflow's snapshot selection;
     # change only the producer pins that caused the reported installation failure.
-    (tmp_path / "pyproject.toml").write_text(
-        (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"), encoding="utf-8"
-    )
+    (tmp_path / "pyproject.toml").write_bytes(planner.read_bytes())
     workflow_directory = tmp_path / ".github" / "workflows"
     workflow_directory.mkdir(parents=True)
     (workflow_directory / "cross-repo-smoke.yml").write_text(
@@ -365,10 +372,9 @@ def test_offline_workflow_guard_rejects_original_producer_pins(
     with pytest.raises(AssertionError, match="cannot be installed together") as failure:
         test_workflow_tpp_pin_resolves_with_planner_dev_pins(monkeypatch)
 
-    for tool, version in restored.items():
-        assert f"{tool}: trip-planner '{requirements[tool][0]}' vs TPP '{tool}=={version}'" in str(
-            failure.value
-        )
+    for tool, version in restored_pins.items():
+        planner_pin = planner_requirements[tool][0]
+        assert f"{tool}: trip-planner '{planner_pin}' vs TPP '{tool}=={version}'" in str(failure.value)
 
 
 @pytest.mark.parametrize(
