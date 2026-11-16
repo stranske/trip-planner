@@ -345,3 +345,36 @@ blocked: `git add` cannot create `.git/index.lock` because Git metadata is
 mounted read-only. The test change and this record remain uncommitted.
 The blocker comment and `needs-human` label could not be applied: both GitHub
 tools require approval, while this run's approval policy is `never`.
+
+## Pytest command regression
+
+On 2026-11-16, added two subprocess cases that invoke the smoke pin guard
+through pytest using the fixed #2038 planner metadata. The original producer
+must exit 1 and identify only the Ruff 0.17.5/0.17.4 conflict; the repaired
+producer must exit 0. This checks collection, relative checkout discovery and
+failure propagation beyond the existing direct calls to the guard.
+
+On Python 3.14.10, the focused two-file command passes: **121 passed,
+2 skipped**. The skips require a live TPP checkout. Ruff, mypy and the required
+repository-wide Black command pass (**530 files unchanged**), using the
+sequential Black cache workaround above. Temporarily restoring Ruff 0.17.4 in
+the repaired producer snapshot makes the new repaired-producer case fail;
+restoring the fixture byte-for-byte makes it pass. Logs:
+`/tmp/issue2038-cli-{broken,restored}.log`.
+
+The full `python -m pytest -q -m 'not slow' -x` command still exits during
+setup because the sandbox denies socket I/O required by `TestClient`.
+`gh run view 43820524287 --repo stranske/trip-planner --json
+headSha,status,conclusion` cannot connect to the GitHub API. Connector readback
+confirms #2037 is open and ready at its original head `65b25b559ea6`.
+Regenerated-sync CI and subsequent sync-core verification remain pending;
+no acceptance checkbox was changed.
+
+The commit attempt failed because `git add` cannot create `.git/index.lock`
+on the read-only Git metadata mount. The regression and this verification note
+need committing on the existing branch in an environment with writable Git
+metadata. No workflow or dependency pin was changed.
+
+The blocker comment and `needs-human` label could not be applied: both GitHub
+tools require approval, while this run's approval policy is `never`. Neither
+remote update was applied. PR #2039 was read back open and ready.

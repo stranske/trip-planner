@@ -516,6 +516,64 @@ def test_smoke_pin_guard_with_historical_editable_checkouts(
 
 
 @pytest.mark.parametrize(
+    ("producer_ref", "expected_exit"),
+    [
+        pytest.param("5c9ec6e15ac959023b9fc9cdd1099d70a6073396", 1, id="original-producer"),
+        pytest.param("50992156e4a1f97c1115b6c7af84a219a3b9aae7", 0, id="repaired-producer"),
+    ],
+)
+def test_pin_guard_cli_with_issue_2038_checkouts(
+    tmp_path: Path, producer_ref: str, expected_exit: int
+) -> None:
+    """The smoke job's pytest entry point must reject #2037's original source pair."""
+    planner = REPO_ROOT / "tests/fixtures/issue_2038_dev_pins/trip-planner.toml"
+    producer = REPO_ROOT / "tests/fixtures/tpp_dev_pins" / producer_ref / "pyproject.toml"
+    (tmp_path / "pyproject.toml").write_bytes(planner.read_bytes())
+    checkout = tmp_path / "tpp"
+    checkout.mkdir()
+    (checkout / "pyproject.toml").write_bytes(producer.read_bytes())
+    guard = tmp_path / "tests/scripts/test_cross_repo_dev_pins.py"
+    guard.parent.mkdir(parents=True)
+    guard.write_bytes(Path(__file__).read_bytes())
+
+    # A fresh pytest process exercises collection, checkout discovery and failure
+    # propagation, without inheriting the parent process's monkeypatches or config.
+    environment = _checkout_git_env()
+    environment["TPP_REPO_PATH"] = "tpp"
+    environment["PYTEST_ADDOPTS"] = ""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            (
+                "tests/scripts/test_cross_repo_dev_pins.py::"
+                "test_planner_dev_pins_resolve_with_pinned_tpp_checkout"
+            ),
+            "-q",
+            "-m",
+            "not slow",
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    diagnostics = result.stdout + result.stderr
+    assert result.returncode == expected_exit, diagnostics
+    if expected_exit:
+        assert "1 failed" in diagnostics
+        assert "cannot be installed together" in diagnostics
+        assert "ruff: trip-planner 'ruff==0.17.5' vs TPP 'ruff==0.17.4'" in diagnostics
+        assert "mypy: trip-planner" not in diagnostics
+        assert "pytest: trip-planner" not in diagnostics
+    else:
+        assert "1 passed" in diagnostics
+
+
+@pytest.mark.parametrize(
     ("restored_tool", "historical_phase"),
     [
         *((tool, None) for tool in ("all", "ruff", "mypy", "pytest", None)),
