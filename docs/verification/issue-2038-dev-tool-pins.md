@@ -1,5 +1,31 @@
 # Issue #2038: dev-tool pin verification
 
+## Preserve optional dependency marker context
+
+On 2026-11-16, corrected `_requirements` so optional `dev` entries are
+evaluated only with `extra="dev"`. Runtime entries retain base-plus-dev
+evaluation. Previously a dev entry marked `extra != 'dev'` incorrectly
+caused a pin conflict. The regression now distinguishes the two sections
+for both projects, including empty-extra and combined Python/extra markers.
+Before the implementation change, six cases failed; afterward the focused
+two-file command below passes on Python 3.14.10: **144 passed, 2 skipped**.
+The skips require a live TPP checkout. Ruff, mypy, `git diff --check`, and
+the required repository-wide Black command pass (**530 files unchanged**).
+Black used the sequential-cache workaround described below.
+
+The full `python -m pytest -q -m 'not slow' -x` command still exits because
+the sandbox denies TestClient socketpair I/O. PR #2037 remains open and ready
+at `65b25b559ea631d494e3dcfd624fb0126b098bbf`; #2039 is open and ready at
+`4c71f20a2cd5b7cb990e78b77b913d5557cdfc3b`. Regenerated-sync CI and the
+subsequent sync-core classification remain unverified; no acceptance checkbox
+was changed. No workflow or dependency pin was edited.
+
+Committing is blocked: `git add` cannot create `.git/index.lock` on the
+read-only Git metadata mount. Commit the verified source change and this note
+on the existing branch when Git metadata is writable. The blocker comment and
+`needs-human` label were rejected because the GitHub connector requires approval
+and this run's approval policy is `never`; neither remote update was applied.
+
 ## Explicit Python resolver targets
 
 On 2026-11-16, extended the offline pip regression to resolve each pin pair

@@ -49,17 +49,19 @@ def _checkout_git_env() -> dict[str, str]:
 
 def _requirements(pyproject: Path) -> dict[str, list[Requirement]]:
     project = tomllib.loads(pyproject.read_text())["project"]
-    entries = list(project.get("dependencies", []))
-    entries += project.get("optional-dependencies", {}).get("dev", [])
     requirements: dict[str, list[Requirement]] = {}
-    for req in map(Requirement, entries):
-        # pip installs the base distribution and the requested dev extra. A pin
-        # excluded by both marker contexts cannot cause this installation to fail.
-        if req.marker is not None and not any(
-            req.marker.evaluate(environment={"extra": extra}) for extra in ("", "dev")
-        ):
-            continue
-        requirements.setdefault(canonicalize_name(req.name), []).append(req)
+    for entries, extras in (
+        (project.get("dependencies", []), ("", "dev")),
+        (project.get("optional-dependencies", {}).get("dev", []), ("dev",)),
+    ):
+        for req in map(Requirement, entries):
+            # Optional dev dependencies also have an implicit extra == 'dev'
+            # condition; evaluating them in the base context admits inactive pins.
+            if req.marker is not None and not any(
+                req.marker.evaluate(environment={"extra": extra}) for extra in extras
+            ):
+                continue
+            requirements.setdefault(canonicalize_name(req.name), []).append(req)
     return requirements
 
 
@@ -105,18 +107,25 @@ def test_find_pin_conflicts_flags_diverged_exact_pin(tmp_path: Path) -> None:
 @pytest.mark.parametrize("constrained_project", ["planner", "tpp"])
 @pytest.mark.parametrize("section", ["dependencies", "dev"])
 @pytest.mark.parametrize(
-    ("marker", "active"),
+    ("marker", "runtime_active", "dev_active"),
     [
-        ("python_version < '3'", False),
-        ("python_version >= '3'", True),
-        ("extra == 'dev'", True),
-        ("extra == 'test'", False),
-        ("extra != 'dev'", True),
-        ("python_version < '3' and extra == 'dev'", False),
+        ("python_version < '3'", False, False),
+        ("python_version >= '3'", True, True),
+        ("extra == 'dev'", True, True),
+        ("extra == 'test'", False, False),
+        ("extra != 'dev'", True, False),
+        ("extra == ''", True, False),
+        ("python_version < '3' and extra == 'dev'", False, False),
+        ("python_version >= '3' and extra != 'dev'", True, False),
     ],
 )
 def test_find_pin_conflicts_checks_active_dev_install_requirements(
-    tmp_path: Path, constrained_project: str, section: str, marker: str, active: bool
+    tmp_path: Path,
+    constrained_project: str,
+    section: str,
+    marker: str,
+    runtime_active: bool,
+    dev_active: bool,
 ) -> None:
     """The smoke job installs base and dev requirements for the running Python."""
     projects = {name: tmp_path / f"{name}.toml" for name in ("planner", "tpp")}
@@ -133,6 +142,7 @@ def test_find_pin_conflicts_checks_active_dev_install_requirements(
 
     conflicts = find_pin_conflicts(projects["planner"], projects["tpp"])
 
+    active = runtime_active if section == "dependencies" else dev_active
     if active:
         planner_req, tpp_req = (
             (marked_requirement, "ruff==0.17.5")
