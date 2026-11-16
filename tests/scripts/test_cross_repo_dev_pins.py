@@ -53,6 +53,12 @@ def _requirements(pyproject: Path) -> dict[str, list[Requirement]]:
     entries += project.get("optional-dependencies", {}).get("dev", [])
     requirements: dict[str, list[Requirement]] = {}
     for req in map(Requirement, entries):
+        # pip installs the base distribution and the requested dev extra. A pin
+        # excluded by both marker contexts cannot cause this installation to fail.
+        if req.marker is not None and not any(
+            req.marker.evaluate(environment={"extra": extra}) for extra in ("", "dev")
+        ):
+            continue
         requirements.setdefault(canonicalize_name(req.name), []).append(req)
     return requirements
 
@@ -94,6 +100,50 @@ def test_find_pin_conflicts_flags_diverged_exact_pin(tmp_path: Path) -> None:
     assert find_pin_conflicts(planner, tpp) == [
         "ruff: trip-planner 'ruff==0.17.3' vs TPP 'ruff==0.17.2'"
     ]
+
+
+@pytest.mark.parametrize("constrained_project", ["planner", "tpp"])
+@pytest.mark.parametrize("section", ["dependencies", "dev"])
+@pytest.mark.parametrize(
+    ("marker", "active"),
+    [
+        ("python_version < '3'", False),
+        ("python_version >= '3'", True),
+        ("extra == 'dev'", True),
+        ("extra == 'test'", False),
+        ("extra != 'dev'", True),
+        ("python_version < '3' and extra == 'dev'", False),
+    ],
+)
+def test_find_pin_conflicts_checks_active_dev_install_requirements(
+    tmp_path: Path, constrained_project: str, section: str, marker: str, active: bool
+) -> None:
+    """The smoke job installs base and dev requirements for the running Python."""
+    projects = {name: tmp_path / f"{name}.toml" for name in ("planner", "tpp")}
+    marked_requirement = f"ruff==0.17.4; {marker}"
+    for name, path in projects.items():
+        requirement = marked_requirement if name == constrained_project else "ruff==0.17.5"
+        runtime = [requirement] if section == "dependencies" else []
+        dev = [requirement] if section == "dev" else []
+        path.write_text(
+            f"[project]\ndependencies = {json.dumps(runtime)}\n"
+            f"[project.optional-dependencies]\ndev = {json.dumps(dev)}\n",
+            encoding="utf-8",
+        )
+
+    conflicts = find_pin_conflicts(projects["planner"], projects["tpp"])
+
+    if active:
+        planner_req, tpp_req = (
+            (marked_requirement, "ruff==0.17.5")
+            if constrained_project == "planner"
+            else ("ruff==0.17.5", marked_requirement)
+        )
+        assert conflicts == [
+            f"ruff: trip-planner '{Requirement(planner_req)}' vs TPP '{Requirement(tpp_req)}'"
+        ]
+    else:
+        assert conflicts == []
 
 
 @pytest.mark.parametrize("constrained_project", ["planner", "tpp"])

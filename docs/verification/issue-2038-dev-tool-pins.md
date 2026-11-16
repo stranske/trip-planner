@@ -316,3 +316,32 @@ The two-file focused command above passed on `07a9bbfa6ff54` with the live
 TPP checkout (97 passed on Python 3.12.2). The round excludes the full local
 suite. Sync-core round `20261116T094313Z` still records `pin-conflict` and
 `pin-held` for #2037. A1 and A3 remain open.
+
+## Marker-aware local pin verification
+
+On 2026-11-16, extended the guard to evaluate dependency markers for the
+running interpreter with both the base distribution and the requested `dev`
+extra. Previously it reported conflicts even for pins excluded from the smoke
+job's installation. The 24 new cases cover both projects and dependency
+sections, including active, inactive, and combined Python/extra markers.
+Before the fix, 12 cases failed with false conflict reports; after the fix,
+the focused two-file command passes on Python 3.14.10: **119 passed, 2 skipped**.
+The two skips require a live TPP checkout. Ruff and mypy pass on the changed
+test file.
+
+The full `python -m pytest -q -m 'not slow' -x` command exits during setup
+because the sandbox denies the local socketpair I/O required by `TestClient`.
+This does not satisfy A1's local-suite requirement. GitHub readback shows
+#2037 still open and ready at the original head `65b25b559ea6`, and #2039
+open and ready. `gh run view 43820524287 --repo stranske/trip-planner --json
+headSha,status,conclusion` cannot connect to the GitHub API in this sandbox.
+A1 and A3 remain unchecked; regeneration and sync-core classification require
+the owning external lane. No repository workflow or dependency pin was changed.
+
+The required repository-wide Black command passes: **530 files unchanged**.
+The sequential-cache workaround above was used with the project's inferred
+Python 3.13/3.14 target versions. `git diff --check` passes. Committing is
+blocked: `git add` cannot create `.git/index.lock` because Git metadata is
+mounted read-only. The test change and this record remain uncommitted.
+The blocker comment and `needs-human` label could not be applied: both GitHub
+tools require approval, while this run's approval policy is `never`.
