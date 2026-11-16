@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+import tomllib
 import yaml
 
-WORKFLOWS = Path(__file__).resolve().parents[1] / ".github" / "workflows"
+ROOT = Path(__file__).resolve().parents[1]
+WORKFLOWS = ROOT / ".github" / "workflows"
 RUNTIME_KEYS = {
     "python-version",
     "python-versions",
@@ -65,3 +69,32 @@ def test_workflow_python_pins_follow_standard() -> None:
         assert json.loads(config["with"]["python-versions"]) == ["3.13", "3.14"]
         assert config["with"]["primary-python-version"] == "3.14"
         assert not config.get("continue-on-error", False)
+
+
+def _pyproject_defines_ruff_config(pyproject: Path) -> bool:
+    data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    return "ruff" in data.get("tool", {})
+
+
+def test_ruff_check_matches_reusable_python_ci_when_ruff_omitted() -> None:
+    """When pyproject.toml has no [tool.ruff], CI uses --select E4,E7,E9,F (not the default set)."""
+    pyproject = ROOT / "pyproject.toml"
+    assert not _pyproject_defines_ruff_config(pyproject), "update this test if [tool.ruff] is added"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            "--select",
+            "E4,E7,E9,F",
+            "--extend-exclude",
+            ".workflows-lib",
+            ".",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr

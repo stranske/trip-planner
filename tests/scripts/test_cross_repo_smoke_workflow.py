@@ -140,6 +140,18 @@ def test_workflow_uses_stable_setup_action_tags(workflow: dict) -> None:
     assert "actions/setup-node@v6" not in uses_values
 
 
+def test_cross_repo_smoke_job_uses_python_3_14(workflow: dict) -> None:
+    """Cross-repo smoke must match the primary Python CI runtime (3.14)."""
+    job = workflow["jobs"]["cross-repo-full-product"]
+    setup = next(
+        step
+        for step in job["steps"]
+        if step.get("name") == "Set up Python"
+        and str(step.get("uses", "")).startswith("actions/setup-python@")
+    )
+    assert setup["with"]["python-version"] == "3.14"
+
+
 def test_portal_contract_installs_both_projects_in_its_interpreter(workflow: dict) -> None:
     steps = workflow["jobs"]["cross-repo-full-product"]["steps"]
     contract = next(step for step in steps if step["name"] == "Verify TPP portal handoff contract")
