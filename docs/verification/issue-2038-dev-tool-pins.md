@@ -259,3 +259,23 @@ Python 3.14 run and subsequent classification. This round neither edits the
 generated PR nor dispatches or takes over that lane. PR #2039 was read back open
 and ready before this documentation-only update. T7 is complete; A1 and A3 stay
 unchecked.
+
+## Local keepalive round 4/12
+
+On 2026-11-16, `gh run view 43820524287 --repo stranske/trip-planner --json headSha,conclusion,jobs`
+confirmed that Python 3.14 still fails on #2037 head `65b25b559ea6`. The PR
+still has that head. Sync-core round `20261116T091416Z` recorded the same
+`pin-conflict` and `pin-held` disposition. Gate run `43836319557` passed
+Python 3.14 on the repair head `358dd71e2d01`.
+
+The focused command from round 3 passed again on the repair head with the
+same TPP checkout. All 97 cases passed on Python 3.12.2. The local full suite
+was outside this round's test scope.
+
+The existing repair commit `a99e01e558b7` changes Ruff from 0.17.4 to 0.17.5
+in `.github/workflows/autofix-versions.env`, `pyproject.toml`, and
+`requirements.lock`. Those files have a sole writer,
+`maint-auto-update-pypi-versions.yml`. The pin changes need reconciliation
+through that owner as part of integrating the compatible TPP revision and
+regenerating the sync PR. A1 needs the Python 3.14 run on the regenerated
+head. A3 needs a subsequent sync-core result for #2037 without `pin-conflict`.
