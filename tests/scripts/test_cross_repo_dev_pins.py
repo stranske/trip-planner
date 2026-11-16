@@ -380,31 +380,52 @@ def test_offline_workflow_guard_rejects_original_producer_pins(
 
 
 @pytest.mark.parametrize(
-    ("planner_phase", "producer_phase", "conflicting"),
+    ("planner_fixture", "producer_ref", "conflicting_tools"),
     [
-        pytest.param("failed", "failed", True, id="original-install-inputs"),
-        pytest.param("failed", "successful", False, id="change-only-tpp-checkout"),
-        pytest.param("successful", "successful", False, id="merged-install-inputs"),
+        pytest.param(
+            "issue_2025_ledger/failed-trip-planner.toml",
+            "acc4aeddee5f4ffefbdc73fcb07505cd3d198197",
+            ("mypy", "pytest", "ruff"),
+            id="original-install-inputs",
+        ),
+        pytest.param(
+            "issue_2025_ledger/failed-trip-planner.toml",
+            "b56d92b389736c70370aa9134f379ac8cd1f3ad1",
+            (),
+            id="change-only-tpp-checkout",
+        ),
+        pytest.param(
+            "issue_2025_ledger/successful-trip-planner.toml",
+            "b56d92b389736c70370aa9134f379ac8cd1f3ad1",
+            (),
+            id="merged-install-inputs",
+        ),
+        pytest.param(
+            "issue_2038_dev_pins/trip-planner.toml",
+            "5c9ec6e15ac959023b9fc9cdd1099d70a6073396",
+            ("ruff",),
+            id="issue-2038-original-install",
+        ),
+        pytest.param(
+            "issue_2038_dev_pins/trip-planner.toml",
+            "50992156e4a1f97c1115b6c7af84a219a3b9aae7",
+            (),
+            id="issue-2038-repaired-install",
+        ),
     ],
 )
 def test_smoke_pin_guard_with_historical_editable_checkouts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    planner_phase: str,
-    producer_phase: str,
-    conflicting: bool,
+    planner_fixture: str,
+    producer_ref: str,
+    conflicting_tools: tuple[str, ...],
 ) -> None:
     """The actual smoke guard must detect the old checkout and accept its replacement."""
-    planner_source = (
-        REPO_ROOT / "tests/fixtures/issue_2025_ledger" / f"{planner_phase}-trip-planner.toml"
-    )
-    producer_ref = {
-        "failed": "acc4aeddee5f4ffefbdc73fcb07505cd3d198197",
-        "successful": "b56d92b389736c70370aa9134f379ac8cd1f3ad1",
-    }[producer_phase]
+    planner_source = REPO_ROOT / "tests/fixtures" / planner_fixture
     producer_source = REPO_ROOT / "tests/fixtures/tpp_dev_pins" / producer_ref / "pyproject.toml"
     # Preserve both complete original metadata files, including runtime and dev
-    # requirements. The middle case changes only the selected producer source.
+    # requirements. Each repair changes only the selected producer source.
     (tmp_path / "pyproject.toml").write_bytes(planner_source.read_bytes())
     checkout = tmp_path / "tpp"
     checkout.mkdir()
@@ -412,12 +433,12 @@ def test_smoke_pin_guard_with_historical_editable_checkouts(
     monkeypatch.setattr(f"{__name__}.REPO_ROOT", tmp_path)
     monkeypatch.setenv("TPP_REPO_PATH", "tpp")
 
-    if conflicting:
+    if conflicting_tools:
         with pytest.raises(AssertionError, match="cannot be installed together") as failure:
             test_planner_dev_pins_resolve_with_pinned_tpp_checkout()
         diagnostics = str(failure.value)
         for tool in ("ruff", "mypy", "pytest"):
-            assert f"{tool}: trip-planner" in diagnostics
+            assert (f"{tool}: trip-planner" in diagnostics) == (tool in conflicting_tools)
         assert "Move TPP_PINNED_REF" in diagnostics
     else:
         test_planner_dev_pins_resolve_with_pinned_tpp_checkout()

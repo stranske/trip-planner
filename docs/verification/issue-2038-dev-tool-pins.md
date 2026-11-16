@@ -131,3 +131,42 @@ uncommitted in the workspace; a run with writable Git metadata must commit them.
 Attempts to add a blocker comment and `needs-human` label to PR #2039 were also
 rejected: the GitHub tools require approval, while this run's approval policy is
 `never`. Neither remote update was applied.
+
+## Round 4: exercise the smoke guard with #2038 source inputs
+
+Extended `test_smoke_pin_guard_with_historical_editable_checkouts` with the
+fixed #2038 planner snapshot and both original and repaired TPP snapshots. This
+exercises the smoke job's actual pin guard, in addition to round 3's isolated
+pip resolver. The original pair must report only Ruff as conflicting; the
+repaired pair must pass without changing planner's pytest or mypy pins.
+
+- [x] Focused verification on Python 3.14.10: **90 passed, 2 skipped** using
+  the two-file pytest command above with `-m 'not slow'`. The skips require
+  a live TPP checkout. Ruff and mypy pass on the changed test file.
+- [x] Deliberate-break/revert: replacing Ruff 0.17.5 with 0.17.4 in the repaired
+  producer snapshot makes
+  `test_smoke_pin_guard_with_historical_editable_checkouts[issue-2038-repaired-install]`
+  fail with the expected Ruff diagnostic (exit 1). Restoring the snapshot
+  byte-for-byte makes it pass (exit 0). Logs:
+  `/tmp/issue-2038-round4-{broken,restored}.log`.
+
+The full `python -m pytest -q -m 'not slow' -x` command exits during setup:
+the sandbox still denies local socketpair I/O required by `TestClient`.
+This is not a passing full-suite result. GitHub readback confirms #2037 is
+still open and ready at its original head `65b25b559ea6`; #2039 is also open
+and ready. `gh run view 43820524287 --json headSha,status,conclusion --repo
+stranske/trip-planner` cannot connect to the GitHub API in this sandbox.
+Regenerated-sync CI and the next sync-core classification remain pending.
+No workflow or dependency pin was edited this round.
+
+The required repository-wide Black check passes: **530 files unchanged**.
+As in round 3, files were checked sequentially to populate a temporary cache
+before running the unchanged full command with `BLACK_NUM_WORKERS=1`.
+The final focused pytest rerun also passes: **90 passed, 2 skipped**.
+
+The commit remains blocked: `git add` fails to create `.git/index.lock` with
+`Read-only file system`. These two changed files need to be committed on the
+existing `codex/issue-2038` branch in a run with writable Git metadata.
+The blocker comment and `needs-human` label were also rejected because the
+GitHub tools require approval and this run's approval policy is `never`;
+neither remote update was applied.
