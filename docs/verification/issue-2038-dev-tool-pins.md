@@ -657,3 +657,66 @@ guard and this evidence update remain drainable. After regeneration, read its
 exact-head Python 3.14 run and the subsequent sync-core classification. This
 round changes only this verification record; no dependency pins, workflows,
 acceptance checkboxes, or generated sync PR were edited.
+
+## Closer continuation (Cursor composer)
+
+Check date: 2026-11-16. Outcome: **repair PR #2039 checks are green; A1 and A3
+remain unsatisfied**. This pass is delivery evidence only; no dependency pins,
+workflows, or acceptance checkboxes were edited.
+
+### PR #2039 integration gates
+
+`gh pr checks 2039 -R stranske/trip-planner` reports no failing or pending
+required checks on head `776bea09e6d671064b501f3bd5efa37541c2185b`. Gate run
+`43865443029` concludes **success** on that same head, including
+`Python CI / python 3.14` and `Cross-Repo Smoke / cross-repo-full-product`.
+PR #2039 is **open**, `isDraft=false`, mergeable.
+
+### Sync PR #2037 (not regenerated)
+
+```sh
+gh run view 43820524287 --repo stranske/trip-planner --json headSha,conclusion,jobs
+```
+
+Still reports `headSha` `65b25b559ea631d494e3dcfd624fb0126b098bbf`, overall
+`conclusion` **failure**, with `Python CI / python 3.14` and
+`Python CI / python 3.13` failed and `Cross-Repo Smoke / cross-repo-full-product`
+failed. PR #2037 head is unchanged on branch `deps/sync-dev-versions-f5d01d8ca39f`.
+
+The owning sync lane's post-integration regeneration of #2037 was **not**
+observed in this pass (no new head SHA, no new CI run on a regenerated sync
+branch). Empty-diff supersession disposition for #2037 is **not** recorded;
+treating the stale head as satisfying the regenerated-head criterion would be
+incorrect without an explicit sync-owner disposition reconciled to the literal
+regenerated head.
+
+### sync-core classification
+
+First completed 2026-11-16 round for `stranske/trip-planner#2037`: timestamp
+`2026-11-16T07:31:06Z`, disposition `pin-conflict`, terminal `pin-held`.
+Latest at read time: `2026-11-16T14:43:25Z`, same disposition, handoff
+`#2038 (open)`. No subsequent round on a regenerated #2037 head without the
+pin-conflict finding.
+
+### Local full not-slow pytest (supported interpreter)
+
+Repository-selected interpreter: `.python-version` **3.14** →
+`.venv/bin/python` **CPython 3.14.3** (created from `/Users/teacher/.codex/py314/bin/python`
+after `ensurepip`; `pip` available). Tested SHA: `776bea09e6d671064b501f3bd5efa37541c2185b`.
+
+```sh
+.venv/bin/python -m pytest -q -m 'not slow'
+```
+
+Terminal summary: **1 failed, 2981 passed, 6 skipped** in ~216s; **exit 1**.
+Single failure:
+`tests/scripts/test_verify_local_suite.py::test_relative_virtualenv_interpreter_survives_isolated_checkout`
+— child venv created with `--without-pip --system-site-packages` reports
+`No module named pytest` instead of the expected retained traceback (local 3.14.3
+venv does not propagate the parent site-packages). Gate **Python CI / python 3.14**
+on this head still **passes**, so this is an environment delta, not a regression
+in the pin repair. Log: `/tmp/issue2038-closer-pytest.log`.
+
+**A1** (regenerated #2037 head with passing Python 3.14 CI) and **A3** (subsequent
+sync-core without pin-conflict on that target) remain **blocked on the delivery/sync
+owner** after source integration of #2039; a coding agent cannot complete them here.
