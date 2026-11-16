@@ -378,3 +378,21 @@ metadata. No workflow or dependency pin was changed.
 The blocker comment and `needs-human` label could not be applied: both GitHub
 tools require approval, while this run's approval policy is `never`. Neither
 remote update was applied. PR #2039 was read back open and ready.
+
+## Local keepalive round 7/12
+
+On 2026-11-16, `gh run view 43820524287 -R stranske/trip-planner --json headSha,conclusion,jobs`
+confirmed that Python 3.14 failed on #2037 head
+`65b25b559ea631d494e3dcfd624fb0126b098bbf`. GitHub still reports that head.
+On #2039 head `12e45ddd2659`, Python 3.14 and Cross-Repo Smoke passed.
+The focused two-file command above passed all 123 cases on Python 3.12.2
+with the exact TPP checkout `50992156e4a1f97c1115b6c7af84a219a3b9aae7`.
+The full local suite was outside this round's test scope. A1 remains open.
+
+Sync-core round `20261116T101343Z` still classified #2037 as
+`pin-conflict` with terminal state `pin-held`. A3 remains open.
+Consumer main still selects the old TPP checkout `5c9ec6e15ac9`.
+The pin owner needs to coordinate the existing Ruff changes with the
+compatible TPP checkout, then the Maint 52 sync owner can regenerate the
+delivery. Recheck Python 3.14 and the next sync-core classification on
+the resulting #2037 head.
