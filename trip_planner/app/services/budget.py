@@ -197,11 +197,25 @@ def _build_budget_summary(
             2,
         )
 
+    def _unallocated_category_summary(category_key: str, actual_amount: float) -> dict[str, Any]:
+        rounded_actual = round(actual_amount, 2)
+        return {
+            "category_key": category_key,
+            "label": category_key.replace("_", " ").title(),
+            "currency": currency,
+            "planned_amount": 0.0,
+            "actual_amount": rounded_actual,
+            "remaining_amount": round(-rounded_actual, 2),
+            "flexibility": "flexible",
+        }
+
     category_summaries: list[dict[str, Any]] = []
+    allocated_keys: set[str] = set()
     if allocations:
         for allocation in allocations:
             actual_amount = round(spend_totals_by_category.get(allocation["category_key"], 0.0), 2)
             planned_amount = round(allocation["planned_amount"], 2)
+            allocated_keys.add(allocation["category_key"])
             category_summaries.append(
                 {
                     "category_key": allocation["category_key"],
@@ -213,8 +227,16 @@ def _build_budget_summary(
                     "flexibility": allocation["flexibility"],
                 }
             )
+        for category_key in sorted(
+            key for key in spend_totals_by_category if key not in allocated_keys
+        ):
+            category_summaries.append(
+                _unallocated_category_summary(category_key, spend_totals_by_category[category_key])
+            )
     else:
-        for category in _suggested_categories(trip_mode):
+        suggested_categories = _suggested_categories(trip_mode)
+        suggested_keys = set(suggested_categories)
+        for category in suggested_categories:
             category_summaries.append(
                 {
                     "category_key": category,
@@ -225,6 +247,12 @@ def _build_budget_summary(
                     "remaining_amount": round(-spend_totals_by_category.get(category, 0.0), 2),
                     "flexibility": "flexible",
                 }
+            )
+        for category_key in sorted(
+            key for key in spend_totals_by_category if key not in suggested_keys
+        ):
+            category_summaries.append(
+                _unallocated_category_summary(category_key, spend_totals_by_category[category_key])
             )
 
     planned_total = round(sum(item["planned_amount"] for item in category_summaries), 2)
