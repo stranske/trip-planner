@@ -171,14 +171,19 @@ describe("WorkspaceBudgetPanel", () => {
       spend_events: [
         {
           spend_event_id: "spend:lodging-1",
+          trip_id: "trip:kyoto",
           budget_plan_id: "budget:kyoto",
           category_key: "lodging",
           amount: 50,
           currency: "USD",
+          occurred_at: "2026-08-02T00:00:00Z",
           source_kind: "manual",
           source_context: "Hotel deposit",
+          scenario_budget_id: "scenario-budget:kyoto",
+          saved_scenario_id: "saved-scenario:kyoto",
           merchant_name: "",
-          recorded_at: "2026-08-02T00:00:00Z",
+          source_ref: null,
+          notes: [],
         },
       ],
       summary: {
