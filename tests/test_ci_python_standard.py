@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -89,6 +90,30 @@ def test_ruff_check_matches_reusable_python_ci_when_ruff_omitted() -> None:
             "--select",
             "E4,E7,E9,F",
             "--extend-exclude",
+            ".workflows-lib",
+            ".",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_mypy_matches_reusable_python_ci() -> None:
+    """Reusable Python CI runs mypy with pyproject config and .workflows-lib excluded."""
+    build_dir = ROOT / "build"
+    if build_dir.exists():
+        shutil.rmtree(build_dir)
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "mypy",
+            "--config-file",
+            "pyproject.toml",
+            "--exclude",
             ".workflows-lib",
             ".",
         ],
