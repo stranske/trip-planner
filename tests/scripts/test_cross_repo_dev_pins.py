@@ -542,7 +542,9 @@ def test_smoke_pin_guard_with_historical_editable_checkouts(
         pytest.param("50992156e4a1f97c1115b6c7af84a219a3b9aae7", 0, id="repaired-producer"),
     ],
 )
-@pytest.mark.parametrize("guard_mode", ["live-checkout", "workflow-snapshot", "missing-snapshot"])
+@pytest.mark.parametrize(
+    "guard_mode", ["live-checkout", "workflow-snapshot", "missing-snapshot", "combined-guards"]
+)
 def test_pin_guard_cli_with_issue_2038_checkouts(
     tmp_path: Path, producer_ref: str, expected_exit: int, guard_mode: str
 ) -> None:
@@ -556,15 +558,19 @@ def test_pin_guard_cli_with_issue_2038_checkouts(
     guard = tmp_path / "tests/scripts/test_cross_repo_dev_pins.py"
     guard.parent.mkdir(parents=True)
     guard.write_bytes(Path(__file__).read_bytes())
-    test_name = "test_planner_dev_pins_resolve_with_pinned_tpp_checkout"
+    test_names = ["test_planner_dev_pins_resolve_with_pinned_tpp_checkout"]
     if guard_mode != "live-checkout":
-        test_name = "test_workflow_tpp_pin_resolves_with_planner_dev_pins"
+        snapshot_test = "test_workflow_tpp_pin_resolves_with_planner_dev_pins"
+        if guard_mode == "combined-guards":
+            test_names.append(snapshot_test)
+        else:
+            test_names = [snapshot_test]
         workflow = tmp_path / ".github/workflows/cross-repo-smoke.yml"
         workflow.parent.mkdir(parents=True)
         workflow.write_text(
             yaml.safe_dump({"env": {"TPP_PINNED_REF": producer_ref}}), encoding="utf-8"
         )
-        if guard_mode == "workflow-snapshot":
+        if guard_mode in ("workflow-snapshot", "combined-guards"):
             snapshot = tmp_path / "tests/fixtures/tpp_dev_pins" / producer_ref / "pyproject.toml"
             snapshot.parent.mkdir(parents=True)
             snapshot.write_bytes(producer.read_bytes())
@@ -581,7 +587,7 @@ def test_pin_guard_cli_with_issue_2038_checkouts(
             sys.executable,
             "-m",
             "pytest",
-            f"tests/scripts/test_cross_repo_dev_pins.py::{test_name}",
+            *(f"tests/scripts/test_cross_repo_dev_pins.py::{name}" for name in test_names),
             "-q",
             "-m",
             "not slow",
@@ -596,7 +602,7 @@ def test_pin_guard_cli_with_issue_2038_checkouts(
     diagnostics = result.stdout + result.stderr
     assert result.returncode == expected_exit, diagnostics
     if expected_exit:
-        assert "1 failed" in diagnostics
+        assert f"{len(test_names)} failed" in diagnostics
     if guard_mode == "missing-snapshot":
         # Even a compatible live checkout cannot replace review of a new pin.
         assert f"Missing TPP dependency snapshot for {producer_ref}" in diagnostics
@@ -607,7 +613,7 @@ def test_pin_guard_cli_with_issue_2038_checkouts(
         assert "mypy: trip-planner" not in diagnostics
         assert "pytest: trip-planner" not in diagnostics
     else:
-        assert "1 passed" in diagnostics
+        assert f"{len(test_names)} passed" in diagnostics
 
 
 @pytest.mark.parametrize(

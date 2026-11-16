@@ -1,5 +1,34 @@
 # Issue #2038: dev-tool pin verification
 
+## Combined pytest guard regression
+
+On 2026-11-16, extended the subprocess regression to run the live-checkout
+and workflow-snapshot pin guards together against both original and repaired
+#2038 dependency inputs. The original pair must report two failures and exit 1;
+the repaired pair must report two passes and exit 0.
+
+On Python 3.14.10, the focused two-file command below passes: **150 passed,
+2 skipped**. The skips require a live TPP checkout. Temporarily restoring
+Ruff 0.17.4 in the repaired snapshot makes the combined regression fail with
+both guard failures; restoring the fixture byte-for-byte makes it pass.
+Logs: `/tmp/issue2038-combined-cli-{broken,restored}.log`. Ruff, mypy,
+`git diff --check`, and the required repository-wide Black check pass
+(**530 files unchanged**), using the sequential-cache workaround below.
+
+The full `python -m pytest -q -m 'not slow' -x` command exits because the
+sandbox denies TestClient socketpair I/O. GitHub readback confirms #2037 is
+still open and ready at its original head `65b25b559ea6`; #2039 is open and
+ready. `gh run view 43820524287 --repo stranske/trip-planner --json
+headSha,status,conclusion` cannot connect to GitHub. Regenerated-sync CI and
+subsequent sync-core acceptance remain pending; no checkbox was changed.
+No repository workflow or dependency pin was edited.
+
+The commit attempt failed because Git cannot create `.git/index.lock` on the
+read-only Git metadata mount. These changes remain uncommitted. The blocker
+comment and `needs-human` label were also rejected: the GitHub tools require
+approval while this run's approval policy is `never`. Neither remote update
+was applied.
+
 ## Preserve producer Python compatibility metadata
 
 On 2026-11-16, read both #2038 producer revisions from GitHub and confirmed
