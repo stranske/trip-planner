@@ -602,8 +602,9 @@ def test_pin_guard_cli_with_issue_2038_checkouts(
         pytest.param(None, "issue-2038-repaired", id="issue-2038-repaired-install"),
     ],
 )
+@pytest.mark.parametrize("target_python", ["3.13", "3.14"])
 def test_pip_resolves_paired_dev_tool_pins_offline(
-    tmp_path: Path, restored_tool: str | None, historical_phase: str | None
+    tmp_path: Path, restored_tool: str | None, historical_phase: str | None, target_python: str
 ) -> None:
     """Exercise pip's resolver for the failing tool pins without network or installs.
 
@@ -615,6 +616,8 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
     Historical cases read fixed source snapshots, independent of subsequent
     planner and workflow updates. For #2038, only the TPP revision changes
     between the failed and repaired installations.
+    Resolve for both CI Python versions, preserving the source projects' Python
+    requirements rather than relying on whichever interpreter runs this test.
     This verifies resolution only, not a complete cross-repo installation.
     """
     workflow = yaml.safe_load(
@@ -659,6 +662,10 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
         "planner": _requirements(planner),
         "tpp": _requirements(snapshot / "pyproject.toml"),
     }
+    project_metadata = {
+        "planner": tomllib.loads(planner.read_text(encoding="utf-8"))["project"],
+        "tpp": tomllib.loads((snapshot / "pyproject.toml").read_text(encoding="utf-8"))["project"],
+    }
 
     def write_wheel(name: str, version: str, dependency_metadata: str = "") -> None:
         dist_info = f"{name}-{version}.dist-info"
@@ -676,6 +683,8 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
     project_names = {"planner": "trip_planner", "tpp": "travel_plan_permission"}
     for name, requirements in projects.items():
         dependency_metadata = "Provides-Extra: dev\n"
+        if requires_python := project_metadata[name].get("requires-python"):
+            dependency_metadata += f"Requires-Python: {requires_python}\n"
         for tool, old_version in old_versions.items():
             selected = requirements[tool]
             if name == "tpp" and restored_tool in ("all", tool):
@@ -709,6 +718,9 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
             "install",
             "--dry-run",
             "--ignore-installed",
+            "--python-version",
+            target_python,
+            "--only-binary=:all:",
             "--no-index",
             "--no-cache-dir",
             "--find-links",
@@ -753,6 +765,13 @@ def test_pip_resolves_paired_dev_tool_pins_offline(
             canonicalize_name(entry["metadata"]["name"]): entry["metadata"]["version"]
             for entry in resolved
         } == expected
+        resolved_metadata = {
+            canonicalize_name(entry["metadata"]["name"]): entry["metadata"] for entry in resolved
+        }
+        for name, distribution in project_names.items():
+            assert resolved_metadata[canonicalize_name(distribution)].get("requires_python") == (
+                project_metadata[name].get("requires-python")
+            )
 
 
 @pytest.mark.parametrize(

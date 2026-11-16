@@ -1,5 +1,38 @@
 # Issue #2038: dev-tool pin verification
 
+## Explicit Python resolver targets
+
+On 2026-11-16, extended the offline pip regression to resolve each pin pair
+for Python 3.13 and 3.14 with `--python-version` and `--only-binary=:all:`.
+The project wheels now retain the available `requires-python` metadata, and
+the successful pip report must preserve it. This checks tool resolution and
+Python compatibility metadata; it does not execute application code on another
+interpreter or emulate its environment markers.
+
+On Python 3.14.10, the focused two-file command below passes: **136 passed,
+2 skipped**. The skips require a live TPP checkout. Ruff and mypy pass on the
+changed test file. Narrowing only the historical planner fixture's Python
+requirement to `>=3.13,<3.14` makes the repaired-install case fail for target
+3.14 while target 3.13 passes. Restoring the fixture byte-for-byte makes both
+pass. Logs: `/tmp/issue2038-python-matrix-{broken,restored}.log`.
+
+The full `python -m pytest -q -m 'not slow' -x` command still exits during
+setup because the sandbox denies socketpair I/O required by `TestClient`.
+PR #2037 is still open and ready at its original head `65b25b559ea6`;
+GitHub readback of run `43820524287` confirms failed Python 3.14 and cross-repo
+smoke jobs. `gh run view` cannot connect to the GitHub API from the shell.
+Regenerated-sync CI and the next sync-core classification remain unverified;
+their acceptance checkboxes stay unchecked. No workflow or dependency pin was
+changed.
+
+The required repository-wide Black command passes (**530 files unchanged**),
+using the sequential-cache workaround described below. `git diff --check`
+passes. The commit attempt fails because `.git` is mounted read-only and Git
+cannot create `index.lock`; the test and this note remain uncommitted.
+The blocker comment and `needs-human` label could not be applied because
+the GitHub tools require approval and this run's approval policy is `never`.
+Neither remote update was applied. PR #2039 was read back open and ready.
+
 ## Outcome and bounded check
 
 Check date: 2026-11-16, local keepalive round 2. The real repository inputs must
