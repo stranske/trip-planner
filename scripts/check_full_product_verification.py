@@ -1310,6 +1310,7 @@ def _comparison_pair(
                 client, evidence, "GET", f"/api/workspace/{trip_id}/scenarios/compare"
             )
         else:
+            observation["requested_total"] = amount
             price_path = f"/api/workspace/{trip_id}/prices"
             _observe(
                 client,
@@ -1354,6 +1355,7 @@ def _probe_comparison(client: TestClient, evidence: dict[str, Any]) -> str:
                 pair[0]["entered_total"] != pair[1]["entered_total"]
                 and all(
                     observation["entered_total"] is not None
+                    and observation["entered_total"] == observation["requested_total"]
                     and {
                         (figure["estimated_total"] or {}).get("typical_amount")
                         for figure in observation["figures"]

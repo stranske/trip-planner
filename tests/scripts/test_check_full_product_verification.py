@@ -615,6 +615,7 @@ def test_tp3_probe_price_pair_enters_distinct_component_totals(monkeypatch, part
         read["body"]["total"]["typical_amount"] for read in (first_read, second_read)
     ]
     assert persisted_totals == [250.0, 700.0]
+    assert [item["requested_total"] for item in price_pair] == persisted_totals
     assert [item["entered_total"] for item in price_pair] == persisted_totals
     for item, total in zip(price_pair, persisted_totals, strict=True):
         measured_totals = [
@@ -637,6 +638,41 @@ def test_tp3_probe_price_pair_enters_distinct_component_totals(monkeypatch, part
         else:
             assert party_control[0]["figures"] == party_control[1]["figures"]
     assert comparison["verdict"] == "WORKS", comparison
+
+
+@pytest.mark.parametrize("corrupt_amounts", [(250.0,), (700.0,), (250.0, 700.0)])
+def test_tp3_probe_rejects_incorrect_persisted_price_totals(monkeypatch, corrupt_amounts):
+    from fastapi.testclient import TestClient
+
+    original = TestClient.request
+    requested_amounts = []
+
+    def corrupt_price_write(self, method, url, **kwargs):
+        if method.upper() == "PUT" and str(url).endswith("/prices"):
+            amount = kwargs["json"]["amount"]
+            requested_amounts.append(amount)
+            if amount in corrupt_amounts:
+                # Simulate a write bug through the real persistence and workspace routes.
+                kwargs["json"] = {**kwargs["json"], "amount": amount * 2}
+        return original(self, method, url, **kwargs)
+
+    monkeypatch.setattr(TestClient, "request", corrupt_price_write)
+    rows = verifier.run_contract_report()
+    comparison = next(row for row in rows if row["id"] == "TP3")
+    price_pair = comparison["evidence"]["pairs"]["price"]
+    assert requested_amounts == [250.0, 700.0]
+    assert [item["requested_total"] for item in price_pair] == requested_amounts
+    expected_totals = [
+        amount * 2 if amount in corrupt_amounts else amount for amount in requested_amounts
+    ]
+    assert [item["entered_total"] for item in price_pair] == expected_totals
+    # Displaying the same wrong totals must not count as preserving entered prices.
+    for item, total in zip(price_pair, expected_totals, strict=True):
+        assert item["figures"]
+        assert {figure["estimated_total"]["typical_amount"] for figure in item["figures"]} == {
+            total
+        }
+    assert comparison["verdict"] == "PARTIAL", comparison
 
 
 def test_product_probe_report_lists_every_contract_id():
