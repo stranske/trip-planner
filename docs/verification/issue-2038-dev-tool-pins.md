@@ -593,3 +593,25 @@ Sync-core round `20261116T105944Z` still records `pin-conflict` and
 with passing checks on main. A3 remains open. Verify it against a sync-core
 classification after the source repair lands and the sync owner regenerates
 #2037.
+
+## Local keepalive round 11/12
+
+On 2026-11-16, the focused two-file command from round 3 passed all 152
+tests in 14.70 seconds on `ae470a382e07` against the exact TPP checkout
+`50992156e4a1`. Gate run `43861450259` also passed Python 3.14 and Cross-Repo
+Smoke on that repair head. The full local suite was outside this round's
+scope. `gh run view 43820524244` confirmed that Python 3.14 still fails on
+the current #2037 head `65b25b559ea6`. A1 remains open.
+
+Sync-core round `20261116T115814Z` records `pin-conflict` and `pin-held`
+for #2037 and lists #2038 as its open handoff. A3 remains open.
+
+Consumer main `968b17f4f203` still uses Ruff 0.17.4 and TPP `5c9ec6e15ac9`.
+The existing repair commit `a99e01e5` already carries the same Ruff 0.17.5
+update as #2037 in all three pin-writer files, paired with TPP
+`50992156e4a1`, which also uses Ruff 0.17.5. Maint 52 can replay the original
+wave using its `source_sha` input, but only publishes when regeneration
+produces a diff against current main. If both changes reach main and the
+replay produces an empty diff, the sync owner needs to record the disposition
+of #2037. A1 still requires a passing Python 3.14 run on a regenerated head.
+A3 requires a subsequent sync-core record for that target.
