@@ -29,6 +29,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from fastapi.testclient import TestClient  # noqa: E402
+from httpx import HTTPError
 
 from trip_planner.app.main import create_app  # noqa: E402
 from trip_planner.app.services.planner_runtime_config import (  # noqa: E402
@@ -1343,7 +1344,16 @@ def _probe_comparison(client: TestClient, evidence: dict[str, Any]) -> str:
         controls["party"] = _comparison_pair(
             client, evidence, (("Chicago", 1, None), ("Chicago", 8, None))
         )
-    except VerificationFailure as exc:
+    except (
+        VerificationFailure,
+        HTTPError,
+        AttributeError,
+        LookupError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        # This optional control cannot override the measured determinant verdict,
+        # including when its response is malformed or its transport is interrupted.
         controls["party_error"] = str(exc)
 
     if any(not observation["figures"] for pair in pairs.values() for observation in pair):

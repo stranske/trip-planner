@@ -548,7 +548,9 @@ def test_product_probe_report_marks_constant_figures_fabricated(
     assert all(request["status"] == 200 for request in comparison["evidence"]["requests"])
 
 
-@pytest.mark.parametrize("party_response", ["unchanged", "empty", "unavailable"])
+@pytest.mark.parametrize(
+    "party_response", ["unchanged", "empty", "unavailable", "malformed", "interrupted"]
+)
 def test_tp3_probe_price_pair_enters_distinct_component_totals(monkeypatch, party_response):
     import httpx
     from fastapi.testclient import TestClient
@@ -566,6 +568,10 @@ def test_tp3_probe_price_pair_enters_distinct_component_totals(monkeypatch, part
                 return httpx.Response(200, json={"scenarios": []})
             if party_response == "unavailable":
                 return httpx.Response(503, json={"detail": "party control unavailable"})
+            if party_response == "malformed":
+                return httpx.Response(200, json={"scenarios": None})
+            if party_response == "interrupted":
+                raise httpx.ReadError("party control response interrupted")
         response = original(self, method, url, **kwargs)
         if method.upper() == "POST" and str(url) == "/api/trips":
             frame = kwargs["json"]["trip_frame"]
@@ -625,10 +631,20 @@ def test_tp3_probe_price_pair_enters_distinct_component_totals(monkeypatch, part
 
     assert set(evidence["pairs"]) == {"destination", "price"}
     controls = evidence["controls"]
-    if party_response == "unavailable":
-        assert "contract route failed" in controls["party_error"]
-        assert evidence["requests"][-1]["status"] == 503
-        assert evidence["requests"][-1]["body"] == {"detail": "party control unavailable"}
+    if party_response in {"unavailable", "malformed", "interrupted"}:
+        expected_error = {
+            "unavailable": "contract route failed",
+            "malformed": "NoneType",
+            "interrupted": "party control response interrupted",
+        }[party_response]
+        assert expected_error in controls["party_error"]
+        assert "party" not in controls
+        if party_response == "unavailable":
+            assert evidence["requests"][-1]["status"] == 503
+            assert evidence["requests"][-1]["body"] == {"detail": "party control unavailable"}
+        elif party_response == "malformed":
+            assert evidence["requests"][-1]["status"] == 200
+            assert evidence["requests"][-1]["body"] == {"scenarios": None}
     else:
         party_control = controls["party"]
         assert [item["party"] for item in party_control] == [1, 8]
@@ -638,6 +654,46 @@ def test_tp3_probe_price_pair_enters_distinct_component_totals(monkeypatch, part
         else:
             assert party_control[0]["figures"] == party_control[1]["figures"]
     assert comparison["verdict"] == "WORKS", comparison
+
+
+@pytest.mark.parametrize("control_failure", ["malformed", "interrupted"])
+@pytest.mark.parametrize("vary_figures", [True, False], ids=["working", "fabricated"])
+def test_tp3_control_errors_do_not_change_determinant_verdict(
+    monkeypatch, control_failure, vary_figures
+):
+    import httpx
+
+    error = (
+        TypeError("malformed party control")
+        if control_failure == "malformed"
+        else httpx.ReadError("party control response interrupted")
+    )
+
+    def observe_pair(_client, _evidence, inputs):
+        if inputs[0][1] != inputs[1][1]:
+            raise error
+        return [
+            {
+                "requested_total": amount,
+                "entered_total": amount,
+                "figures": [
+                    {
+                        "estimated_total": {
+                            "currency": "USD",
+                            "typical_amount": amount if vary_figures else 100.0,
+                        },
+                        "travel_minutes": 120 if vary_figures and "Iceland" in region else 60,
+                    }
+                ],
+            }
+            for region, _count, amount in inputs
+        ]
+
+    monkeypatch.setattr(verifier, "_comparison_pair", observe_pair)
+    evidence = {}
+    assert verifier._probe_comparison(None, evidence) == ("WORKS" if vary_figures else "FABRICATED")
+    assert evidence["controls"] == {"party_error": str(error)}
+    assert set(evidence["pairs"]) == {"destination", "price"}
 
 
 @pytest.mark.parametrize("corrupt_amounts", [(250.0,), (700.0,), (250.0, 700.0)])
