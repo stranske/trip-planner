@@ -79,6 +79,7 @@ residual-trend-history.ndjson
 archives/metrics/
 
 # Build artifacts
+build/
 .autofix-venv/
 
 # PR automation generated files (MEDIUM conflict risk)
