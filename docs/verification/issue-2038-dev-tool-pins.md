@@ -203,3 +203,21 @@ python -m mypy --follow-imports=silent tests/scripts/test_cross_repo_dev_pins.py
 - Module ruff/mypy: pass.
 - A1 deliberate break (`trip-planner.toml` dev `ruff==0.17.4` temporary): **8 failed** in `-k issue-2038`; fixture restored to `0.17.5`; suite **112 passed** again.
 - CI readback on head: **Cross-Repo Smoke / cross-repo-full-product** and **Python CI / python 3.14** pass (workflow runs on `6a39f973`, e.g. `43968755530` / `43968756377`).
+
+Keepalive round 13/12 (2026-11-16, parent `3c2ec129`): local PR-head acceptance for remaining lint/test tasks:
+
+```sh
+python -m ruff check --select E4,E7,E9,F --extend-exclude .workflows-lib .
+python -m mypy --config-file pyproject.toml --exclude .workflows-lib .
+black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+make test
+python -m pytest tests/test_ci_python_standard.py -q
+```
+
+- Ruff (reusable Python CI select set): pass
+- mypy: pass (`493` source files; remove stale `build/` if present locally)
+- Black (keepalive gate): pass (`816` files unchanged)
+- `make test`: **3026 passed**, 6 skipped (~4m58s)
+- `tests/test_ci_python_standard.py`: **6 passed** (includes `test_pr_head_python_ci_proxy_matches_reusable_workflow`)
+- Offline cross-repo smoke proxies: **157 passed**, 2 skipped (via bundled proxy test)
+- Hosted CI readback on prior head `3c2ec129`: **Cross-Repo Smoke / cross-repo-full-product** and **Python CI / python 3.14** were green before this commit; re-run expected after push.

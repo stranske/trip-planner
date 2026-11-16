@@ -166,3 +166,15 @@ def test_cross_repo_full_product_offline_guards_match_pr_head() -> None:
         check=False,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_pr_head_python_ci_proxy_matches_reusable_workflow() -> None:
+    """Single keepalive entry: lint, typecheck, format, and cross-repo smoke offline proxies.
+
+    Full ``make test`` / hosted ``Python CI / python 3.14`` parity is enforced by reusable
+    workflow pytest; this bundles the fast local checks that must pass before trusting hosted CI.
+    """
+    test_ruff_check_matches_reusable_python_ci_when_ruff_omitted()
+    test_mypy_matches_reusable_python_ci()
+    test_black_format_matches_pre_commit_gate()
+    test_cross_repo_full_product_offline_guards_match_pr_head()
