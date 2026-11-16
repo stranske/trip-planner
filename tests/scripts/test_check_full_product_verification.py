@@ -675,6 +675,54 @@ def test_tp3_probe_rejects_incorrect_persisted_price_totals(monkeypatch, corrupt
     assert comparison["verdict"] == "PARTIAL", comparison
 
 
+@pytest.mark.parametrize("corrupt_amount", [250.0, 700.0])
+@pytest.mark.parametrize("displayed_total", [None, 999.0], ids=["missing", "stale"])
+def test_tp3_probe_rejects_one_incorrect_scenario_total(
+    monkeypatch, corrupt_amount, displayed_total
+):
+    destination_pair = [
+        {"figures": [{"travel_minutes": 60}]},
+        {"figures": [{"travel_minutes": 120}]},
+    ]
+    price_pair = [
+        {
+            "requested_total": amount,
+            "entered_total": amount,
+            "figures": [
+                {"estimated_total": {"currency": "USD", "typical_amount": amount}} for _ in range(2)
+            ],
+        }
+        for amount in (250.0, 700.0)
+    ]
+    # Persistence is correct and one scenario still displays the entered price.
+    # A single missing or stale scenario in either observation must prevent WORKS.
+    corrupt_observation = next(
+        item for item in price_pair if item["entered_total"] == corrupt_amount
+    )
+    corrupt_observation["figures"][0]["estimated_total"] = (
+        None if displayed_total is None else {"currency": "USD", "typical_amount": displayed_total}
+    )
+
+    def observe_pair(_client, _evidence, inputs):
+        if inputs[0][2] is not None:
+            return price_pair
+        if inputs[0][0] != inputs[1][0]:
+            return destination_pair
+        return [
+            {"figures": [{"travel_minutes": 60}]},
+            {"figures": [{"travel_minutes": 60}]},
+        ]
+
+    monkeypatch.setattr(verifier, "_comparison_pair", observe_pair)
+    evidence = {}
+    assert verifier._probe_comparison(None, evidence) == "PARTIAL", evidence
+    corrupt_observation["figures"][0]["estimated_total"] = {
+        "currency": "USD",
+        "typical_amount": corrupt_amount,
+    }
+    assert verifier._probe_comparison(None, evidence) == "WORKS", evidence
+
+
 def test_product_probe_report_lists_every_contract_id():
     import re
 
