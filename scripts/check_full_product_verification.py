@@ -6,9 +6,9 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
-import re
 import json
 import os
+import re
 import shlex
 import shutil
 import socket
@@ -29,6 +29,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from fastapi.testclient import TestClient  # noqa: E402
+from httpx import HTTPError  # noqa: E402
 
 from trip_planner.app.main import create_app  # noqa: E402
 from trip_planner.app.services.planner_runtime_config import (  # noqa: E402
@@ -161,14 +162,16 @@ def _fixture(*parts: str) -> dict[str, Any]:
 
 
 def run_frontend_runtime_smoke() -> CheckResult:
-    command = [str(REPO_ROOT / "scripts" / "check_full_stack_runtime.sh"), "--smoke-only"]
+    command = [
+        str(REPO_ROOT / "scripts" / "check_full_stack_runtime.sh"),
+        "--smoke-only",
+    ]
     try:
         completed = subprocess.run(
             command,
             cwd=REPO_ROOT,
             check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             timeout=180,
         )
@@ -356,7 +359,11 @@ def _assert_workspace_scenario_context(payload: dict[str, Any], *, trip_id: str)
     runtime_comparison = payload["runtime_scenario_comparison"]
     scenarios = list(scenario_search.get("scenarios") or [])
     comparison_rows = list(runtime_comparison.get("scenarios") or [])
-    _require(bool(scenarios), "workspace scenario search returned no scenarios", trip_id=trip_id)
+    _require(
+        bool(scenarios),
+        "workspace scenario search returned no scenarios",
+        trip_id=trip_id,
+    )
     _require(
         bool(comparison_rows),
         "workspace comparison returned no scenarios",
@@ -456,16 +463,24 @@ def classify_map_prerequisite(env: Mapping[str, str] | None = None) -> CheckResu
         return CheckResult(
             "map-provider",
             "BLOCKED",
-            {"provider_state": "loading", "message": "Provider adapter has not become ready."},
+            {
+                "provider_state": "loading",
+                "message": "Provider adapter has not become ready.",
+            },
         )
     return CheckResult(
         "map-provider",
         "FAIL",
-        {"provider_state": provider_state, "message": "Configured map provider reported an error."},
+        {
+            "provider_state": provider_state,
+            "message": "Configured map provider reported an error.",
+        },
     )
 
 
-def classify_planner_llm_prerequisite(env: Mapping[str, str] | None = None) -> CheckResult:
+def classify_planner_llm_prerequisite(
+    env: Mapping[str, str] | None = None,
+) -> CheckResult:
     runtime = build_planner_runtime_config(os.environ if env is None else env)
     details = {
         "data_zone": runtime.data_zone,
@@ -590,7 +605,7 @@ def _wait_for_http(url: str, *, timeout_seconds: float = 20.0) -> None:
                 last_status = response.status
                 if 200 <= response.status < 400:
                     return
-        except Exception as exc:  # pragma: no cover - exercised by integration use
+        except Exception as exc:  # noqa: BLE001 # pragma: no cover - exercised by integration use
             last_error = exc
             status_code = getattr(exc, "code", None)
             if isinstance(status_code, int):
@@ -686,8 +701,13 @@ def _started_tpp_service(
         "TPP_ACCESS_TOKEN": env["TPP_ACCESS_TOKEN"],
         "TPP_OIDC_PROVIDER": env["TPP_OIDC_PROVIDER"],
     }
-    stdout_file = tempfile.NamedTemporaryFile(prefix="tpp-service-", suffix=".stdout", delete=False)
-    stderr_file = tempfile.NamedTemporaryFile(prefix="tpp-service-", suffix=".stderr", delete=False)
+    # These files must remain addressable after their handles close so readiness failures can tail them.
+    stdout_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
+        prefix="tpp-service-", suffix=".stdout", delete=False
+    )
+    stderr_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
+        prefix="tpp-service-", suffix=".stderr", delete=False
+    )
     stdout_path = Path(stdout_file.name)
     stderr_path = Path(stderr_file.name)
     command = [
@@ -746,12 +766,16 @@ def _run_live_tpp_journey(
     expected_evaluation_status: str = EXPECTED_BUSINESS_EVALUATION_STATUS,
 ) -> dict[str, Any]:
     evaluation_fixture_name = _evaluation_fixture_name(expected_evaluation_status)
-    with _started_tpp_service(env) as (base_url, _process):
+    with _started_tpp_service(env) as (base_url, _process):  # noqa: SIM117
         with _temporary_tpp_client_environment(base_url, env):
             policy_request = _prepared_policy_request(trip_id)
             policy_response = client.put(
                 f"/api/workspace/{trip_id}/policy",
-                json={"request": policy_request, "response": None, "tags": ["full-product-live"]},
+                json={
+                    "request": policy_request,
+                    "response": None,
+                    "tags": ["full-product-live"],
+                },
             )
             _require(
                 policy_response.status_code == 200,
@@ -1076,9 +1100,11 @@ def run_product_journeys(
 
             if tpp_status.status == "READY":
                 live_tpp_env = {key: str(value) for key, value in tpp_status.details.items()}
-                with _started_tpp_service(live_tpp_env) as (base_url, _process):
-                    with _temporary_tpp_client_environment(base_url, live_tpp_env):
-                        refresh = client.post(f"/api/workspace/{business_trip_id}/proposal/refresh")
+                with (
+                    _started_tpp_service(live_tpp_env) as (base_url, _process),
+                    _temporary_tpp_client_environment(base_url, live_tpp_env),
+                ):
+                    refresh = client.post(f"/api/workspace/{business_trip_id}/proposal/refresh")
             else:
                 refresh = client.post(f"/api/workspace/{business_trip_id}/proposal/refresh")
             _require(
@@ -1290,32 +1316,91 @@ def _comparison_figures(payload: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-def _probe_comparison(client: TestClient, evidence: dict[str, Any]) -> str:
-    pairs = {}
-    for determinant, inputs in (
-        ("destination", (("Chicago", 1), ("Reykjavik, Iceland", 1))),
-        ("party", (("Chicago", 1), ("Chicago", 8))),
-    ):
-        observations = []
-        for region, count in inputs:
-            trip_id = _create_trip(
-                client,
-                mode="business",
-                title="Contract comparison",
-                region=region,
-                traveler_count=count,
-            )
+def _comparison_pair(
+    client: TestClient,
+    evidence: dict[str, Any],
+    inputs: tuple[tuple[str, int, float | None], tuple[str, int, float | None]],
+) -> list[dict[str, Any]]:
+    observations = []
+    for region, count, amount in inputs:
+        trip_id = _create_trip(
+            client,
+            mode="business",
+            title="Contract comparison",
+            region=region,
+            traveler_count=count,
+        )
+        observation: dict[str, Any] = {"destination": region, "party": count}
+        if amount is None:
             payload = _observe(
                 client, evidence, "GET", f"/api/workspace/{trip_id}/scenarios/compare"
             )
-            observations.append(
-                {"destination": region, "party": count, "figures": _comparison_figures(payload)}
+        else:
+            observation["requested_total"] = amount
+            price_path = f"/api/workspace/{trip_id}/prices"
+            _observe(
+                client,
+                evidence,
+                "PUT",
+                price_path,
+                json={"component": "transport", "amount": amount, "currency": "USD"},
             )
-        pairs[determinant] = observations
+            total = _observe(client, evidence, "GET", price_path)["total"]
+            observation["entered_total"] = total["typical_amount"] if total else None
+            # The Compare tab reads route_comparison from the workspace, which applies
+            # entered prices to the scenario figures.
+            workspace = _observe(client, evidence, "GET", f"/api/workspace/{trip_id}")
+            payload = workspace["route_comparison"]
+        observation["figures"] = _comparison_figures(payload)
+        observations.append(observation)
+    return observations
+
+
+def _probe_comparison(client: TestClient, evidence: dict[str, Any]) -> str:
+    pairs = {}
+    for determinant, inputs in (
+        ("destination", (("Chicago", 1, None), ("Reykjavik, Iceland", 1, None))),
+        ("price", (("Chicago", 1, 250.0), ("Chicago", 1, 700.0))),
+    ):
+        pairs[determinant] = _comparison_pair(client, evidence, inputs)
     evidence["pairs"] = pairs
+    controls = evidence["controls"] = {}
+    try:
+        controls["party"] = _comparison_pair(
+            client, evidence, (("Chicago", 1, None), ("Chicago", 8, None))
+        )
+    except (
+        VerificationFailure,
+        HTTPError,
+        AttributeError,
+        LookupError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        # This optional control cannot override the measured determinant verdict,
+        # including when its response is malformed or its transport is interrupted.
+        controls["party_error"] = str(exc)
+
     if any(not observation["figures"] for pair in pairs.values() for observation in pair):
         return "PARTIAL"
-    moved = [pair[0]["figures"] != pair[1]["figures"] for pair in pairs.values()]
+    moved = []
+    for determinant, pair in pairs.items():
+        if determinant == "price":
+            moved.append(
+                pair[0]["entered_total"] != pair[1]["entered_total"]
+                and all(
+                    observation["entered_total"] is not None
+                    and observation["entered_total"] == observation["requested_total"]
+                    and {
+                        (figure["estimated_total"] or {}).get("typical_amount")
+                        for figure in observation["figures"]
+                    }
+                    == {observation["entered_total"]}
+                    for observation in pair
+                )
+            )
+        else:
+            moved.append(pair[0]["figures"] != pair[1]["figures"])
     # Cross-pair comparison is essential: HTTP success cannot detect fabricated figures.
     if not any(moved):
         return "FABRICATED"
@@ -1328,7 +1413,11 @@ def _probe_planner(client: TestClient, evidence: dict[str, Any]) -> str:
     for message in ("Cancel my trip. I no longer want to travel.", "zxqv 923 glorb?!"):
         trip_id = _create_trip(client, mode="business", title="Contract planner", region="Chicago")
         payload = _observe(
-            client, evidence, "POST", f"/api/planner/{trip_id}/turns", json={"message": message}
+            client,
+            evidence,
+            "POST",
+            f"/api/planner/{trip_id}/turns",
+            json={"message": message},
         )
         reply = next(
             item["content"]
@@ -1364,7 +1453,11 @@ def _probe_planner(client: TestClient, evidence: dict[str, Any]) -> str:
 
 
 def _import_probe_policy(
-    client: TestClient, evidence: dict[str, Any], trip_id: str, *, restrictive: bool = False
+    client: TestClient,
+    evidence: dict[str, Any],
+    trip_id: str,
+    *,
+    restrictive: bool = False,
 ) -> dict[str, Any]:
     response = copy.deepcopy(_fixture("policy", "standard_policy_sync.json")["response"])
     rules = response["result_payload"]["constraint_set"]
@@ -1485,9 +1578,12 @@ def run_contract_report() -> list[dict[str, Any]]:
                 evidence: dict[str, Any] = {"transport": "TestClient; local TPP fixture envelopes"}
                 try:
                     verdict = probe(client, evidence)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - each probe must report independently.
                     verdict = "BROKEN"
-                    evidence["exception"] = {"type": type(exc).__name__, "message": str(exc)}
+                    evidence["exception"] = {
+                        "type": type(exc).__name__,
+                        "message": str(exc),
+                    }
                 rows.append({"id": f"TP{index}", "verdict": verdict, "evidence": evidence})
     return rows
 
@@ -1543,8 +1639,11 @@ def main(argv: list[str] | None = None) -> int:
         # must never prevent the independent contract observations from being collected.
         try:
             _print_results(run_product_journeys(live_tpp=args.live_tpp))
-        except Exception as exc:
-            print(f"Existing product journey failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        except Exception as exc:  # noqa: BLE001 - report mode preserves contract observations.
+            print(
+                f"Existing product journey failed: {type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
         rows = run_contract_report()
         args.contract_report.parent.mkdir(parents=True, exist_ok=True)
         args.contract_report.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
@@ -1558,7 +1657,7 @@ def main(argv: list[str] | None = None) -> int:
     except VerificationFailure as exc:
         print(f"Full-product verification failed: {exc}", file=sys.stderr)
         return 1
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - CLI boundary reports unexpected failures.
         print(
             "Full-product verification failed due to an unexpected error: "
             f"{type(exc).__name__}: {exc}. Check repository/configuration paths "
