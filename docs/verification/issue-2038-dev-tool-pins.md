@@ -396,3 +396,33 @@ The pin owner needs to coordinate the existing Ruff changes with the
 compatible TPP checkout, then the Maint 52 sync owner can regenerate the
 delivery. Recheck Python 3.14 and the next sync-core classification on
 the resulting #2037 head.
+
+## Snapshot CLI regression
+
+On 2026-11-16, extended the pytest subprocess regression to exercise the
+workflow-snapshot guard with the original and repaired #2038 producer inputs.
+Both producer refs are also tested without a reviewed snapshot: the command
+must fail with the missing-snapshot diagnostic, even with a live checkout.
+These add four cases to the existing live-checkout subprocess checks.
+
+On Python 3.14.10, the focused two-file command passes: **125 passed,
+2 skipped**. The skips require a live TPP checkout. Ruff, mypy and the required
+repository-wide Black command pass (**530 files unchanged**), using the
+sequential Black cache workaround above. Temporarily restoring Ruff 0.17.4
+in the repaired producer snapshot makes the new workflow-snapshot subprocess
+case fail with the Ruff conflict; restoring the fixture byte-for-byte makes
+it pass. Logs: `/tmp/issue2038-snapshot-cli-{broken,restored}.log`.
+
+The full `python -m pytest -q -m 'not slow' -x` command stops during setup:
+the sandbox denies socketpair I/O required by `TestClient`. GitHub readback
+confirms #2037 is open and ready at its original head `65b25b559ea6`, and
+run 43820524287 still reports failed Python 3.14 and cross-repo smoke jobs.
+`gh run view` cannot connect to the GitHub API from the shell. A1 remains
+incomplete. No new sync-core classification was established, so A3 also
+remains unchecked. No repository workflow or dependency pin was changed.
+
+The commit attempt failed: `git add` cannot create `.git/index.lock` on the
+read-only Git metadata mount. The test and verification changes remain in
+the workspace for the existing branch's next writable run. The blocker
+comment and `needs-human` label were rejected because the GitHub tools require
+approval and this run's approval policy is `never`; neither update was applied.

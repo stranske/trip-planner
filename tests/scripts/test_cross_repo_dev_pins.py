@@ -522,10 +522,11 @@ def test_smoke_pin_guard_with_historical_editable_checkouts(
         pytest.param("50992156e4a1f97c1115b6c7af84a219a3b9aae7", 0, id="repaired-producer"),
     ],
 )
+@pytest.mark.parametrize("guard_mode", ["live-checkout", "workflow-snapshot", "missing-snapshot"])
 def test_pin_guard_cli_with_issue_2038_checkouts(
-    tmp_path: Path, producer_ref: str, expected_exit: int
+    tmp_path: Path, producer_ref: str, expected_exit: int, guard_mode: str
 ) -> None:
-    """The smoke job's pytest entry point must reject #2037's original source pair."""
+    """Both pytest guards must reject #2037's old pair and unreviewed source pins."""
     planner = REPO_ROOT / "tests/fixtures/issue_2038_dev_pins/trip-planner.toml"
     producer = REPO_ROOT / "tests/fixtures/tpp_dev_pins" / producer_ref / "pyproject.toml"
     (tmp_path / "pyproject.toml").write_bytes(planner.read_bytes())
@@ -535,6 +536,20 @@ def test_pin_guard_cli_with_issue_2038_checkouts(
     guard = tmp_path / "tests/scripts/test_cross_repo_dev_pins.py"
     guard.parent.mkdir(parents=True)
     guard.write_bytes(Path(__file__).read_bytes())
+    test_name = "test_planner_dev_pins_resolve_with_pinned_tpp_checkout"
+    if guard_mode != "live-checkout":
+        test_name = "test_workflow_tpp_pin_resolves_with_planner_dev_pins"
+        workflow = tmp_path / ".github/workflows/cross-repo-smoke.yml"
+        workflow.parent.mkdir(parents=True)
+        workflow.write_text(
+            yaml.safe_dump({"env": {"TPP_PINNED_REF": producer_ref}}), encoding="utf-8"
+        )
+        if guard_mode == "workflow-snapshot":
+            snapshot = tmp_path / "tests/fixtures/tpp_dev_pins" / producer_ref / "pyproject.toml"
+            snapshot.parent.mkdir(parents=True)
+            snapshot.write_bytes(producer.read_bytes())
+        else:
+            expected_exit = 1
 
     # A fresh pytest process exercises collection, checkout discovery and failure
     # propagation, without inheriting the parent process's monkeypatches or config.
@@ -546,10 +561,7 @@ def test_pin_guard_cli_with_issue_2038_checkouts(
             sys.executable,
             "-m",
             "pytest",
-            (
-                "tests/scripts/test_cross_repo_dev_pins.py::"
-                "test_planner_dev_pins_resolve_with_pinned_tpp_checkout"
-            ),
+            f"tests/scripts/test_cross_repo_dev_pins.py::{test_name}",
             "-q",
             "-m",
             "not slow",
@@ -565,6 +577,11 @@ def test_pin_guard_cli_with_issue_2038_checkouts(
     assert result.returncode == expected_exit, diagnostics
     if expected_exit:
         assert "1 failed" in diagnostics
+    if guard_mode == "missing-snapshot":
+        # Even a compatible live checkout cannot replace review of a new pin.
+        assert f"Missing TPP dependency snapshot for {producer_ref}" in diagnostics
+        assert "cannot be installed together" not in diagnostics
+    elif expected_exit:
         assert "cannot be installed together" in diagnostics
         assert "ruff: trip-planner 'ruff==0.17.5' vs TPP 'ruff==0.17.4'" in diagnostics
         assert "mypy: trip-planner" not in diagnostics
