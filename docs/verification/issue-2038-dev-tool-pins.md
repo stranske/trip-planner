@@ -1,6 +1,6 @@
 # Issue #2038: dev-tool pin verification
 
-Check date: 2026-11-16 (UTC). Branch `cursor/issue-2038`, head `c29f2a77515b61e2882f2e763514f4a6b5594709`.
+Check date: 2026-11-16 (UTC). Branch `cursor/issue-2038`, head `783d769fb58865f755ad31f67167dd1679bea56e`.
 Outcome: reproduce the `#2037` pin conflict on main, review closed PR `#2039` (`cfe14d89e8a6`), and
 confirm the paired pin repair on this branch.
 
@@ -41,13 +41,13 @@ trip-planner[dev] … depends on ruff==0.17.5
 ERROR: ResolutionImpossible
 ```
 
-Restoring `TPP_PINNED_REF: 50992156e4a1f97c1115b6c7af84a219a3b9aae7` yields **109 passed, 2 skipped**.
+Restoring `TPP_PINNED_REF: 50992156e4a1f97c1115b6c7af84a219a3b9aae7` yields **112 passed, 2 skipped**.
 
 ## Review of closed PR `#2039` (`cfe14d89e8a6`)
 
 Fetched `refs/pull/2039/head` and compared trees.
 
-| Concern / thread theme | What was checked on `#2039` | Disposition on this PR (`c29f2a77`) |
+| Concern / thread theme | What was checked on `#2039` | Disposition on this PR (`783d769f`) |
 | --- | --- | --- |
 | Scope creep (`PRODUCT_CONTRACT`, `check_full_product_verification`) | Merge commit `cfe14d89` **dropped** those files relative to parent `aee71a92`; pin repair files match the narrowed diff vs `main` | Same pin-only scope; no product-probe or ledger files on this branch |
 | Live vs snapshot TPP guards | `test_live_tpp_checkout_matches_workflow_snapshot`, workflow snapshot under `tests/fixtures/tpp_dev_pins/50992156…` | Present; `TPP_PINNED_REF` and fixture agree on `50992156` |
@@ -65,10 +65,10 @@ Command:
 python -m pytest tests/scripts/test_cross_repo_dev_pins.py -q
 ```
 
-- Green baseline: **109 passed, 2 skipped** (~13s).
-- `TPP_PINNED_REF` → `5c9ec6e…`: **12 failed** (ruff conflict).
-- `tests/fixtures/issue_2038_dev_pins/trip-planner.toml` `ruff==0.17.4` (repaired `0.17.5` restored after): **8 failed** in `-k issue-2038`.
-- After restoration: **109 passed** again.
+- Green baseline: **112 passed, 2 skipped** (~12s) including `test_repaired_workflow_pins_agree_across_repo`.
+- `TPP_PINNED_REF` → `5c9ec6e…`: **12 failed** (ruff conflict); workflow file restored immediately after.
+- `tests/fixtures/issue_2038_dev_pins/trip-planner.toml` `ruff==0.17.4` (repaired `0.17.5` restored after): **8 failed** in `-k issue-2038` (recorded on prior head).
+- After restoration: **112 passed** again.
 
 Lint on the changed test module:
 
@@ -83,7 +83,7 @@ Both succeed. Full suite:
 make test
 ```
 
-**3017 passed, 6 skipped** (~6m).
+**3019 passed, 6 skipped** (~4.5m, `-m "not slow"`).
 
 ## Pin agreement (repair state)
 

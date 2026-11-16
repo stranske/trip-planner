@@ -230,6 +230,34 @@ def test_issue_2038_fixture_pins_resolve_from_recorded_metadata(
         assert conflicts == []
 
 
+def test_repaired_workflow_pins_agree_across_repo() -> None:
+    """Workflow ref, planner metadata, autofix env, and snapshot must share ruff 0.17.5."""
+    paired_ref = "50992156e4a1f97c1115b6c7af84a219a3b9aae7"
+    workflow = yaml.safe_load(
+        (REPO_ROOT / ".github/workflows/cross-repo-smoke.yml").read_text(encoding="utf-8")
+    )
+    assert workflow["env"]["TPP_PINNED_REF"] == paired_ref
+
+    snapshot = REPO_ROOT / "tests/fixtures/tpp_dev_pins" / paired_ref / "pyproject.toml"
+    assert snapshot.is_file(), f"Missing paired producer snapshot at {snapshot}"
+    for label, path in (
+        ("planner", REPO_ROOT / "pyproject.toml"),
+        ("tpp-snapshot", snapshot),
+    ):
+        ruff_pin = _exact_pin(_requirements(path)["ruff"][0])
+        assert ruff_pin == "0.17.5", f"{label} ruff pin is {ruff_pin!r}, expected 0.17.5"
+
+    autofix = (REPO_ROOT / ".github/workflows/autofix-versions.env").read_text(encoding="utf-8")
+    assert any(
+        line.strip() == "RUFF_VERSION=0.17.5" for line in autofix.splitlines() if line.strip()
+    )
+
+    lock = (REPO_ROOT / "requirements.lock").read_text(encoding="utf-8")
+    assert "ruff==0.17.5" in lock
+
+    assert find_pin_conflicts(REPO_ROOT / "pyproject.toml", snapshot) == []
+
+
 @pytest.mark.parametrize("constrained_project", ["planner", "tpp"])
 @pytest.mark.parametrize("runtime_pin", ["0.17.2", "0.17.3"])
 def test_find_pin_conflicts_preserves_runtime_and_dev_requirements(
