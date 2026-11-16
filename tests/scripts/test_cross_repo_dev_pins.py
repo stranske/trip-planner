@@ -200,6 +200,36 @@ def test_find_pin_conflicts_checks_compound_and_prefix_constraints(
     assert conflicts == expected
 
 
+@pytest.mark.parametrize(
+    ("producer_ref", "expect_conflict"),
+    [
+        pytest.param("5c9ec6e15ac959023b9fc9cdd1099d70a6073396", True, id="stale-producer"),
+        pytest.param("50992156e4a1f97c1115b6c7af84a219a3b9aae7", False, id="paired-producer"),
+    ],
+)
+def test_issue_2038_fixture_pins_resolve_from_recorded_metadata(
+    producer_ref: str, expect_conflict: bool
+) -> None:
+    """Issue #2038 fixtures must encode planner lookup and producer revision pairing."""
+    planner = REPO_ROOT / "tests/fixtures/issue_2038_dev_pins/trip-planner.toml"
+    producer = REPO_ROOT / "tests/fixtures/tpp_dev_pins" / producer_ref / "pyproject.toml"
+    planner_meta = tomllib.loads(planner.read_text(encoding="utf-8"))["project"]
+    producer_meta = tomllib.loads(producer.read_text(encoding="utf-8"))["project"]
+    assert planner_meta.get("requires-python") == ">=3.13,<3.15"
+    assert producer_meta.get("requires-python") == ">=3.13"
+
+    planner_ruff = _exact_pin(_requirements(planner)["ruff"][0])
+    producer_ruff = _exact_pin(_requirements(producer)["ruff"][0])
+    assert planner_ruff == "0.17.5"
+    assert producer_ruff in {"0.17.4", "0.17.5"}
+
+    conflicts = find_pin_conflicts(planner, producer)
+    if expect_conflict:
+        assert conflicts == ["ruff: trip-planner 'ruff==0.17.5' vs TPP 'ruff==0.17.4'"]
+    else:
+        assert conflicts == []
+
+
 @pytest.mark.parametrize("constrained_project", ["planner", "tpp"])
 @pytest.mark.parametrize("runtime_pin", ["0.17.2", "0.17.3"])
 def test_find_pin_conflicts_preserves_runtime_and_dev_requirements(
