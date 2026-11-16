@@ -300,3 +300,19 @@ and reuses an open PR for the same wave when it has a generated change to ship.
 The pin owner and sync owner need to coordinate the Ruff 0.17.5 delivery with
 the compatible TPP checkout. Verify a passing Python 3.14 job on the regenerated
 #2037 head, then read the next sync-core record for that target.
+
+## Local keepalive round 6/12
+
+On 2026-11-16, `gh run view 43820524287 --repo stranske/trip-planner --job 133144833914 --log-failed`
+showed six failures in `test_cross_repo_dev_pins.py` on the original #2037
+head `65b25b559ea6`. The live configuration rejected the old TPP revision,
+and synthetic negative cases and offline resolver cases also failed after
+the Ruff bump. The negative guard expected planner Ruff 0.17.4 in its
+diagnostic, while the generated branch supplied 0.17.5. Regenerate from main
+with the #2039 workflow and regression fixes integrated so the retry includes
+both sets of changes.
+
+The two-file focused command above passed on `07a9bbfa6ff54` with the live
+TPP checkout (97 passed on Python 3.12.2). The round excludes the full local
+suite. Sync-core round `20261116T094313Z` still records `pin-conflict` and
+`pin-held` for #2037. A1 and A3 remain open.
