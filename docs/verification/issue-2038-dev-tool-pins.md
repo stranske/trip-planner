@@ -1,5 +1,33 @@
 # Issue #2038: dev-tool pin verification
 
+## Preserve producer Python compatibility metadata
+
+On 2026-11-16, read both #2038 producer revisions from GitHub and confirmed
+`requires-python = ">=3.13"`. Both local snapshots omitted this field, so their
+offline pip wheels did not retain the producer's Python requirement. Added the
+verified field to both snapshots and extended the live snapshot guard to reject
+changed or missing Python compatibility metadata, including a producer that
+excludes Python 3.14 despite matching tool pins.
+
+On Python 3.14.10, the focused two-file pytest command below passes:
+**148 passed, 2 skipped**. The skips require a live TPP checkout. Removing the
+new assertion produces four regression failures; restoring it produces four
+passes. Logs: `/tmp/issue2038-pythoncompat-{broken,restored}.log`. Ruff, mypy,
+`git diff --check`, and the required repository-wide Black check pass
+(**530 files unchanged**), using the sequential-cache workaround below.
+
+The full `python -m pytest -q -m 'not slow' -x` command exits because the
+sandbox denies TestClient socketpair I/O. PR #2037 remains open and ready at
+its original head `65b25b559ea631d494e3dcfd624fb0126b098bbf`; #2039 is open
+and ready. Regenerated-sync and subsequent sync-core acceptance remain pending;
+no acceptance checkbox changed. No workflow or dependency pin was edited.
+
+Committing remains blocked: `git add` cannot create `.git/index.lock` on the
+read-only Git metadata mount. Commit these verified changes on the existing
+branch when Git metadata is writable. GitHub rejected the blocker comment and
+`needs-human` label because its tools require approval and this run's approval
+policy is `never`; neither remote update was applied.
+
 ## Preserve optional dependency marker context
 
 On 2026-11-16, corrected `_requirements` so optional `dev` entries are

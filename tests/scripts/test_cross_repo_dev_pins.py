@@ -269,6 +269,10 @@ def test_live_tpp_checkout_matches_workflow_snapshot() -> None:
     snapshot = REPO_ROOT / "tests" / "fixtures" / "tpp_dev_pins" / pinned_ref / "pyproject.toml"
     producer = tomllib.loads((checkout / "pyproject.toml").read_text())["project"]
     reviewed = tomllib.loads(snapshot.read_text())["project"]
+    assert producer.get("requires-python") == reviewed.get("requires-python"), (
+        f"TPP requires-python snapshot differs from checkout {pinned_ref}; "
+        "refresh the snapshot from the pinned source before recording verification."
+    )
     for section, actual, expected in (
         ("runtime", producer["dependencies"], reviewed["dependencies"]),
         ("dev", producer["optional-dependencies"]["dev"], reviewed["optional-dependencies"]["dev"]),
@@ -279,7 +283,7 @@ def test_live_tpp_checkout_matches_workflow_snapshot() -> None:
         )
 
 
-@pytest.mark.parametrize("mismatch", [None, "head", "runtime", "dev"])
+@pytest.mark.parametrize("mismatch", [None, "head", "runtime", "dev", "python", "missing-python"])
 @pytest.mark.parametrize("inherit_git_locations", [False, True])
 def test_live_snapshot_guard_rejects_unverified_producer_metadata(
     tmp_path: Path,
@@ -304,7 +308,7 @@ def test_live_snapshot_guard_rejects_unverified_producer_metadata(
     checkout.mkdir()
     pyproject = checkout / "pyproject.toml"
     metadata = (
-        '[project]\ndependencies = ["httpx>=0.28.1"]\n'
+        '[project]\nrequires-python = ">=3.13"\ndependencies = ["httpx>=0.28.1"]\n'
         '[project.optional-dependencies]\ndev = ["ruff==0.17.3"]\n'
     )
     pyproject.write_text(metadata, encoding="utf-8")
@@ -349,6 +353,12 @@ def test_live_snapshot_guard_rejects_unverified_producer_metadata(
         pyproject.write_text(metadata.replace("httpx>=0.28.1", "httpx>=0.29"), encoding="utf-8")
     elif mismatch == "dev":
         pyproject.write_text(metadata.replace("ruff==0.17.3", "ruff==0.17.2"), encoding="utf-8")
+    elif mismatch == "python":
+        pyproject.write_text(metadata.replace(">=3.13", ">=3.13,<3.14"), encoding="utf-8")
+    elif mismatch == "missing-python":
+        (snapshot / "pyproject.toml").write_text(
+            metadata.replace('requires-python = ">=3.13"\n', ""), encoding="utf-8"
+        )
     monkeypatch.setattr(f"{__name__}.REPO_ROOT", tmp_path)
     monkeypatch.setenv("TPP_REPO_PATH", "tpp")
 
