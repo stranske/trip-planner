@@ -123,3 +123,24 @@ def test_mypy_matches_reusable_python_ci() -> None:
         check=False,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_cross_repo_full_product_offline_guards_match_pr_head() -> None:
+    """Cross-repo smoke job pin/runtime checks must pass offline before hosted CI is trusted."""
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/scripts/test_cross_repo_smoke_workflow.py",
+            "tests/scripts/test_cross_repo_dev_pins.py",
+            "-q",
+            "-m",
+            "not slow",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
