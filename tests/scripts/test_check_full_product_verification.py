@@ -555,8 +555,11 @@ def test_tp3_probe_price_pair_enters_distinct_component_totals(monkeypatch, part
 
     original = TestClient.request
     party_paths = set()
+    price_puts = []
 
     def control_response(self, method, url, **kwargs):
+        if method.upper() == "PUT" and str(url).endswith("/prices"):
+            price_puts.append((str(url), kwargs["json"]))
         if method.upper() == "GET" and str(url) in party_paths:
             if party_response == "empty":
                 return httpx.Response(200, json={"scenarios": []})
@@ -589,6 +592,10 @@ def test_tp3_probe_price_pair_enters_distinct_component_totals(monkeypatch, part
     assert second_put["path"] == second_read["path"]
     assert first_put["path"] != second_put["path"]
     assert all(request["status"] == 200 for request in price_requests)
+    assert price_puts == [
+        (first_put["path"], {"component": "transport", "amount": 250.0, "currency": "USD"}),
+        (second_put["path"], {"component": "transport", "amount": 700.0, "currency": "USD"}),
+    ]
 
     persisted_totals = [
         read["body"]["total"]["typical_amount"] for read in (first_read, second_read)
