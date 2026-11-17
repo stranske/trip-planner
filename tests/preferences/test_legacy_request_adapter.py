@@ -2,6 +2,7 @@ import json
 import re
 import socket
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -326,7 +327,7 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
         return
 
     # Synthetic local fixtures exercise validation, never establish a real run.
-    claim = {
+    claim: dict[str, Any] = {
         "layer": "configured_full_product",
         "status": "VERIFIED",
         "consumer_sha": "a" * 40,
@@ -335,7 +336,9 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
         "command": "python scripts/check_full_product_verification.py --live-tpp=required",
         "receipt": "receipt.json",
     }
-    receipt = {key: value for key, value in claim.items() if key not in {"status", "receipt"}}
+    receipt: dict[str, Any] = {
+        key: value for key, value in claim.items() if key not in {"status", "receipt"}
+    }
     receipt.update(
         run="run.log",
         artifact="result.json",
@@ -484,6 +487,7 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
     if case.startswith("document-"):
         # Promote only an in-memory copy, using the same checks as the real map.
         block = re.search(r"```json\n(.*?)\n```", text, re.DOTALL)
+        assert block is not None
         registry = json.loads(block.group(1))
         configured = next(
             item
