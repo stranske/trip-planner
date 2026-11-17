@@ -1,12 +1,19 @@
 import json
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from trip_planner.app.main import create_app
-from trip_planner.persistence.db import reset_database_state
+from trip_planner.persistence.db import get_session_factory, reset_database_state
+from trip_planner.persistence.models.budget import (
+    PersistedActualSpendEvent,
+    PersistedBudgetPlan,
+    PersistedBudgetPlanVersion,
+)
 
 
 @pytest.fixture
@@ -343,6 +350,141 @@ def test_workspace_budget_spend_event_rejects_currency_drift(client: TestClient)
 
     assert recorded.status_code == 400
     assert recorded.json()["detail"].startswith("The workspace budget request was invalid.")
+    budget_url = f"/api/workspace/{trip_id}/budget"
+    assert client.get(budget_url).json()["spend_events"] == []
+
+    spend = {"category_key": "food", "amount": 30, "source_context": "Lunch", "currency": "usd"}
+    accepted = client.post(f"{budget_url}/spend-events", json=spend)
+    assert accepted.status_code == 200
+    before = accepted.json()
+    event = before["spend_events"][0]
+    assert event["currency"] == "USD"
+
+    rejected_edit = client.patch(
+        f"{budget_url}/spend-events/{event['spend_event_id']}",
+        json={**spend, "amount": 40, "currency": "eur"},
+    )
+    assert rejected_edit.status_code == 400
+    assert client.get(budget_url).json() == before
+
+
+def _budget_in_currency(currency: str, *, planned_amount: int = 150) -> dict[str, Any]:
+    return {
+        "title": f"{currency} budget",
+        "currency": currency,
+        "scenario_budgets": [
+            {
+                "title": "Baseline",
+                "allocations": [
+                    {
+                        "category_key": "food",
+                        "label": "Food",
+                        "planned_amount": planned_amount,
+                        "currency": currency,
+                    }
+                ],
+            }
+        ],
+    }
+
+
+@pytest.fixture
+def budget_url(client: TestClient) -> str:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Lisbon budget",
+            "mode": "leisure",
+            "trip_frame": {"duration_days": 3, "primary_regions": ["Lisbon"]},
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+    url = f"/api/workspace/{trip_id}/budget"
+    assert client.put(url, json=_budget_in_currency("USD")).status_code == 200
+    return url
+
+
+def test_plan_currency_change_rejected_when_spend_in_other_currency(
+    client: TestClient, budget_url: str
+) -> None:
+    recorded = client.post(
+        f"{budget_url}/spend-events",
+        json={"category_key": "food", "amount": 30, "source_context": "Lunch"},
+    )
+    assert recorded.status_code == 200
+    before = recorded.json()
+    plan_id = before["budget_plan"]["budget_plan_id"]
+    assert before["summary"]["actual_total"] == 30
+    assert before["summary"]["version_count"] == 1
+
+    rejected = client.put(budget_url, json=_budget_in_currency("EUR", planned_amount=200))
+
+    with get_session_factory()() as db_session:
+        plan = db_session.get(PersistedBudgetPlan, plan_id)
+        assert plan is not None
+        version_ids = db_session.scalars(
+            select(PersistedBudgetPlanVersion.version_id).where(
+                PersistedBudgetPlanVersion.budget_plan_id == plan_id
+            )
+        ).all()
+        assert rejected.status_code == 422, (rejected.text, plan.currency, len(version_ids))
+        assert plan.currency == "USD"
+        assert plan.scenario_budgets == before["budget_plan"]["scenario_budgets"]
+        assert list(version_ids) == [before["versions"][0]["version_id"]]
+    assert rejected.json()["detail"].startswith(
+        "The budget plan currency must match all recorded spend currencies."
+    )
+
+    reread = client.get(budget_url)
+    assert reread.status_code == 200
+    assert reread.json() == before
+
+
+def test_plan_currency_change_allowed_without_spend(client: TestClient, budget_url: str) -> None:
+    updated = client.put(budget_url, json=_budget_in_currency("EUR", planned_amount=200))
+
+    assert updated.status_code == 200
+    payload = updated.json()
+    plan = payload["budget_plan"]
+    scenario = plan["scenario_budgets"][0]
+    allocation = scenario["allocations"][0]
+    assert plan["currency"] == scenario["currency"] == allocation["currency"] == "EUR"
+    assert payload["summary"]["currency"] == "EUR"
+    assert payload["summary"]["planned_total"] == 200
+    assert payload["summary"]["actual_total"] == 0
+    assert payload["summary"]["version_count"] == 2
+    assert payload["spend_events"] == []
+    assert client.get(budget_url).json() == payload
+
+
+def test_legacy_mixed_currency_read_returns_conflict(client: TestClient, budget_url: str) -> None:
+    spend_url = f"{budget_url}/spend-events"
+    spend = {"category_key": "food", "amount": 30, "source_context": "Lunch"}
+    first = client.post(spend_url, json=spend)
+    assert first.status_code == 200
+    second = client.post(spend_url, json={**spend, "source_context": "Dinner"})
+    assert second.status_code == 200
+    event_ids = [event["spend_event_id"] for event in second.json()["spend_events"]]
+
+    with get_session_factory()() as db_session:
+        event = db_session.get(PersistedActualSpendEvent, event_ids[0])
+        assert event is not None
+        event.currency = "EUR"
+        db_session.commit()
+
+    for url in (budget_url, budget_url.removesuffix("/budget")):
+        response = client.get(url)
+        assert response.status_code == 409
+        assert response.json()["detail"].startswith(
+            "Recorded spend currencies conflict with the workspace budget currency."
+        )
+
+    rejected = client.post(spend_url, json={**spend, "source_context": "Breakfast"})
+    assert rejected.status_code == 409
+    with get_session_factory()() as db_session:
+        stored_ids = db_session.scalars(select(PersistedActualSpendEvent.spend_event_id)).all()
+    assert sorted(stored_ids) == sorted(event_ids)
 
 
 def test_workspace_budget_spend_event_updates_session_timestamp(client: TestClient) -> None:

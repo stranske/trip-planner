@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from importlib.resources import files
@@ -32,6 +33,14 @@ from trip_planner.state import (
 
 class WorkspaceBudgetNotFoundError(ValueError):
     """Raised when a workspace budget or trip does not exist for the user."""
+
+
+class WorkspaceBudgetPlanCurrencyMismatchError(ValueError):
+    """Raised when a proposed plan currency conflicts with recorded spending."""
+
+
+class WorkspaceBudgetSpendCurrencyMismatchError(Exception):
+    """Raised when persisted spend cannot be totaled in the plan currency."""
 
 
 def _state_fixture_dir(kind: str) -> Traversable:
@@ -190,6 +199,13 @@ def _build_budget_summary(
         )
         allocations = list(current_scenario["allocations"]) if current_scenario is not None else []
 
+    for event in spend_events:
+        if event["currency"] != currency:
+            raise WorkspaceBudgetSpendCurrencyMismatchError(
+                f"Spend event {event['spend_event_id']} uses {event['currency']}, "
+                f"but the budget uses {currency}."
+            )
+
     spend_totals_by_category: dict[str, float] = {}
     for event in spend_events:
         spend_totals_by_category[event["category_key"]] = round(
@@ -313,12 +329,23 @@ def _get_owned_trip_record(
     *,
     user: AuthenticatedUser,
     trip_id: str,
+    for_update: bool = False,
 ) -> PersistedTrip:
-    record = db_session.scalar(
+    query = (
         select(PersistedTrip)
         .where(PersistedTrip.trip_id == trip_id)
         .where(PersistedTrip.user_id == user.user_id)
     )
+    if for_update:
+        # Serialize plan and spend writes before either reads the other's currency.
+        connection = db_session.connection()
+        driver_connection = connection.connection.driver_connection
+        if isinstance(driver_connection, sqlite3.Connection):
+            if not driver_connection.in_transaction:
+                connection.exec_driver_sql("BEGIN IMMEDIATE")
+        else:
+            query = query.with_for_update()
+    record = db_session.scalar(query)
     if record is None:
         raise WorkspaceBudgetNotFoundError(f"Trip '{trip_id}' was not found.")
     return record
@@ -387,6 +414,18 @@ def load_budget_payload_for_workspace(
     return _load_budget_payload_for_record(db_session, record=record)
 
 
+def _commit_budget_payload(db_session: Session, *, record: PersistedTrip) -> dict[str, Any]:
+    # Validate the response against the pending write before persisting it.
+    db_session.flush()
+    try:
+        payload = _load_budget_payload_for_record(db_session, record=record)
+    except WorkspaceBudgetSpendCurrencyMismatchError:
+        db_session.rollback()
+        raise
+    db_session.commit()
+    return payload
+
+
 def upsert_workspace_budget_plan(
     db_session: Session,
     *,
@@ -400,7 +439,7 @@ def upsert_workspace_budget_plan(
     scenario_budgets: list[dict[str, Any]],
     summary: str = "",
 ) -> dict[str, Any]:
-    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id, for_update=True)
     existing = db_session.scalar(
         select(PersistedBudgetPlan)
         .where(PersistedBudgetPlan.trip_id == record.trip_id)
@@ -456,6 +495,17 @@ def upsert_workspace_budget_plan(
         }
     )
 
+    mismatched_currency = db_session.scalar(
+        select(PersistedActualSpendEvent.currency)
+        .where(PersistedActualSpendEvent.trip_id == record.trip_id)
+        .where(PersistedActualSpendEvent.currency != budget_plan.currency)
+        .limit(1)
+    )
+    if mismatched_currency is not None:
+        raise WorkspaceBudgetPlanCurrencyMismatchError(
+            f"Budget currency {budget_plan.currency} conflicts with {mismatched_currency} spend."
+        )
+
     if existing is None:
         existing = PersistedBudgetPlan(
             budget_plan_id=budget_plan.budget_plan_id,
@@ -502,8 +552,7 @@ def upsert_workspace_budget_plan(
             snapshot=budget_plan.to_dict(),
         )
     )
-    db_session.commit()
-    return _load_budget_payload_for_record(db_session, record=record)
+    return _commit_budget_payload(db_session, record=record)
 
 
 def record_workspace_spend_event(
@@ -523,7 +572,7 @@ def record_workspace_spend_event(
     source_ref: str | None,
     notes: list[str],
 ) -> dict[str, Any]:
-    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id, for_update=True)
     plan_record = db_session.scalar(
         select(PersistedBudgetPlan)
         .where(PersistedBudgetPlan.trip_id == record.trip_id)
@@ -580,8 +629,7 @@ def record_workspace_spend_event(
     session_record.active_budget_plan_id = plan_record.budget_plan_id
     session_record.last_updated_at = _next_session_timestamp(session_record.last_updated_at)
     record.updated_at = datetime.now(UTC)
-    db_session.commit()
-    return _load_budget_payload_for_record(db_session, record=record)
+    return _commit_budget_payload(db_session, record=record)
 
 
 def update_workspace_spend_event(
@@ -602,7 +650,7 @@ def update_workspace_spend_event(
     source_ref: str | None,
     notes: list[str],
 ) -> dict[str, Any]:
-    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id, for_update=True)
     event_record = db_session.get(PersistedActualSpendEvent, spend_event_id)
     if event_record is None or event_record.trip_id != record.trip_id:
         raise WorkspaceBudgetNotFoundError(
@@ -652,5 +700,4 @@ def update_workspace_spend_event(
     session_record.active_budget_plan_id = event_record.budget_plan_id
     session_record.last_updated_at = _next_session_timestamp(session_record.last_updated_at)
     record.updated_at = datetime.now(UTC)
-    db_session.commit()
-    return _load_budget_payload_for_record(db_session, record=record)
+    return _commit_budget_payload(db_session, record=record)
