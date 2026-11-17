@@ -1,7 +1,7 @@
 # Issue #2044 receipt-validator checks
 
 Observed locally on 2026-11-17, starting from consumer commit
-`6c77b32d20e209487bf04da929fca6de2d160d7d` with this repair applied.
+`db869e25f9ea6c47ea2ecac5776de92cb8067b92` with this repair applied.
 Environment: Linux sandbox, CPython 3.14.10, pytest, Black 26.10.1.
 These results establish documentation-validator behavior only. The synthetic
 receipt fixtures do not verify TPP, Maps, a deployment, or a current producer pair.
@@ -18,18 +18,24 @@ The `workflow-only` parameter supplies this claim to `_coverage_claim_errors`:
 workflow configuration. Socket connection and DNS entry points are patched to
 fail the test on any network request, including for remote receipt locators.
 
-Temporarily added `workflow-only` to the set of examples expected to validate,
-without changing the validator, then ran:
+The follow-up expands the named test from 40 to 54 cases. Invalid examples now
+assert their exact diagnostics, so an unrelated rejection cannot satisfy the
+test. Added cases cover omitted receipt scope fields, an abbreviated producer SHA
+and explicitly unverified examples for every proof layer.
+
+Temporarily replaced the `workflow-only` expected diagnostics with an empty list
+(expecting the claim to validate), without changing the validator, then ran:
 
 ```bash
 python3 -m pytest tests/preferences/test_legacy_request_adapter.py::test_coverage_map_keeps_claims_scoped_to_their_evidence -q -m "not slow" --tb=short
 ```
 
-Observed exit 1, **1 failed, 39 passed**. The failure was the named test's
+Observed exit 1, **1 failed, 53 passed**. The failure was the named test's
 `[workflow-only]` parameter:
 
 ```text
-AssertionError: ['VERIFIED needs a local JSON receipt, not a workflow filename']
+AssertionError: assert ['VERIFIED ne...low filename'] == []
+Left contains one more item: 'VERIFIED needs a local JSON receipt, not a workflow filename'
 ```
 
 Removed the temporary acceptance expectation and reran the named test:
@@ -38,7 +44,7 @@ Removed the temporary acceptance expectation and reran the named test:
 python3 -m pytest tests/preferences/test_legacy_request_adapter.py::test_coverage_map_keeps_claims_scoped_to_their_evidence -q -m "not slow"
 ```
 
-Observed exit 0, **40 passed**. The final test expects rejection of the
+Observed exit 0, **54 passed**. The final test expects rejection of the
 workflow-only claim and acceptance of scoped structured receipt examples for
 each layer. Missing and mismatched receipts, abbreviated SHAs, absent locators,
 failed/skipped observations and optional/disabled full-product gates are rejected.
@@ -49,7 +55,7 @@ failed/skipped observations and optional/disabled full-product gates are rejecte
 python3 -m pytest tests/preferences/test_legacy_request_adapter.py -q -m "not slow"
 ```
 
-Observed exit 0, **47 passed**, including the preserved addressability test,
+Observed exit 0, **61 passed**, including the preserved addressability test,
 missing-path rejection and document-relative link checks. Existing dependency
 deprecation warnings remain. Ruff checks for the changed Python file also pass.
 
@@ -78,9 +84,20 @@ configured exclusions and the required command's exclusion expression.
 
 ## Delivery blocker
 
-The local `git add`/`git commit` attempt was rejected because `.git` is mounted
-read-only. The GitHub connector also rejected the tree-creation action because
-it requires approval while this run's approval policy is `never`. Consequently
-this repair is present in the workspace but is not committed, and the PR's
-checkboxes have not been changed. Commit these four validated files to the
-existing PR branch and include this failure/restoration record in the PR.
+The initial receipt rewrite was committed by automation as `463b4660`. The
+follow-up adds precise diagnostic assertions and 14 receipt validation cases;
+the follow-up remains uncommitted because `git add` exited 128:
+
+```text
+fatal: Unable to create '/home/runner/work/trip-planner/trip-planner/.git/index.lock': Read-only file system
+```
+
+The attempted commit was `test: assert scoped receipt rejection diagnostics`.
+Commit the changed test and this evidence record to the existing PR branch from
+an environment with a writable Git directory. No branch or pull request was
+created, and the documentation's execution claims remain explicitly unverified.
+
+Updating the PR with the verified checklist and failure/restoration results was
+also rejected by the GitHub connector: `MCP tool call requires approval, but
+approval policy is never`. Adding the requested `needs-human` label received the
+same rejection. Neither the PR body nor its labels were changed by this run.

@@ -238,6 +238,7 @@ def _coverage_claim_errors(claim: dict, root: Path) -> list[str]:
         "unknown-layer",
         "unknown-status",
         "short-sha",
+        "short-producer-sha",
         "missing-run",
         "missing-artifact",
         "workflow-as-run",
@@ -253,9 +254,14 @@ def _coverage_claim_errors(claim: dict, root: Path) -> list[str]:
     ]
     + [f"missing-{field}" for field in ("consumer_sha", "producer_sha", "environment", "command")]
     + [
+        f"missing-receipt-{field}"
+        for field in ("layer", "consumer_sha", "producer_sha", "environment", "command")
+    ]
+    + [
         f"mismatched-{field}"
         for field in ("layer", "consumer_sha", "producer_sha", "environment", "command")
     ]
+    + [f"unverified-{layer}" for layer in sorted(_PROOF_LAYERS)]
     + [f"verified-{layer}" for layer in sorted(_PROOF_LAYERS)],
 )
 def test_coverage_map_keeps_claims_scoped_to_their_evidence(
@@ -333,14 +339,59 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
     (tmp_path / "run.log").write_text("Synthetic local run fixture\n", encoding="utf-8")
     (tmp_path / "result.json").write_text('{"fixture": true}\n', encoding="utf-8")
     (tmp_path / "workflow.yml").write_text("name: configuration only\n", encoding="utf-8")
-    valid = case in {"unverified", "remote-locators"} or case.startswith("verified-")
+    expected_errors = {
+        "unverified-without-gate": ["UNVERIFIED needs a required gate"],
+        "workflow-only": ["VERIFIED needs a local JSON receipt, not a workflow filename"],
+        "missing-receipt": ["VERIFIED needs a local JSON receipt, not a workflow filename"],
+        "malformed-receipt": ["Unreadable JSON receipt"],
+        "non-object-receipt": ["Receipt must be an object"],
+        "receipt-outside-root": ["VERIFIED needs a local JSON receipt, not a workflow filename"],
+        "unknown-layer": ["Unknown proof layer"],
+        "unknown-status": ["Unknown execution status"],
+        "short-sha": ["consumer_sha must be an exact full SHA"],
+        "short-producer-sha": ["producer_sha must be an exact full SHA"],
+        "missing-run": ["Missing or invalid run locator"],
+        "missing-artifact": ["Missing or invalid artifact locator"],
+        "workflow-as-run": ["Missing or invalid run locator"],
+        "workflow-as-artifact": ["Missing or invalid artifact locator"],
+        "missing-local-artifact": ["Missing or invalid artifact locator"],
+        "missing-observed-result": ["Receipt needs an observed PASS, summary and zero skips"],
+        "failed-result": ["Receipt needs an observed PASS, summary and zero skips"],
+        "skipped-result": ["Receipt needs an observed PASS, summary and zero skips"],
+        "empty-summary": ["Receipt needs an observed PASS, summary and zero skips"],
+        "optional-gate": ["Configured full-product proof needs the required live-TPP gate"],
+        "disabled-gate": ["Configured full-product proof needs the required live-TPP gate"],
+    }
+    expected = expected_errors.get(case, [])
     if case.startswith("verified-"):
         claim["layer"] = receipt["layer"] = case.removeprefix("verified-")
-    elif case.startswith("missing-") and case.removeprefix("missing-") in claim:
-        claim.pop(case.removeprefix("missing-"))
+    elif case.startswith("unverified-") and case.removeprefix("unverified-") in _PROOF_LAYERS:
+        claim = {
+            "layer": case.removeprefix("unverified-"),
+            "status": "UNVERIFIED",
+            "required_gate": "Retain a scoped execution receipt before promotion",
+        }
+    elif case.startswith("missing-receipt-"):
+        field = case.removeprefix("missing-receipt-")
+        receipt.pop(field)
+        expected = [f"Receipt {field} mismatch"]
+    elif case.startswith("missing-") and case.removeprefix("missing-") in {
+        "consumer_sha",
+        "producer_sha",
+        "environment",
+        "command",
+    }:
+        field = case.removeprefix("missing-")
+        claim.pop(field)
+        expected = [f"Missing claim {field}"]
+        if field.endswith("_sha"):
+            expected.append(f"{field} must be an exact full SHA")
+        if field == "command":
+            expected.append("Configured full-product proof needs the required live-TPP gate")
     elif case.startswith("mismatched-"):
         field = case.removeprefix("mismatched-")
         receipt[field] = "c" * 40 if field.endswith("_sha") else "another scope"
+        expected = [f"Receipt {field} mismatch"]
     elif case == "unverified":
         claim = {
             "layer": "configured_full_product",
@@ -361,8 +412,9 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
         claim["layer"] = "all_layers"
     elif case == "unknown-status":
         claim["status"] = "IMPLEMENTED"
-    elif case == "short-sha":
-        claim["consumer_sha"] = receipt["consumer_sha"] = "abcdef0"
+    elif case in {"short-sha", "short-producer-sha"}:
+        field = "producer_sha" if case == "short-producer-sha" else "consumer_sha"
+        claim[field] = receipt[field] = "abcdef0"
     elif case in {"missing-run", "missing-artifact", "missing-observed-result"}:
         receipt.pop(case.removeprefix("missing-").replace("-", "_"))
     elif case in {"workflow-as-run", "workflow-as-artifact"}:
@@ -395,4 +447,4 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
     elif case == "non-object-receipt":
         receipt_path.write_text("[]", encoding="utf-8")
     errors = _coverage_claim_errors(claim, tmp_path)
-    assert (errors == []) == valid, errors
+    assert errors == expected
