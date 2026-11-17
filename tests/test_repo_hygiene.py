@@ -136,7 +136,10 @@ def test_readme_documents_local_bootstrap_and_optional_integrations() -> None:
         "TPP_BASE_URL",
         "TPP_ACCESS_TOKEN",
         "TPP_OIDC_PROVIDER",
-        "They do not prove live Google Maps rendering or remote Travel-Plan-Permission transport",
+        (
+            "Default or skipped integration checks do not prove live Google Maps rendering or "
+            "configured TPP execution"
+        ),
     ]
 
     for snippet in expected_snippets:

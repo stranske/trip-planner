@@ -258,7 +258,7 @@ Issues: `#678` (epic), `#694`–`#697`
 
 Design ref: [`docs/live-tpp-execution-reoptimization-epic.md`](live-tpp-execution-reoptimization-epic.md)
 
-> **Current configured execution: UNVERIFIED.** Historical transport, pinned local two-app contracts and a current full-product gate are separate evidence states.
+> **Current configured execution: UNVERIFIED.** Historical transport, local HTTP contracts, pinned two-app execution, the configured full-product gate and hosted/in-perimeter execution are separate proof layers. None implies a PASS in another layer or environment.
 
 | Layer | Source / tests | Evidence state |
 |---|---|---|
@@ -274,6 +274,95 @@ The old remote-path implementation remains available through
 or live-provider run was performed for this docs issue. The current required
 configured gate remains a bounded release verification gap; no date or test name
 substitutes for its execution receipt.
+
+### Execution receipt contract
+
+The registry below is the execution-status record for these bounded claims,
+including the F50/F51/F52 gaps described later. All remain explicitly UNVERIFIED
+in this repair because no checked receipt for the current pair is attached.
+Implementation paths, configured workflow triggers and producer pins establish
+available code/checks, not observed execution. A historical receipt retains its
+original revisions and environment; it cannot establish the current pair.
+
+To promote **one layer** to VERIFIED, replace that layer's registry entry with
+`status`, `layer`, exact 40-character `consumer_sha` and `producer_sha`,
+`environment`, `command` and `receipt`. The receipt is a repository-relative JSON
+file containing matching layer, SHAs, environment and command, plus:
+
+- `run`: an actual GitHub Actions run URL or repository-relative retained run log.
+- `artifact`: an actual Actions artifact URL or repository-relative retained result file.
+  When both locators are Actions URLs, the artifact must belong to the recorded
+  run in the same owner/repository.
+- `observed_result`: an object with `status` equal to PASS, a nonempty `summary`
+  of the observed behavior, and `skipped` equal to zero for the claimed layer.
+
+Describe the OS/runtime, HTTP/auth boundary, storage, provider substitutions and
+deployment perimeter in `environment`; an environment label must not hide those
+limits. For `configured_full_product`, the command must be
+`python scripts/check_full_product_verification.py --live-tpp=required`.
+Default/disabled/skipped live-TPP checks cannot satisfy that layer. For other
+layers, record the exact command and its scoped observations. In particular,
+fixture lifecycle cannot establish native lineage, local pinned HTTP/auth/SQLite
+cannot establish hosted/in-perimeter transport, mocked Maps SDK cannot establish
+live provider behavior, and in-process SQLite reopen cannot establish
+OS-process/PostgreSQL/deployment restart. A new revision pair needs a new receipt.
+
+The reusable test helper in `tests/preferences/test_legacy_request_adapter.py`
+validates the registry and synthetic local receipt fixtures through the same
+contract. It rejects missing receipts, mismatched layers/revisions/environments/
+commands and workflow-name-only evidence without network requests. Local run and
+artifact paths must exist inside the repository; workflow files are not run or
+artifact locators. Remote URL syntax is checked offline, **not remote
+retrievability or artifact authenticity**. A reviewer must check the retained
+observations before promoting real documentation. Synthetic fixtures are validator
+tests, never evidence of a product or hosted execution.
+
+```json
+{
+  "execution_claims": [
+    {
+      "layer": "fixture_lifecycle",
+      "status": "UNVERIFIED",
+      "required_gate": "Run fixture lifecycle/reload tests at the recorded pair; prove only supplied-envelope and in-process file-SQLite behavior."
+    },
+    {
+      "layer": "local_http_transport",
+      "status": "UNVERIFIED",
+      "required_gate": "Run TPP client and local HTTP contract tests; retain the exact pair and intercepted/synthetic provider boundaries."
+    },
+    {
+      "layer": "pinned_two_app",
+      "status": "UNVERIFIED",
+      "required_gate": "Run authenticated two-app and portal contract tests against the resolved pinned producer; retain HTTP/auth/SQLite observations."
+    },
+    {
+      "layer": "native_lineage",
+      "status": "UNVERIFIED",
+      "required_gate": "F50: observe native producer lineage before persistence repair, then stored proposal and plan at the recorded pair."
+    },
+    {
+      "layer": "configured_full_product",
+      "status": "UNVERIFIED",
+      "required_gate": "python scripts/check_full_product_verification.py --live-tpp=required"
+    },
+    {
+      "layer": "hosted_in_perimeter",
+      "status": "UNVERIFIED",
+      "required_gate": "Observe authenticated hosted transport in the approved perimeter; local execution cannot satisfy this gate."
+    },
+    {
+      "layer": "maps_provider",
+      "status": "UNVERIFIED",
+      "required_gate": "F51: observe live authenticated Maps provider/deployment behavior; mocked SDK tests are a narrower control."
+    },
+    {
+      "layer": "deployment_restart",
+      "status": "UNVERIFIED",
+      "required_gate": "F52: observe OS-process/PostgreSQL/deployment restart and configured provider acceptance; in-process SQLite reopen is narrower."
+    }
+  ]
+}
+```
 
 ---
 
