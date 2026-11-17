@@ -14,7 +14,8 @@
     "test": "vitest run --exclude src/smoke/**",
     "test:e2e": "playwright test e2e/two-trip-canary.spec.ts",
     "test:smoke": "vitest run src/smoke/runtime.smoke.test.ts",
-    "test:e2e:canary": "playwright test e2e/two-trip-canary.spec.ts e2e/approval-packet-journey.spec.ts"
+    "test:e2e:canary": "playwright test e2e/two-trip-canary.spec.ts e2e/approval-packet-journey.spec.ts",
+    "test:e2e:approval-packet-journey": "playwright test e2e/approval-packet-journey.spec.ts"
   },
   "dependencies": {
     "@googlemaps/js-api-loader": "^2.1.1",

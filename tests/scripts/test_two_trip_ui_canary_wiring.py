@@ -8,6 +8,7 @@ removal of the packet DOM (negative probe) fails CI before the expensive canary 
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 
@@ -26,6 +27,12 @@ def test_frontend_canary_runner_includes_approval_packet_journey() -> None:
     canary_script = package["scripts"]["test:e2e:canary"]
     assert "e2e/approval-packet-journey.spec.ts" in canary_script
     assert "e2e/two-trip-canary.spec.ts" in canary_script
+
+
+def test_frontend_named_journey_runner_targets_only_approval_packet_spec() -> None:
+    package = json.loads(Path("frontend/package.json").read_text(encoding="utf-8"))
+    journey_script = package["scripts"]["test:e2e:approval-packet-journey"]
+    assert journey_script == "playwright test e2e/approval-packet-journey.spec.ts"
 
 
 def test_approval_packet_journey_spec_anchors_workspace_packet_mount() -> None:
@@ -93,3 +100,20 @@ def test_reconciled_pr_body_marks_all_acceptance_criteria_complete() -> None:
     assert body.count("- [x]") >= 8
     assert "- [ ]" not in body.split("### Acceptance criteria")[1]
     assert "039d13fb" in body and "87d7f2eb" in body
+
+
+def test_deliberate_break_and_revert_commits_are_ancestors_of_head() -> None:
+    """Acceptance: negative probe and restore commits are on the PR branch (not doc-only)."""
+    for sha in ("039d13fb", "87d7f2eb"):
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", sha, "HEAD"],
+            check=True,
+            capture_output=True,
+        )
+        show = subprocess.run(
+            ["git", "show", "-s", "--format=%s", sha],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        assert show.stdout.strip()

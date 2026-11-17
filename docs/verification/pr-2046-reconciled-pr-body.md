@@ -25,5 +25,5 @@ Add an isolated local HTTP TPP test double started and cleaned up by `scripts/ru
 
 ### Acceptance criteria
 
-- [x] Named test `frontend/e2e/approval-packet-journey.spec.ts` :: policy (check → native submit → approval packet print …) passes in the repository frontend test runner (`npm --prefix frontend run test:e2e:canary` via `scripts/run_two_trip_ui_canary.sh`).
+- [x] Named test `frontend/e2e/approval-packet-journey.spec.ts` :: policy (check → native submit → approval packet print …) passes in the repository frontend test runner (`npm --prefix frontend run test:e2e:approval-packet-journey` or `test:e2e:canary` via `scripts/run_two_trip_ui_canary.sh`).
 - [x] Deliberate break → revert recorded in PR history: `039d13fb` (mount removed → named test failed); `87d7f2eb` (mount restored → **2 passed**).

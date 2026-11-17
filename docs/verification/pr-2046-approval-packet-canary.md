@@ -118,3 +118,16 @@ Full canary (ports 8806/5184/8114):
 - Named journey → **passed** (3.1s)
 - `two-trip-canary.spec.ts` → **passed** (7.3s)
 - Summary: **2 passed**
+
+## Keepalive re-verification (2026-11-17, named journey npm script)
+
+Added `frontend/package.json` script `test:e2e:approval-packet-journey` for the acceptance
+criterion front-door runner (structural guard in `test_two_trip_ui_canary_wiring.py`).
+
+Full canary (ports 8806/5184/8114) after local venv + `npm --prefix frontend ci` + Chromium:
+
+- Named journey → **passed** (3.3s)
+- `two-trip-canary.spec.ts` → **passed** (7.3s)
+- Summary: **2 passed** — simulated TPP at `http://127.0.0.1:8114`
+
+Branch history gate: `039d13fb` / `87d7f2eb` are ancestors of `HEAD` (pytest `git merge-base`).
