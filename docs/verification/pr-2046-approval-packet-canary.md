@@ -20,7 +20,7 @@ All implementation tasks and additional probes are verified:
 
 ### Named `approval-packet-journey` test passes
 
-Verified on branch `cursor/issue-2043` (2026-11-17):
+Verified on branch `cursor/issue-2043` (2026-11-17, keepalive re-run):
 
 ```sh
 export PATH="$HOME/.local/bin:$PATH"
@@ -45,6 +45,9 @@ The repository frontend runner entry point is `npm --prefix frontend run test:e2
 |------|--------|--------|
 | Break — drop `ApprovalPacket` mount in `WorkspacePage.tsx` | `039d13fb` | `getByTestId('approval-packet-document')` not visible → **1 failed** |
 | Revert + regression anchor comment in spec | `87d7f2eb` | **2 passed** including named test |
+
+Structural CI guards: `tests/scripts/test_two_trip_ui_canary_wiring.py` (canary script, npm
+entry point, e2e regression anchor, and `WorkspacePage` ApprovalPacket mount).
 
 **PR body update (when API token available):** check both acceptance-criteria boxes under
 `#### Acceptance criteria` — verification above satisfies them; keepalive does not auto-check
