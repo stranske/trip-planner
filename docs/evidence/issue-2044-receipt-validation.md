@@ -43,7 +43,7 @@ extending Section 15 prose checks to every mapped proof-layer row.
 Repository-wide Black check when required by CI:
 
 ```bash
-black --check --line-length 100 --exclude '(\.workflows-lib\|node_modules)' .
+black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
 ```
 
 ## Verified implementation checklist

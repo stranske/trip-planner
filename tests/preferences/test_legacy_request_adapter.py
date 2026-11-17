@@ -211,7 +211,7 @@ def _coverage_claim_errors(claim: dict, root: Path) -> list[str]:
         locator = receipt.get(field)
         # Remote locators are checked for shape only, never fetched. A local
         # locator must resolve to a retained file, not workflow configuration.
-        remote_pattern = r"https://github\.com/[^/\s]+/[^/\s]+/actions/runs/[1-9][0-9]*"
+        remote_pattern = r"https://github\.com/[^/\s?#]+/[^/\s?#]+/actions/runs/[1-9][0-9]*"
         if field == "artifact":
             remote_pattern += r"/artifacts/[1-9][0-9]*"
         path = local_file(locator)
@@ -251,15 +251,15 @@ def _coverage_map_execution_errors(text: str, root: Path) -> list[str]:
     claim_by_layer = {claim["layer"]: claim for claim in claims}
     # Compare Section 15 table prose to the registry, skipping the historical row.
     for layer, prefix in _LAYER_SECTION_15_ROWS.items():
-        line = next((line for line in text.splitlines() if line.startswith(prefix)), None)
-        if line is None:
-            continue
+        line = next((line for line in text.splitlines() if line.startswith(prefix)), "")
         registry_status = claim_by_layer[layer]["status"]
-        if layer == "configured_full_product":
+        requires_status = layer == "configured_full_product"
+        if requires_status:
             status = re.search(r"\bcurrent configured execution (UNVERIFIED|VERIFIED)\b", line)
         else:
             status = re.search(r"\b(UNVERIFIED|VERIFIED)\b", line)
-        if status is not None and status.group(1) != registry_status:
+        row_status = status.group(1) if status is not None else None
+        if (requires_status or row_status is not None) and row_status != registry_status:
             errors.append(f"Layer {layer} execution status mismatch: {prefix}")
     configured = claim_by_layer["configured_full_product"]
     preamble = "> **Current configured execution:"
@@ -311,6 +311,7 @@ def _coverage_map_execution_errors(text: str, root: Path) -> list[str]:
         "document-workflow-only",
         "document-missing-receipt",
         "document-row-status-mismatch",
+        "document-configured-row-bare-verified",
         "document-preamble-status-mismatch",
         "document-row-status-decoy",
         "document-preamble-status-decoy",
@@ -333,6 +334,12 @@ def _coverage_map_execution_errors(text: str, root: Path) -> list[str]:
         f"remote-{field}-{kind}"
         for field in ("run", "artifact")
         for kind in ("workflow", "missing-id", "wrong-kind")
+    ]
+    + [
+        f"remote-{field}-{component}-{delimiter}"
+        for field in ("run", "artifact")
+        for component in ("owner", "repository")
+        for delimiter in ("fragment", "query")
     ]
     + [f"invalid-skips-{kind}" for kind in ("boolean", "float", "string", "null", "missing")]
     + [
@@ -604,6 +611,17 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
         }[case]
         receipt["artifact"] = artifact_run + "/artifacts/456"
         expected = ["Receipt artifact must belong to its recorded run"]
+    elif case.endswith(("-fragment", "-query")):
+        _, field, component, delimiter = case.split("-")
+        owner, repository = "example", "fixture"
+        marker = "#" if delimiter == "fragment" else "?"
+        if component == "owner":
+            owner += f"{marker}note"
+        else:
+            repository += f"{marker}note"
+        locator = f"https://github.com/{owner}/{repository}/actions/runs/123"
+        receipt[field] = locator + "/artifacts/456" if field == "artifact" else locator
+        expected = [f"Missing or invalid {field} locator"]
     elif case.startswith("remote-"):
         _, field, kind = case.split("-", 2)
         run_url = "https://github.com/example/fixture/actions/runs/123"
@@ -633,6 +651,15 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
     elif case == "non-object-receipt":
         receipt_path.write_text("[]", encoding="utf-8")
     if case.startswith("document-"):
+        if case == "document-configured-row-bare-verified":
+            prefix = _LAYER_SECTION_15_ROWS["configured_full_product"]
+            row = next(line for line in text.splitlines() if line.startswith(prefix))
+            phrase = "current configured execution UNVERIFIED"
+            assert phrase in row
+            changed = text.replace(row, row.replace(phrase, "VERIFIED"), 1)
+            expected = expected_errors["document-row-status-mismatch"]
+            assert _coverage_map_execution_errors(changed, tmp_path) == expected
+            return
         # Promote only an in-memory copy, using the same checks as the real map.
         block = re.search(r"```json\n(.*?)\n```", text, re.DOTALL)
         assert block is not None
