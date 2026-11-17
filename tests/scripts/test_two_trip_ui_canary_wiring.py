@@ -8,7 +8,16 @@ removal of the packet DOM (negative probe) fails CI before the expensive canary 
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
+
+NAMED_JOURNEY_TITLE_FRAGMENT = (
+    "policy (check -> native submit -> approval packet print "
+    "(real frontend/backend + local HTTP TPP stub verifies packet renders trip title, "
+    "fare, verdict, and triggers window.print)"
+)
+DELIBERATE_BREAK_COMMIT = "039d13fb"
+DELIBERATE_BREAK_REVERT_COMMIT = "87d7f2eb"
 
 
 def test_canary_script_starts_tpp_stub_and_exports_tpp_base_url() -> None:
@@ -99,3 +108,56 @@ def test_reconciled_pr_body_marks_all_acceptance_criteria_complete() -> None:
     assert body.count("- [x]") >= 8
     assert "- [ ]" not in body.split("### Acceptance criteria")[1]
     assert "039d13fb" in body and "87d7f2eb" in body
+
+
+def test_playwright_lists_named_approval_packet_journey_in_frontend_runner() -> None:
+    """Acceptance: the named journey is registered with the repository Playwright runner."""
+    listing = subprocess.run(
+        ["npx", "playwright", "test", "e2e/approval-packet-journey.spec.ts", "--list"],
+        cwd="frontend",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert listing.returncode == 0
+    assert "approval-packet-journey.spec.ts" in listing.stdout
+    assert NAMED_JOURNEY_TITLE_FRAGMENT in listing.stdout
+    assert "Total: 1 test" in listing.stdout
+
+
+def test_deliberate_break_commit_removed_approval_packet_mount_in_pr_history() -> None:
+    """Acceptance: deliberate break is recorded in PR history (negative probe commit)."""
+    patch = subprocess.run(
+        [
+            "git",
+            "show",
+            DELIBERATE_BREAK_COMMIT,
+            "-p",
+            "--",
+            "frontend/src/routes/WorkspacePage.tsx",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "showApprovalPacket && currentWorkspace.proposal_state" in patch.stdout
+    assert "<ApprovalPacket" in patch.stdout
+    assert patch.stdout.count("--- a/frontend/src/routes/WorkspacePage.tsx") >= 1
+
+    reverted = subprocess.run(
+        [
+            "git",
+            "show",
+            DELIBERATE_BREAK_REVERT_COMMIT,
+            "-p",
+            "--",
+            "frontend/src/routes/WorkspacePage.tsx",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert (
+        "+          {showApprovalPacket && currentWorkspace.proposal_state ? (" in reverted.stdout
+    )
+    assert "+            <ApprovalPacket" in reverted.stdout
