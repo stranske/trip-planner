@@ -290,6 +290,7 @@ def _coverage_map_execution_errors(text: str, root: Path) -> list[str]:
     ]
     + [f"unverified-{layer}" for layer in sorted(_PROOF_LAYERS)]
     + [f"verified-{layer}" for layer in sorted(_PROOF_LAYERS)]
+    + [f"workflow-only-{layer}" for layer in sorted(_PROOF_LAYERS)]
     + [f"invalid-skips-{kind}" for kind in ("boolean", "float", "string", "null", "missing")],
 )
 def test_coverage_map_keeps_claims_scoped_to_their_evidence(
@@ -428,6 +429,12 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
             "status": "VERIFIED",
             "receipt": "workflow.yml",
         }
+    elif case.startswith("workflow-only-"):
+        # Even otherwise complete claims cannot substitute configuration for a
+        # receipt, regardless of which proof layer they would promote.
+        claim["layer"] = receipt["layer"] = case.removeprefix("workflow-only-")
+        claim["receipt"] = "workflow.yml"
+        expected = expected_errors["workflow-only"]
     elif case == "receipt-outside-root":
         claim["receipt"] = "../receipt.json"
     elif case == "unknown-layer":

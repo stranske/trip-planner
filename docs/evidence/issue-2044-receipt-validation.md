@@ -235,3 +235,64 @@ test requirements are verified, including the duplicate entries. Publishing
 the failure/revert evidence in the PR and reconciling its checkboxes still
 require an environment permitting PR writes. A final read confirmed PR #2047
 remains open and ready for review (`draft=false`).
+
+## Workflow-only rejection across proof layers
+
+Observed locally on 2026-11-17 from consumer commit
+`e2b68b211386875285c987436d28010fa38dca5b` with this test follow-up applied,
+using Linux, CPython 3.14.10 and Black 26.10.1. The baseline file passed
+71 tests. Added eight named-test parameters: each proof layer now supplies an
+otherwise complete VERIFIED claim with `receipt: "workflow.yml"`. The existing
+local workflow file must be rejected even when the claim supplies exact SHAs,
+environment and command. All cases use the shared receipt validator, with DNS
+and socket connections patched to fail on network requests.
+
+For the deliberate break, temporarily changed the shared `workflow-only`
+expected diagnostics to `[]`, leaving the validator unchanged, then ran:
+
+```bash
+python3 -m pytest tests/preferences/test_legacy_request_adapter.py::test_coverage_map_keeps_claims_scoped_to_their_evidence -q -m "not slow" --tb=short
+```
+
+Observed exit 1: **9 failed, 63 passed**, comprising the original
+`[workflow-only]` case and the eight new layer-specific cases. Every failure
+reported `VERIFIED needs a local JSON receipt, not a workflow filename` where
+the deliberately broken expectation required acceptance. Restored that
+expectation in a `finally` block before running the final checks:
+
+| Command | Observed result |
+| --- | --- |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py::test_coverage_map_keeps_claims_scoped_to_their_evidence -q -m "not slow"` | Exit 0; 72 passed |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py -q -m "not slow"` | Exit 0; 79 passed |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py tests/test_repo_hygiene.py -q -m "not slow"` | Exit 0; 95 passed, 1 existing skip |
+| `ruff check tests/preferences/test_legacy_request_adapter.py` | Exit 0 |
+| `git diff --check` | Exit 0 |
+
+Ran Black on the changed Python file. The initial repository-wide CLI stalled;
+checked all 530 files through Black's serial `reformat_one` CHECK API, using the
+CLI's source discovery, project configuration and inferred Python targets.
+Then the required CLI gate passed using the freshly populated cache (exit 0;
+**530 files would be left unchanged**):
+
+```bash
+BLACK_NUM_WORKERS=1 BLACK_CACHE_DIR=/tmp/black-issue-2044-layer black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+- [x] Validate unverified and receipt-backed examples with one shared helper,
+  including workflow-only rejection for every bounded proof layer.
+- [x] Verify the named test and full file while preserving addressability and
+  local-path checks.
+
+The actual README and coverage-map execution claims remain UNVERIFIED; these
+synthetic fixtures establish only offline validator behavior.
+
+Delivery remains blocked for this follow-up: `git add` exited 128 because
+`.git/index.lock` is on a read-only filesystem. The attempted commit was
+`test: reject workflow-only proof for every receipt layer`; both changed files
+remain in the working tree for committing on the existing PR branch.
+
+The GitHub connector rejected the results/blocker comment, the verified
+checklist/evidence body update and the additive `needs-human` label with
+`MCP tool call requires approval, but approval policy is never`. No PR metadata
+was changed. Showing these results in the PR and reconciling its checkboxes
+remain blocked on PR write access; the local checks above are complete.
