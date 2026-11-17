@@ -296,3 +296,69 @@ checklist/evidence body update and the additive `needs-human` label with
 `MCP tool call requires approval, but approval policy is never`. No PR metadata
 was changed. Showing these results in the PR and reconciling its checkboxes
 remain blocked on PR write access; the local checks above are complete.
+
+## Current-status declaration regression follow-up
+
+Observed locally on 2026-11-17 from consumer commit
+`375b8319b6b437f99f9e2bc006e60064cca32e46` with this repair applied, using
+Linux and CPython 3.14.10. The baseline whole-file run passed 79 tests.
+
+The document helper accepted any occurrence of the registry's status on the
+relevant prose line. Two new local document fixtures retain a mismatched
+UNVERIFIED declaration while adding `Historical examples may be VERIFIED for a
+different pair.` on that same line. Before the fix, the named test reported
+**2 failed, 72 passed**, exit 1: both mismatched declarations were accepted.
+The helper now extracts the current-status declaration and compares it with
+the receipt-backed registry status. Both fixtures are rejected with the
+expected layer-specific diagnostic; the existing valid promotion still passes.
+
+Repeated the workflow-only deliberate break by temporarily replacing the shared
+`workflow-only` expected diagnostics with `[]`, leaving the validator unchanged:
+
+```bash
+python3 -m pytest tests/preferences/test_legacy_request_adapter.py::test_coverage_map_keeps_claims_scoped_to_their_evidence -q -m "not slow" --tb=line
+```
+
+Observed exit 1, **9 failed, 65 passed**. The original workflow-only case and
+all eight layer-specific variants rejected the VERIFIED claim with
+`VERIFIED needs a local JSON receipt, not a workflow filename`. DNS and socket
+connections remained patched to fail on network requests. Restored the
+rejection expectation in a `finally` block, then verified:
+
+| Command | Observed result |
+| --- | --- |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py::test_coverage_map_keeps_claims_scoped_to_their_evidence -q -m "not slow"` | Exit 0; 74 passed |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py -q -m "not slow"` | Exit 0; 81 passed |
+| `ruff check tests/preferences/test_legacy_request_adapter.py` | Exit 0 |
+| `black --line-length 100 tests/preferences/test_legacy_request_adapter.py` | Exit 0; unchanged |
+
+The initial repository-wide Black CLI stalled and was interrupted. Checked all
+530 sources through Black's serial `reformat_one` CHECK API with the CLI's
+source discovery, project exclusions and inferred Python targets. All were
+unchanged. The required CLI gate then passed using that fresh cache, exit 0,
+**530 files would be left unchanged**:
+
+```bash
+BLACK_NUM_WORKERS=1 BLACK_CACHE_DIR=/tmp/black-issue-2044-status black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+- [x] Validate unverified, receipt-backed and invalid claims through the shared
+  helper, including current-status declarations with misleading later text.
+- [x] Verify the named test and whole file, preserving the addressability and
+  existing local-path checks.
+
+README and coverage-map execution claims remain UNVERIFIED. These synthetic
+fixtures establish only offline documentation-validator behavior.
+
+Delivery for this follow-up is blocked: `git add` exited 128 because
+`.git/index.lock` is on a read-only filesystem. The intended commit is
+`test: validate declared execution status against receipts`. The changed test
+and this evidence record remain local for committing on the checked-out branch
+from a writable Git environment.
+
+The GitHub connector rejected the results/blocker comment, the verified
+checklist/results body update and the additive `needs-human` label with
+`MCP tool call requires approval, but approval policy is never`. No PR metadata
+was changed. Publishing the failure/restoration evidence and reconciling the
+PR checkboxes still require PR write access. PR #2047 was confirmed open and
+ready for review (`draft=false`).

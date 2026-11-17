@@ -235,13 +235,21 @@ def _coverage_map_execution_errors(text: str, root: Path) -> list[str]:
     assert {claim["layer"] for claim in claims} == _PROOF_LAYERS
     errors = [error for claim in claims for error in _coverage_claim_errors(claim, root)]
     configured = next(claim for claim in claims if claim["layer"] == "configured_full_product")
+    # Read the current-status declaration, not status words in later caveats.
     # Word boundaries distinguish VERIFIED from the suffix of UNVERIFIED.
-    for prefix in (
-        "| Current full-product configured TPP transport |",
-        "> **Current configured execution:",
+    for prefix, pattern in (
+        (
+            "| Current full-product configured TPP transport |",
+            r"\bcurrent configured execution (UNVERIFIED|VERIFIED)\b",
+        ),
+        (
+            "> **Current configured execution:",
+            r"^> \*\*Current configured execution: (UNVERIFIED|VERIFIED)\b",
+        ),
     ):
         line = next(line for line in text.splitlines() if line.startswith(prefix))
-        if not re.search(rf"\b{configured['status']}\b", line):
+        status = re.search(pattern, line)
+        if status is None or status.group(1) != configured["status"]:
             errors.append(f"Configured execution status mismatch: {prefix}")
     return errors
 
@@ -278,6 +286,8 @@ def _coverage_map_execution_errors(text: str, root: Path) -> list[str]:
         "document-missing-receipt",
         "document-row-status-mismatch",
         "document-preamble-status-mismatch",
+        "document-row-status-decoy",
+        "document-preamble-status-decoy",
     ]
     + [f"missing-{field}" for field in ("consumer_sha", "producer_sha", "environment", "command")]
     + [
@@ -382,6 +392,12 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
             "Configured execution status mismatch: | Current full-product configured TPP transport |"
         ],
         "document-preamble-status-mismatch": [
+            "Configured execution status mismatch: > **Current configured execution:"
+        ],
+        "document-row-status-decoy": [
+            "Configured execution status mismatch: | Current full-product configured TPP transport |"
+        ],
+        "document-preamble-status-decoy": [
             "Configured execution status mismatch: > **Current configured execution:"
         ],
     }
@@ -512,13 +528,21 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
         lines = text.splitlines()
         for index, line in enumerate(lines):
             if line.startswith("| Current full-product configured TPP transport |"):
-                promote = case != "document-row-status-mismatch"
+                promote = case not in {
+                    "document-row-status-mismatch",
+                    "document-row-status-decoy",
+                }
             elif line.startswith("> **Current configured execution:"):
-                promote = case != "document-preamble-status-mismatch"
+                promote = case not in {
+                    "document-preamble-status-mismatch",
+                    "document-preamble-status-decoy",
+                }
             else:
                 continue
             status = "VERIFIED" if promote else "UNVERIFIED"
             lines[index] = re.sub(rf"\b{previous_status}\b", status, line)
+            if not promote and case.endswith("-decoy"):
+                lines[index] += " Historical examples may be VERIFIED for a different pair."
         assert _coverage_map_execution_errors("\n".join(lines), tmp_path) == expected
         return
     errors = _coverage_claim_errors(claim, tmp_path)
