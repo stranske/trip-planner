@@ -397,7 +397,7 @@ def _persisted_budget_state(trip_id: str) -> dict[str, list[dict[str, Any]]]:
                 for row in db_session.execute(
                     select(model.__table__)
                     .where(model.trip_id == trip_id)
-                    .order_by(*model.__table__.primary_key.columns)
+                    .order_by(*model.__table__.primary_key)
                 ).mappings()
             ]
             for model in models
