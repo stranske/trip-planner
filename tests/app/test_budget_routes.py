@@ -578,6 +578,45 @@ def test_legacy_mixed_currency_read_returns_conflict(client: TestClient, budget_
     assert sorted(stored_ids) == sorted(event_ids)
 
 
+@pytest.mark.parametrize("edit_mismatched_event", [True, False])
+def test_legacy_mixed_currency_spend_edit_is_rejected_without_persisting(
+    client: TestClient, budget_url: str, edit_mismatched_event: bool
+) -> None:
+    spend_url = f"{budget_url}/spend-events"
+    spend = {"category_key": "food", "amount": 30, "source_context": "Lunch"}
+    first = client.post(spend_url, json=spend)
+    assert first.status_code == 200
+    second = client.post(spend_url, json={**spend, "source_context": "Dinner"})
+    assert second.status_code == 200
+    payload = second.json()
+    trip_id = payload["budget_plan"]["trip_id"]
+    event_ids = [event["spend_event_id"] for event in payload["spend_events"]]
+    with get_session_factory()() as db_session:
+        event = db_session.get(PersistedActualSpendEvent, event_ids[0])
+        assert event is not None
+        event.currency = "EUR"
+        db_session.commit()
+    persisted_before = _persisted_budget_state(trip_id)
+    event_id = event_ids[0 if edit_mismatched_event else 1]
+
+    rejected = client.patch(
+        f"{spend_url}/{event_id}",
+        json={
+            **spend,
+            "amount": 45,
+            "source_context": "Updated receipt",
+            "merchant_name": "Lunch counter",
+            "notes": ["Corrected amount"],
+        },
+    )
+
+    assert rejected.status_code == 409
+    assert rejected.json()["detail"].startswith(
+        "Recorded spend currencies conflict with the workspace budget currency."
+    )
+    assert _persisted_budget_state(trip_id) == persisted_before
+
+
 def test_workspace_budget_spend_event_updates_session_timestamp(client: TestClient) -> None:
     created = client.post(
         "/api/trips",
