@@ -404,3 +404,51 @@ blocked at `git add` (exit 128): `.git/index.lock` could not be created on the
 read-only filesystem. The changed test and this evidence record remain local;
 committing them on the existing branch and publishing the checklist/evidence
 require an environment with Git and PR write access.
+
+## Remote locator rejection and task reconciliation
+
+Observed locally on 2026-11-17 from consumer commit
+`a57fc4d14b99362022b2a0208b160fafc97d5fd3` with this follow-up applied,
+using Linux and CPython 3.14.10. Reviewed the recent commits before continuing;
+the baseline named test passed 78 cases and the whole file passed 85 tests.
+The implementation and earlier recorded workflow-only failure/restoration
+already satisfy the remaining PR checklist entries. Reconciliation of the PR
+body was attempted before adding further tests, but the connector rejected it.
+
+Added six synthetic cases to the existing named test, using the same receipt
+helper and socket/DNS guards. Both run and artifact fields reject a GitHub
+workflow configuration URL, a locator without its numeric ID, and a locator
+for the other resource type. Each case asserts its exact diagnostic. Existing
+valid remote locators still pass without network requests.
+
+| Command | Observed result |
+| --- | --- |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py::test_coverage_map_keeps_claims_scoped_to_their_evidence -q -m "not slow"` | Exit 0; 84 passed |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py -q -m "not slow"` | Exit 0; 91 passed |
+| `ruff check tests/preferences/test_legacy_request_adapter.py` | Exit 0 |
+| `black --line-length 100 tests/preferences/test_legacy_request_adapter.py` | Exit 0; unchanged |
+| `BLACK_CACHE_DIR=/tmp/black-2044-remote-locators BLACK_NUM_WORKERS=1 black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .` | Exit 0; 530 files unchanged |
+
+The initial repository-wide Black command stalled and was interrupted. Ran
+Black's CLI with serial `reformat_one` calls in place of its batch formatter,
+preserving source discovery, configuration, CHECK mode and reporting. All 530
+files passed; the unmodified required command then passed with that fresh cache.
+
+- [x] Validate unverified, structured receipt-backed and invalid examples through
+  the shared helper, including workflow-only evidence and remote locators.
+- [x] Keep bounded proof layers and explicit unverified documentation; distinguish
+  implemented transport, configured checks and observed execution in README.
+- [x] Pass the named test and whole file, preserving addressability/local-path
+  checks and the earlier recorded deliberate failure and restoration.
+
+The PR body update, results comment and additive `needs-human` label were all
+rejected with `MCP tool call requires approval, but approval policy is never`.
+No PR metadata changed. The deliberate failure/restoration evidence above was
+retained instead of repeating that completed experiment. These results concern
+offline validator behavior only; real execution claims remain UNVERIFIED.
+
+After all checks passed, staging the test and this record failed with exit 128:
+Git could not create `.git/index.lock` on the read-only filesystem. The intended
+commit is `test: reject remote configuration as receipt evidence`. Changes
+remain in the workspace for committing on the existing PR branch from an
+environment with a writable Git directory.

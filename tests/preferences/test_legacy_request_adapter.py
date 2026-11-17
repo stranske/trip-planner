@@ -305,6 +305,11 @@ def _coverage_map_execution_errors(text: str, root: Path) -> list[str]:
     + [f"unverified-{layer}" for layer in sorted(_PROOF_LAYERS)]
     + [f"verified-{layer}" for layer in sorted(_PROOF_LAYERS)]
     + [f"workflow-only-{layer}" for layer in sorted(_PROOF_LAYERS)]
+    + [
+        f"remote-{field}-{kind}"
+        for field in ("run", "artifact")
+        for kind in ("workflow", "missing-id", "wrong-kind")
+    ]
     + [f"invalid-skips-{kind}" for kind in ("boolean", "float", "string", "null", "missing")],
 )
 def test_coverage_map_keeps_claims_scoped_to_their_evidence(
@@ -523,6 +528,17 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
     elif case == "remote-locators":
         receipt["run"] = "https://github.com/example/fixture/actions/runs/123"
         receipt["artifact"] = "https://github.com/example/fixture/actions/runs/123/artifacts/456"
+    elif case.startswith("remote-"):
+        _, field, kind = case.split("-", 2)
+        run_url = "https://github.com/example/fixture/actions/runs/123"
+        # A workflow page is configuration; run and artifact locators also
+        # cannot substitute for each other, even when hosted on GitHub.
+        receipt[field] = {
+            "workflow": "https://github.com/example/fixture/actions/workflows/smoke.yml",
+            "missing-id": run_url + "/artifacts/" if field == "artifact" else run_url[:-3],
+            "wrong-kind": run_url if field == "artifact" else run_url + "/artifacts/456",
+        }[kind]
+        expected = [f"Missing or invalid {field} locator"]
     elif not case.startswith("document-") and case not in {
         "missing-receipt",
         "malformed-receipt",
