@@ -65,3 +65,21 @@ def test_deliberate_break_negative_probe_recorded_in_verification_doc() -> None:
     assert "ApprovalPacket" in doc and "Deliberate break" in doc
     assert "87d7f2eb" in doc
     assert "2 passed" in doc
+
+
+def test_acceptance_criterion_named_journey_documented() -> None:
+    doc = Path("docs/verification/pr-2046-approval-packet-canary.md").read_text(encoding="utf-8")
+    spec = Path("frontend/e2e/approval-packet-journey.spec.ts").read_text(encoding="utf-8")
+    assert "acceptance-criterion: named-journey-pass" in doc
+    assert "policy (check -> native submit -> approval packet print" in spec
+    assert "approval-packet-journey.spec.ts" in doc
+    assert "test:e2e:canary" in doc
+    assert "[x]" in doc and "Named test" in doc
+
+
+def test_acceptance_criterion_deliberate_break_revert_documented() -> None:
+    doc = Path("docs/verification/pr-2046-approval-packet-canary.md").read_text(encoding="utf-8")
+    assert "acceptance-criterion: deliberate-break-revert" in doc
+    assert "approval-packet-document" in doc
+    assert "039d13fb" in doc and "87d7f2eb" in doc
+    assert "Deliberate break → revert" in doc or "Deliberate break" in doc

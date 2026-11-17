@@ -82,3 +82,25 @@ Full canary (ports 8806/5184/8114):
 - Named test `approval-packet-journey.spec.ts` → **passed** (3.8s)
 - `two-trip-canary.spec.ts` → **passed** (7.2s)
 - Summary: **2 passed**
+
+## PR acceptance criteria (reconciled for keepalive)
+
+Mirror of the PR body checklist — update the GitHub PR body to match when editing tasks:
+
+- [x] Named test `frontend/e2e/approval-packet-journey.spec.ts` :: policy (check -> native submit -> approval packet print …) passes via `npm --prefix frontend run test:e2e:canary` inside `scripts/run_two_trip_ui_canary.sh` (real frontend/backend + local HTTP TPP stub).
+- [x] Deliberate break → revert recorded: commit `039d13fb` removed the `ApprovalPacket` mount → named test failed (`approval-packet-document` not visible); commit `87d7f2eb` restored mount → **2 passed**.
+
+<!-- acceptance-criterion: named-journey-pass -->
+<!-- acceptance-criterion: deliberate-break-revert -->
+
+## Keepalive re-verification (2026-11-17, acceptance closure)
+
+Structural guards: `pytest tests/scripts/test_two_trip_ui_canary_wiring.py -m "not slow"` → **8 passed** (includes acceptance-criterion doc gates).
+
+Full canary (ports 8806/5184/8114) after `pip install -e ".[dev]"`, `npm --prefix frontend ci`, and Playwright Chromium:
+
+- Named journey `policy (check -> native submit -> approval packet print …)` → **passed** (3.8s)
+- `two-trip-canary.spec.ts` → **passed** (7.7s)
+- Summary: **2 passed** — `Two-trip UI canary PASS (simulated TPP transport at http://127.0.0.1:8114)`
+
+All PR tasks and acceptance criteria are satisfied on `cursor/issue-2043`.
