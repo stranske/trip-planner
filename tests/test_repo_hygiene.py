@@ -48,6 +48,25 @@ def test_no_tracked_database_binaries() -> None:
     )
 
 
+def test_no_tracked_playwright_test_results() -> None:
+    """Playwright failure output must not be committed when run outside the canary artifact dir."""
+    tracked = [path for path in _all_tracked_files() if path.startswith("test-results/")]
+    assert not tracked, (
+        "Found tracked Playwright test-results/. Remove with `git rm -r --cached test-results/` "
+        "and keep test-results/ in .gitignore.\n"
+        f"Offending paths: {', '.join(tracked)}"
+    )
+
+
+def test_no_tracked_uv_lock() -> None:
+    """Ad-hoc uv.lock files from local uv run must stay out of version control."""
+    tracked = [path for path in _all_tracked_files() if path == "uv.lock"]
+    assert not tracked, (
+        'uv.lock must not be tracked; use `pip install -e ".[dev]"` per CI. '
+        "Remove with `git rm --cached uv.lock` and keep uv.lock in .gitignore."
+    )
+
+
 def test_no_node_modules_tracked_anywhere() -> None:
     """node_modules/ must never be tracked in git anywhere in the repo.
 

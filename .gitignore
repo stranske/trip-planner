@@ -29,6 +29,10 @@ frontend/.env.*.local
 build/
 dist/
 *.tsbuildinfo
+test-results/
+
+# Local uv lockfile from ad-hoc `uv run`; canonical install is pip install -e ".[dev]".
+uv.lock
 
 # Runtime LangSmith fleet artifacts are regenerated and can contain local trace IDs.
 artifacts/langsmith/
