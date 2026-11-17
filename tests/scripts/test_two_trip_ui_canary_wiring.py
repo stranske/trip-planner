@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from pathlib import Path
+
+import pytest
 
 NAMED_JOURNEY_TITLE_FRAGMENT = (
     "policy (check -> native submit -> approval packet print "
@@ -28,6 +31,8 @@ def test_canary_script_starts_tpp_stub_and_exports_tpp_base_url() -> None:
     assert "simulated TPP transport" in script
     assert '"${PYTHON}" -m uvicorn trip_planner.app.main:app' in script
     assert "uv run" not in script
+    assert "frontend/node_modules/.bin/vite" in script
+    assert "npm --prefix frontend ci" in script
 
 
 def test_frontend_canary_runner_includes_approval_packet_journey() -> None:
@@ -108,6 +113,25 @@ def test_reconciled_pr_body_marks_all_acceptance_criteria_complete() -> None:
     assert body.count("- [x]") >= 8
     assert "- [ ]" not in body.split("### Acceptance criteria")[1]
     assert "039d13fb" in body and "87d7f2eb" in body
+
+
+@pytest.mark.skipif(
+    not Path("frontend/node_modules/@playwright/test").exists(),
+    reason="frontend node_modules not installed",
+)
+def test_playwright_cli_lists_named_approval_packet_journey() -> None:
+    """When frontend deps are present, Playwright's runner lists the named acceptance test."""
+    repo_root = Path.cwd()
+    playwright_bin = repo_root / "frontend/node_modules/.bin/playwright"
+    result = subprocess.run(
+        [str(playwright_bin), "test", "--list"],
+        check=True,
+        capture_output=True,
+        text=True,
+        cwd=repo_root / "frontend",
+    )
+    assert "approval-packet-journey.spec.ts" in result.stdout
+    assert NAMED_JOURNEY_TITLE_FRAGMENT in result.stdout
 
 
 def test_playwright_lists_named_approval_packet_journey_in_frontend_runner() -> None:

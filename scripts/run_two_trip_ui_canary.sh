@@ -66,6 +66,13 @@ trap show_failure_logs ERR
 mkdir -p "${artifact_dir}"
 cd "${repo_root}"
 
+vite_bin="${repo_root}/frontend/node_modules/.bin/vite"
+if [ ! -x "${vite_bin}" ]; then
+  echo "Two-trip UI canary requires frontend dependencies (missing ${vite_bin})." >&2
+  echo "Run: npm --prefix frontend ci && npm --prefix frontend exec playwright install --with-deps chromium" >&2
+  exit 1
+fi
+
 python3 scripts/tpp_http_canary_stub.py \
   --host 127.0.0.1 --port "${tpp_port}" >"${tpp_log}" 2>&1 &
 tpp_pid=$!
@@ -82,7 +89,7 @@ TPP_ORGANIZATION_ID="${TRIP_PLANNER_CANARY_TPP_ORGANIZATION_ID:-org-canary}" \
 backend_pid=$!
 wait_for_url "${backend_url}/api/health"
 
-VITE_API_BASE_URL="${backend_url}" frontend/node_modules/.bin/vite frontend \
+VITE_API_BASE_URL="${backend_url}" "${vite_bin}" frontend \
   --host 127.0.0.1 --port "${frontend_port}" --strictPort >"${frontend_log}" 2>&1 &
 frontend_pid=$!
 wait_for_url "${frontend_url}/signup"

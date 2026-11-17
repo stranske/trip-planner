@@ -131,3 +131,19 @@ Full canary (ports 8806/5184/8114) after local venv + `npm --prefix frontend ci`
 - Summary: **2 passed** — simulated TPP at `http://127.0.0.1:8114`
 
 Branch history gate: `039d13fb` / `87d7f2eb` are ancestors of `HEAD` (pytest `git merge-base`).
+
+## Keepalive re-verification (2026-11-17, frontend deps preflight)
+
+`scripts/run_two_trip_ui_canary.sh` fails fast when `frontend/node_modules/.bin/vite` is
+missing (install hint: `npm --prefix frontend ci` + Playwright Chromium).
+
+Structural guards: `pytest tests/scripts/test_two_trip_ui_canary_wiring.py -m "not slow"` → **13 passed**
+(includes `test_playwright_cli_lists_named_approval_packet_journey` when `node_modules` is present).
+
+Full canary (ports 8806/5184/8114):
+
+- Named journey → **passed** (3.6s)
+- `two-trip-canary.spec.ts` → **passed** (7.4s)
+- Summary: **2 passed** — simulated TPP at `http://127.0.0.1:8114`
+
+Both acceptance criteria remain satisfied (`039d13fb` break, `87d7f2eb` revert on branch).
