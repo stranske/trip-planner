@@ -14,6 +14,8 @@ from trip_planner.persistence.models.budget import (
     PersistedBudgetPlan,
     PersistedBudgetPlanVersion,
 )
+from trip_planner.persistence.models.session import PersistedPlanningSessionState
+from trip_planner.persistence.models.trip import PersistedTrip
 
 
 @pytest.fixture
@@ -367,6 +369,40 @@ def test_workspace_budget_spend_event_rejects_currency_drift(client: TestClient)
     assert rejected_edit.status_code == 400
     assert client.get(budget_url).json() == before
 
+    accepted_edit = client.patch(
+        f"{budget_url}/spend-events/{event['spend_event_id']}",
+        json={**spend, "amount": 40},
+    )
+    assert accepted_edit.status_code == 200
+    after = accepted_edit.json()
+    assert after["spend_events"][0]["currency"] == "USD"
+    assert after["summary"]["actual_total"] == 40
+    assert after["summary"]["version_count"] == before["summary"]["version_count"]
+    assert client.get(budget_url).json() == after
+
+
+def _persisted_budget_state(trip_id: str) -> dict[str, list[dict[str, Any]]]:
+    """Read persisted rows directly, without invoking the read-side currency guard."""
+    models = (
+        PersistedBudgetPlan,
+        PersistedBudgetPlanVersion,
+        PersistedActualSpendEvent,
+        PersistedPlanningSessionState,
+        PersistedTrip,
+    )
+    with get_session_factory()() as db_session:
+        return {
+            model.__tablename__: [
+                dict(row)
+                for row in db_session.execute(
+                    select(model.__table__)
+                    .where(model.trip_id == trip_id)
+                    .order_by(*model.__table__.primary_key.columns)
+                ).mappings()
+            ]
+            for model in models
+        }
+
 
 def _budget_in_currency(currency: str, *, planned_amount: int = 150) -> dict[str, Any]:
     return {
@@ -417,9 +453,13 @@ def test_plan_currency_change_rejected_when_spend_in_other_currency(
     plan_id = before["budget_plan"]["budget_plan_id"]
     assert before["summary"]["actual_total"] == 30
     assert before["summary"]["version_count"] == 1
+    trip_id = before["budget_plan"]["trip_id"]
+    persisted_before = _persisted_budget_state(trip_id)
 
     rejected = client.put(budget_url, json=_budget_in_currency("EUR", planned_amount=200))
 
+    persisted_after = _persisted_budget_state(trip_id)
+    assert persisted_after == persisted_before
     with get_session_factory()() as db_session:
         plan = db_session.get(PersistedBudgetPlan, plan_id)
         assert plan is not None
@@ -439,6 +479,36 @@ def test_plan_currency_change_rejected_when_spend_in_other_currency(
     reread = client.get(budget_url)
     assert reread.status_code == 200
     assert reread.json() == before
+
+
+@pytest.mark.parametrize("currency", ["USD", "EUR", "GBP"])
+def test_plan_update_checks_all_legacy_spend_currencies(
+    client: TestClient, budget_url: str, currency: str
+) -> None:
+    spend_url = f"{budget_url}/spend-events"
+    spend = {"category_key": "food", "amount": 30, "source_context": "Lunch"}
+    first = client.post(spend_url, json=spend)
+    assert first.status_code == 200
+    second = client.post(spend_url, json={**spend, "source_context": "Dinner"})
+    assert second.status_code == 200
+    payload = second.json()
+    trip_id = payload["budget_plan"]["trip_id"]
+    with get_session_factory()() as db_session:
+        event = db_session.get(
+            PersistedActualSpendEvent, payload["spend_events"][0]["spend_event_id"]
+        )
+        assert event is not None
+        event.currency = "EUR"
+        db_session.commit()
+    persisted_before = _persisted_budget_state(trip_id)
+
+    rejected = client.put(budget_url, json=_budget_in_currency(currency, planned_amount=200))
+
+    assert rejected.status_code == 422
+    assert rejected.json()["detail"].startswith(
+        "The budget plan currency must match all recorded spend currencies."
+    )
+    assert _persisted_budget_state(trip_id) == persisted_before
 
 
 def test_plan_currency_change_allowed_without_spend(client: TestClient, budget_url: str) -> None:
