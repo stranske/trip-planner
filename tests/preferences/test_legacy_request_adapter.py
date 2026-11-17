@@ -319,7 +319,12 @@ def _coverage_map_execution_errors(text: str, root: Path) -> list[str]:
         for field in ("run", "artifact")
         for kind in ("workflow", "missing-id", "wrong-kind")
     ]
-    + [f"invalid-skips-{kind}" for kind in ("boolean", "float", "string", "null", "missing")],
+    + [f"invalid-skips-{kind}" for kind in ("boolean", "float", "string", "null", "missing")]
+    + [
+        f"invalid-{field}-{kind}"
+        for field in ("gate", "environment", "summary")
+        for kind in ("empty", "whitespace", "number", "null")
+    ],
 )
 def test_coverage_map_keeps_claims_scoped_to_their_evidence(
     case: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -537,6 +542,23 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
         expected = ["Receipt needs an observed PASS, summary and zero skips"]
     elif case == "empty-summary":
         receipt["observed_result"]["summary"] = " "
+    elif case.startswith(("invalid-gate-", "invalid-environment-", "invalid-summary-")):
+        _, field, kind = case.split("-", 2)
+        value = {"empty": "", "whitespace": " \t\n", "number": 1, "null": None}[kind]
+        if field == "gate":
+            claim = {
+                "layer": "configured_full_product",
+                "status": "UNVERIFIED",
+                "required_gate": value,
+            }
+            expected = ["UNVERIFIED needs a required gate"]
+        elif field == "environment":
+            # Matching empty/non-text values are still not a scoped environment.
+            claim["environment"] = receipt["environment"] = value
+            expected = ["Missing claim environment"]
+        else:
+            receipt["observed_result"]["summary"] = value
+            expected = ["Receipt needs an observed PASS, summary and zero skips"]
     elif case in {"optional-gate", "disabled-gate"}:
         command = "python scripts/check_full_product_verification.py"
         claim["command"] = receipt["command"] = command + (

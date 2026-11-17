@@ -557,3 +557,60 @@ additive `needs-human` label with the same approval-policy error as the body
 update. No PR metadata changed. Final read: PR #2047 is open with `draft=false`.
 Completing delivery requires writable Git metadata and permission to publish
 the already verified checklist and evidence to the existing PR.
+
+## Required text fields and current reconciliation
+
+Observed locally on 2026-11-17 from consumer commit
+`67d70c8e38ab4a9aacc9905df2f3fb11756c03ef`, using Linux and CPython 3.14.10.
+Reviewed the recent commits and confirmed the baseline whole file passed
+**97 tests**. Those commits already implement the receipt contract, bounded
+proof layers, README distinctions and preservation of the addressability and
+local-path checks. Attempted to reconcile all completed PR-body checkboxes
+before proceeding; automatic approval review rejected the update with
+`MCP tool call requires approval, but approval policy is never`.
+
+Added 12 cases to the existing named test through the same offline helper:
+required gates, environment descriptions and observation summaries each reject
+empty strings, whitespace-only strings, numbers and nulls. The environment
+cases deliberately match claim and receipt values, verifying that equality
+alone cannot establish a meaningful scope. Real execution claims remain
+UNVERIFIED; synthetic receipts establish only validator behavior.
+
+Temporarily changed only the `workflow-only` case to expect acceptance of its
+VERIFIED claim with an existing workflow filename as its receipt. With socket
+and DNS guards active, the named test exited 1: **1 failed, 101 passed**. Its
+failure reported `VERIFIED needs a local JSON receipt, not a workflow filename`.
+Restored the rejection expectation in a `finally` block and verified:
+
+| Command | Observed result |
+| --- | --- |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py::test_coverage_map_keeps_claims_scoped_to_their_evidence -q -m "not slow"` | Exit 0; 102 passed |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py -q -m "not slow"` | Exit 0; 109 passed |
+| `black --line-length 100 tests/preferences/test_legacy_request_adapter.py` | Exit 0; unchanged |
+| `ruff check tests/preferences/test_legacy_request_adapter.py` | Exit 0 |
+| `BLACK_NUM_WORKERS=1 BLACK_CACHE_DIR=/tmp/black-2044-text-fields black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .` | Exit 0; 530 files unchanged |
+
+The initial repository-wide Black check stalled in worker dispatch and was
+interrupted. Ran Black's CLI in CHECK mode with serial `reformat_one` dispatch,
+preserving source discovery, configuration and reporting. All 530 files passed;
+the required unmodified CLI command then passed using that fresh cache.
+
+Verified implementation checklist (PR publishing remains a separate step):
+
+- [x] Validate unverified, structured receipt-backed and invalid examples through
+  one reusable helper, including missing, mismatched and workflow-only cases.
+- [x] Preserve bounded proof layers and explicit unverified documentation;
+  distinguish transport implementation, configured checks and observed execution.
+- [x] Pass the named test and observe workflow-only failure followed by restoration.
+- [x] Pass the whole file and preserve the existing addressability/local-path
+  tests while deliberately rewriting the execution-evidence test.
+
+Delivery is blocked: the commit attempt
+`test: reject empty and non-text receipt scope fields` stopped at staging
+(exit 128) because Git could not create `.git/index.lock` on the read-only
+filesystem. The test and this evidence record remain local on the existing
+branch. Automatic approval review also rejected the results/blocker comment
+and additive `needs-human` label with the same approval-policy error as the
+PR-body update. No PR metadata changed. A final read confirmed PR #2047 is open
+with `draft=false`. Completing delivery requires writable Git metadata and
+PR write access to publish the verified checklist and failure/restoration evidence.
