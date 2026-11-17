@@ -4,6 +4,7 @@
 # when TPP_PINNED_REF changes. The live checkout check remains authoritative.
 
 [project]
+requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115.0",
     "httpx>=0.28.1",

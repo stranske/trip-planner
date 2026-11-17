@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+import tomllib
 import yaml
 
-WORKFLOWS = Path(__file__).resolve().parents[1] / ".github" / "workflows"
+ROOT = Path(__file__).resolve().parents[1]
+WORKFLOWS = ROOT / ".github" / "workflows"
 RUNTIME_KEYS = {
     "python-version",
     "python-versions",
@@ -65,3 +69,131 @@ def test_workflow_python_pins_follow_standard() -> None:
         assert json.loads(config["with"]["python-versions"]) == ["3.13", "3.14"]
         assert config["with"]["primary-python-version"] == "3.14"
         assert not config.get("continue-on-error", False)
+
+
+def _pyproject_defines_ruff_config(pyproject: Path) -> bool:
+    data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    return "ruff" in data.get("tool", {})
+
+
+def test_ruff_check_matches_reusable_python_ci_when_ruff_omitted() -> None:
+    """When pyproject.toml has no [tool.ruff], CI uses --select E4,E7,E9,F (not the default set)."""
+    pyproject = ROOT / "pyproject.toml"
+    assert not _pyproject_defines_ruff_config(pyproject), "update this test if [tool.ruff] is added"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            "--select",
+            "E4,E7,E9,F",
+            "--extend-exclude",
+            ".workflows-lib",
+            ".",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_mypy_matches_reusable_python_ci() -> None:
+    """Reusable Python CI runs mypy with pyproject config and .workflows-lib excluded.
+
+    Local ``build/`` output is excluded rather than deleted so developer artifacts survive.
+    """
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "mypy",
+            "--config-file",
+            "pyproject.toml",
+            "--exclude",
+            r"(^|/)(?:\.workflows-lib|build)(?:/|$)",
+            ".",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_make_test_matches_reusable_python_ci_pytest() -> None:
+    """Reusable Python CI on PR head runs ``python -m pytest``; ``make test`` must match."""
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    recipe: list[str] = []
+    in_test_target = False
+    for line in makefile.splitlines():
+        if line.startswith("test:"):
+            in_test_target = True
+            continue
+        if not in_test_target:
+            continue
+        if line.startswith("\t"):
+            recipe.append(line.strip())
+            continue
+        if line.strip():
+            break
+    assert recipe == ["python -m pytest"], f"Makefile test target recipe mismatch: {recipe!r}"
+
+
+def test_black_format_matches_pre_commit_gate() -> None:
+    """Keepalive and pre-commit Black gate: line length 100, exclude workflows-lib and node_modules."""
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "black",
+            "--check",
+            "--line-length",
+            "100",
+            "--exclude",
+            r"(\.workflows-lib|node_modules)",
+            ".",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_gate_workflow_exposes_python_314_and_cross_repo_smoke_jobs() -> None:
+    """Keepalive PR tasks track Gate jobs that map to Python CI / python 3.14 and cross-repo-full-product."""
+    gate = yaml.safe_load((WORKFLOWS / "pr-00-gate.yml").read_text(encoding="utf-8"))
+    python_ci = gate["jobs"]["python-ci"]
+    assert python_ci["uses"].endswith("reusable-10-ci-python.yml@main")
+    assert python_ci["with"]["primary-python-version"] == "3.14"
+    assert json.loads(python_ci["with"]["python-versions"]) == ["3.13", "3.14"]
+    cross_repo = gate["jobs"]["cross-repo-smoke"]
+    assert cross_repo["uses"] == "./.github/workflows/cross-repo-smoke.yml"
+    smoke = yaml.safe_load((WORKFLOWS / "cross-repo-smoke.yml").read_text(encoding="utf-8"))
+    assert "cross-repo-full-product" in smoke["jobs"]
+
+
+def test_cross_repo_full_product_offline_guards_match_pr_head() -> None:
+    """Cross-repo smoke job pin/runtime checks must pass offline before hosted CI is trusted."""
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/scripts/test_cross_repo_smoke_workflow.py",
+            "tests/scripts/test_cross_repo_dev_pins.py",
+            "-q",
+            "-m",
+            "not slow",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr

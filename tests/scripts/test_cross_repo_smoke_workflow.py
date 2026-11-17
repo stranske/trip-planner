@@ -12,10 +12,12 @@ import re
 import shlex
 import shutil
 import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
 import yaml
+from packaging.requirements import Requirement
 
 WORKFLOW_PATH = (
     Path(__file__).resolve().parents[2] / ".github" / "workflows" / "cross-repo-smoke.yml"
@@ -45,6 +47,38 @@ def test_workflow_pins_tpp_ref(workflow: dict) -> None:
     env = workflow.get("env", {})
     pinned = env.get("TPP_PINNED_REF", "")
     assert re.fullmatch(r"[0-9a-f]{40}", pinned), pinned
+
+
+def _exact_ruff_pin(pyproject: Path) -> str:
+    data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    for raw in data["project"]["optional-dependencies"]["dev"]:
+        req = Requirement(raw)
+        if req.name != "ruff":
+            continue
+        for spec in req.specifier:
+            if spec.operator == "==" and not spec.version.endswith(".*"):
+                return spec.version
+    raise AssertionError(f"no exact ruff pin in {pyproject}")
+
+
+def test_workflow_pinned_ref_matches_offline_snapshot_and_planner_ruff(workflow: dict) -> None:
+    """The smoke workflow pin must have a reviewed snapshot that agrees with planner pins."""
+    repo_root = WORKFLOW_PATH.resolve().parents[2]
+    pinned = workflow["env"]["TPP_PINNED_REF"]
+    snapshot = repo_root / "tests/fixtures/tpp_dev_pins" / pinned / "pyproject.toml"
+    assert snapshot.is_file(), f"missing offline TPP snapshot for workflow pin {pinned}"
+
+    planner_ruff = _exact_ruff_pin(repo_root / "pyproject.toml")
+    snapshot_ruff = _exact_ruff_pin(snapshot)
+    assert planner_ruff == snapshot_ruff == "0.17.5"
+
+    autofix = (repo_root / ".github/workflows/autofix-versions.env").read_text(encoding="utf-8")
+    assert any(
+        line.strip() == "RUFF_VERSION=0.17.5" for line in autofix.splitlines() if line.strip()
+    )
+
+    lock = (repo_root / "requirements.lock").read_text(encoding="utf-8")
+    assert "ruff==0.17.5" in lock
 
 
 def test_workflow_uses_single_top_level_tpp_pin_definition() -> None:
@@ -104,6 +138,18 @@ def test_workflow_uses_stable_setup_action_tags(workflow: dict) -> None:
     assert "actions/setup-node@v7" in uses_values
     assert "actions/setup-python@v5" not in uses_values
     assert "actions/setup-node@v6" not in uses_values
+
+
+def test_cross_repo_smoke_job_uses_python_3_14(workflow: dict) -> None:
+    """Cross-repo smoke must match the primary Python CI runtime (3.14)."""
+    job = workflow["jobs"]["cross-repo-full-product"]
+    setup = next(
+        step
+        for step in job["steps"]
+        if step.get("name") == "Set up Python"
+        and str(step.get("uses", "")).startswith("actions/setup-python@")
+    )
+    assert setup["with"]["python-version"] == "3.14"
 
 
 def test_portal_contract_installs_both_projects_in_its_interpreter(workflow: dict) -> None:
