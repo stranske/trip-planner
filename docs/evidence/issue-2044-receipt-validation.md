@@ -163,3 +163,75 @@ comment and the additive `needs-human` label with `MCP tool call requires
 approval, but approval policy is never`. No PR body, comment or label was changed.
 Apply the verified reconciliation above when PR writes are available. A final
 read confirmed PR #2047 is open and ready for review (`draft=false`).
+
+## Document promotion regression follow-up
+
+Observed locally on 2026-11-17, starting from consumer commit
+`9a1634ac9050bf5dcf9133bd65340c50e3f141b7` with this follow-up applied.
+The baseline whole-file run passed 66 tests. The existing helper validated
+synthetic receipts, but no case exercised a promoted coverage-map document
+through the same registry and prose checks as the repository document.
+
+Extracted those existing checks into `_coverage_map_execution_errors`, which
+continues to call the shared `_coverage_claim_errors` receipt validator. Added
+five named-test parameters using in-memory copies of the actual coverage map:
+
+- A VERIFIED configured-layer registry entry and matching prose pass with a
+  synthetic local receipt containing exact SHAs, scope and observed results.
+- The same document fails with only a workflow filename or a missing receipt.
+- A VERIFIED registry entry fails if either the table row or the preamble still
+  says UNVERIFIED.
+
+The actual README and coverage map retain their UNVERIFIED claims. These tests
+establish only the validator's ability to accept a scoped future update.
+The existing addressability and local-path checks are preserved.
+
+Repeated the required deliberate break by changing only the `workflow-only`
+expected diagnostics to `[]`. The named test reported **1 failed, 63 passed**,
+exit 1, specifically:
+
+```text
+test_coverage_map_keeps_claims_scoped_to_their_evidence[workflow-only]
+AssertionError: assert ['VERIFIED ne...low filename'] == []
+Left contains one more item: 'VERIFIED needs a local JSON receipt, not a workflow filename'
+```
+
+DNS and socket connection calls remained patched to fail on network requests.
+Restored the rejection expectation, then verified:
+
+| Command | Observed result |
+| --- | --- |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py::test_coverage_map_keeps_claims_scoped_to_their_evidence -q -m "not slow"` | Exit 0; 64 passed |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py -q -m "not slow"` | Exit 0; 71 passed |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py tests/test_repo_hygiene.py -q -m "not slow"` | Exit 0; 87 passed, 1 existing skip |
+| `ruff check tests/preferences/test_legacy_request_adapter.py` | Exit 0 |
+| `git diff --check` | Exit 0 |
+
+Ran Black on the changed file. As in the preceding run, the repository-wide
+command stalled in the sandbox. Checked all 530 sources through Black's serial
+`reformat_one` CHECK API using the CLI's source discovery, project configuration
+and inferred Python targets, with no formatting changes needed. Then reran the
+required CLI gate using that freshly populated cache:
+
+```bash
+BLACK_NUM_WORKERS=1 BLACK_CACHE_DIR=/tmp/black-issue-2044-document black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+Observed exit 0, **530 files would be left unchanged**.
+
+### Delivery status for this follow-up
+
+Attempted `test: exercise receipt-backed documentation promotion` on the existing
+PR branch. `git add` exited 128 because `.git/index.lock` is on a read-only
+filesystem. The changed Python test and this evidence record remain local.
+Commit them from the automation runner's writable Git environment; no branch or
+pull request was created.
+
+The GitHub connector rejected the verified PR checklist/results update, the
+results/blocker comment and the additive `needs-human` label with
+`MCP tool call requires approval, but approval policy is never`. No PR body,
+comment or label was changed by this follow-up. The implementation and local
+test requirements are verified, including the duplicate entries. Publishing
+the failure/revert evidence in the PR and reconciling its checkboxes still
+require an environment permitting PR writes. A final read confirmed PR #2047
+remains open and ready for review (`draft=false`).

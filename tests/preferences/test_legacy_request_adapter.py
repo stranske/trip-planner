@@ -225,6 +225,26 @@ def _coverage_claim_errors(claim: dict, root: Path) -> list[str]:
     return errors
 
 
+def _coverage_map_execution_errors(text: str, root: Path) -> list[str]:
+    """Apply the receipt contract and prose consistency checks to a document."""
+    blocks = re.findall(r"```json\n(.*?)\n```", text, re.DOTALL)
+    assert len(blocks) == 1, "Keep execution claims in one structured registry"
+    claims = json.loads(blocks[0])["execution_claims"]
+    assert len(claims) == len(_PROOF_LAYERS)
+    assert {claim["layer"] for claim in claims} == _PROOF_LAYERS
+    errors = [error for claim in claims for error in _coverage_claim_errors(claim, root)]
+    configured = next(claim for claim in claims if claim["layer"] == "configured_full_product")
+    # Word boundaries distinguish VERIFIED from the suffix of UNVERIFIED.
+    for prefix in (
+        "| Current full-product configured TPP transport |",
+        "> **Current configured execution:",
+    ):
+        line = next(line for line in text.splitlines() if line.startswith(prefix))
+        if not re.search(rf"\b{configured['status']}\b", line):
+            errors.append(f"Configured execution status mismatch: {prefix}")
+    return errors
+
+
 @pytest.mark.parametrize(
     "case",
     [
@@ -252,6 +272,11 @@ def _coverage_claim_errors(claim: dict, root: Path) -> list[str]:
         "optional-gate",
         "disabled-gate",
         "remote-locators",
+        "document-verified",
+        "document-workflow-only",
+        "document-missing-receipt",
+        "document-row-status-mismatch",
+        "document-preamble-status-mismatch",
     ]
     + [f"missing-{field}" for field in ("consumer_sha", "producer_sha", "environment", "command")]
     + [
@@ -296,25 +321,7 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
     assert pin is not None and pin.group(1) in text
     assert "tests/integration/test_authenticated_two_app_handoff.py" in text
     assert "python scripts/check_full_product_verification.py --live-tpp=required" in text
-    blocks = re.findall(r"```json\n(.*?)\n```", text, re.DOTALL)
-    assert len(blocks) == 1, "Keep execution claims in one structured registry"
-    claims = json.loads(blocks[0])["execution_claims"]
-    assert len(claims) == len(_PROOF_LAYERS)
-    assert {claim["layer"] for claim in claims} == _PROOF_LAYERS
-    for claim in claims:
-        assert _coverage_claim_errors(claim, root) == []
-    configured = next(claim for claim in claims if claim["layer"] == "configured_full_product")
-    full_product_row = next(
-        line
-        for line in text.splitlines()
-        if line.startswith("| Current full-product configured TPP transport |")
-    )
-    # Compare the prose with its validated entry, allowing either supported
-    # status as receipts become available. Word boundaries distinguish VERIFIED
-    # from the suffix of UNVERIFIED.
-    assert re.search(rf"\b{configured['status']}\b", full_product_row)
-    preamble = next(line for line in text.splitlines() if "Current configured execution:" in line)
-    assert re.search(rf"\b{configured['status']}\b", preamble)
+    assert _coverage_map_execution_errors(text, root) == []
     if case == "repository":
         return
 
@@ -363,6 +370,16 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
         "empty-summary": ["Receipt needs an observed PASS, summary and zero skips"],
         "optional-gate": ["Configured full-product proof needs the required live-TPP gate"],
         "disabled-gate": ["Configured full-product proof needs the required live-TPP gate"],
+        "document-workflow-only": ["VERIFIED needs a local JSON receipt, not a workflow filename"],
+        "document-missing-receipt": [
+            "VERIFIED needs a local JSON receipt, not a workflow filename"
+        ],
+        "document-row-status-mismatch": [
+            "Configured execution status mismatch: | Current full-product configured TPP transport |"
+        ],
+        "document-preamble-status-mismatch": [
+            "Configured execution status mismatch: > **Current configured execution:"
+        ],
     }
     expected = expected_errors.get(case, [])
     if case.startswith("verified-"):
@@ -449,7 +466,11 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
     elif case == "remote-locators":
         receipt["run"] = "https://github.com/example/fixture/actions/runs/123"
         receipt["artifact"] = "https://github.com/example/fixture/actions/runs/123/artifacts/456"
-    elif case not in {"missing-receipt", "malformed-receipt", "non-object-receipt"}:
+    elif not case.startswith("document-") and case not in {
+        "missing-receipt",
+        "malformed-receipt",
+        "non-object-receipt",
+    }:
         raise AssertionError(f"Unhandled fixture case: {case}")
 
     receipt_path = tmp_path / "receipt.json"
@@ -460,5 +481,34 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
         receipt_path.write_text("{", encoding="utf-8")
     elif case == "non-object-receipt":
         receipt_path.write_text("[]", encoding="utf-8")
+    if case.startswith("document-"):
+        # Promote only an in-memory copy, using the same checks as the real map.
+        block = re.search(r"```json\n(.*?)\n```", text, re.DOTALL)
+        registry = json.loads(block.group(1))
+        configured = next(
+            item
+            for item in registry["execution_claims"]
+            if item["layer"] == "configured_full_product"
+        )
+        previous_status = configured["status"]
+        configured.clear()
+        configured.update(claim)
+        if case == "document-workflow-only":
+            configured["receipt"] = "workflow.yml"
+        elif case == "document-missing-receipt":
+            receipt_path.unlink()
+        text = text[: block.start(1)] + json.dumps(registry) + text[block.end(1) :]
+        lines = text.splitlines()
+        for index, line in enumerate(lines):
+            if line.startswith("| Current full-product configured TPP transport |"):
+                promote = case != "document-row-status-mismatch"
+            elif line.startswith("> **Current configured execution:"):
+                promote = case != "document-preamble-status-mismatch"
+            else:
+                continue
+            status = "VERIFIED" if promote else "UNVERIFIED"
+            lines[index] = re.sub(rf"\b{previous_status}\b", status, line)
+        assert _coverage_map_execution_errors("\n".join(lines), tmp_path) == expected
+        return
     errors = _coverage_claim_errors(claim, tmp_path)
     assert errors == expected
