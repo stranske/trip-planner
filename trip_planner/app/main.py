@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from trip_planner.app import APP_VERSION
 from trip_planner.app.database_status import DatabaseStatus
 from trip_planner.app.routes.auth import router as auth_router
+from trip_planner.app.routes.budget import budget_currency_conflict_response
 from trip_planner.app.routes.budget import router as budget_router
 from trip_planner.app.routes.flight_search import router as flight_search_router
 from trip_planner.app.routes.health import router as health_router
@@ -23,6 +24,7 @@ from trip_planner.app.routes.scenario_history import router as scenario_history_
 from trip_planner.app.routes.trip_prices import router as trip_prices_router
 from trip_planner.app.routes.trips import router as trips_router
 from trip_planner.app.routes.workspace import router as workspace_router
+from trip_planner.app.services.budget import WorkspaceBudgetSpendCurrencyMismatchError
 from trip_planner.integrations.tpp.portal_identity import configured_portal_client
 from trip_planner.integrations.tpp.portal_receipt_client import OwnerPortalReceiptClient
 from trip_planner.persistence.db import ensure_database_ready
@@ -81,6 +83,9 @@ def create_app(*, portal_receipt_client: OwnerPortalReceiptClient | None = None)
     )
     app.state.portal_receipt_client = (
         portal_receipt_client if portal_receipt_client is not None else configured_portal_client()
+    )
+    app.add_exception_handler(
+        WorkspaceBudgetSpendCurrencyMismatchError, budget_currency_conflict_response
     )
 
     @app.exception_handler(RequestValidationError)
