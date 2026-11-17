@@ -56,7 +56,18 @@ def _budget_violations(
         return []
     currency = money[1] if money is not None else currency_hint
     if currency != "USD":
-        return []
+        actual_amount = money[0] if money is not None else None
+        return [
+            {
+                "rule_id": rule_id,
+                "message": ("Trip cost is not in USD; the configured spend cap cannot be checked."),
+                "cap_amount": cap_amount,
+                "actual_amount": actual_amount,
+                "currency": currency,
+                "incomplete": True,
+                "reason": "currency_uncheckable",
+            }
+        ]
     if money is None:
         return [
             {
@@ -99,7 +110,19 @@ def _lodging_violations(
         else "USD"
     )
     if currency != "USD":
-        return []
+        return [
+            {
+                "rule_id": rule_id,
+                "message": (
+                    "Nightly rate is not in USD; the configured lodging cap cannot be checked."
+                ),
+                "cap_amount": nightly_cap,
+                "actual_amount": nightly_actual,
+                "currency": currency,
+                "incomplete": True,
+                "reason": "currency_uncheckable",
+            }
+        ]
     if nightly_actual is None:
         return [
             {
@@ -218,10 +241,18 @@ def build_scenario_policy_preview(
         violations.append(label_violation)
 
     if violations and all(item.get("incomplete") for item in violations):
+        currency_uncheckable = any(
+            item.get("reason") == "currency_uncheckable" for item in violations
+        )
+        status_label = (
+            "Non-USD trip cost (preview)"
+            if currency_uncheckable
+            else "Trip cost unavailable (preview)"
+        )
         return {
             **base,
             "status": "preview_incomplete",
-            "status_label": "Trip cost unavailable (preview)",
+            "status_label": status_label,
             "compliant": None,
             "snapshot_available": True,
             "violations": violations,

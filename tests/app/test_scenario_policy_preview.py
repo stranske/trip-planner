@@ -337,7 +337,9 @@ def test_non_usd_scenario_skips_usd_budget_cap_comparison() -> None:
         estimated_total={"currency": "EUR", "typical_amount": 9999},
     )
 
-    assert not any(item["rule_id"] == "BUD-001" for item in preview["violations"])
+    budget = next(item for item in preview["violations"] if item["rule_id"] == "BUD-001")
+    assert budget["incomplete"] is True
+    assert budget["reason"] == "currency_uncheckable"
 
 
 @pytest.mark.parametrize(
@@ -375,8 +377,11 @@ def test_non_usd_missing_amount_skips_usd_budget_cap(amount: Any) -> None:
         estimated_total={"currency": "EUR", "typical_amount": amount},
     )
 
-    assert preview["violations"] == []
-    assert preview["status"] == "compliant"
+    assert preview["compliant"] is None
+    assert preview["status"] == "preview_incomplete"
+    assert preview["status_label"] == "Non-USD trip cost (preview)"
+    assert {item["rule_id"] for item in preview["violations"]} == {"BUD-001", "LOD-001"}
+    assert all(item.get("reason") == "currency_uncheckable" for item in preview["violations"])
 
 
 def test_non_usd_absent_amount_preserves_known_policy_violation() -> None:
@@ -387,8 +392,78 @@ def test_non_usd_absent_amount_preserves_known_policy_violation() -> None:
         scenario_label="exception_nearest",
     )
 
-    assert [item["rule_id"] for item in preview["violations"]] == ["POL-EXC"]
+    assert {item["rule_id"] for item in preview["violations"]} == {
+        "BUD-001",
+        "LOD-001",
+        "POL-EXC",
+    }
     assert preview["compliant"] is False
+    assert preview["status"] == "non_compliant"
+
+
+@pytest.mark.parametrize(
+    "estimated_total",
+    [
+        {"currency": "EUR", "typical_amount": 9999},
+        {"currency": "EUR"},
+    ],
+)
+def test_non_usd_total_with_usd_caps_is_preview_incomplete(estimated_total: dict[str, Any]) -> None:
+    preview = build_scenario_policy_preview(
+        policy_state=FIXTURE_POLICY,
+        trip_mode="business",
+        estimated_total=estimated_total,
+    )
+
+    assert preview["compliant"] is None
+    assert preview["status"] == "preview_incomplete"
+    assert preview["status_label"] == "Non-USD trip cost (preview)"
+    assert {item["rule_id"] for item in preview["violations"]} == {"BUD-001", "LOD-001"}
+    assert all(
+        item.get("incomplete") is True and item.get("reason") == "currency_uncheckable"
+        for item in preview["violations"]
+    )
+
+    record = PersistedTrip(
+        trip_id="trip-non-usd-preview",
+        title="Euro-priced summit",
+        mode="business",
+        duration_days=1,
+        primary_regions=["Berlin"],
+    )
+    fixture_path = (
+        Path(__file__).resolve().parents[2]
+        / "trip_planner/resources/state/scenarios/business_compliant_vs_exception.json"
+    )
+    saved_scenarios = json.loads(fixture_path.read_text())["records"]
+    compliant_scenario = next(
+        scenario
+        for scenario in saved_scenarios
+        if scenario["saved_scenario_id"] == "saved-scenario:compliant-first"
+    )
+    compliant_scenario["versions"][0]["notes"] = []
+    search = build_saved_scenario_search(record, saved_scenarios=saved_scenarios)
+    compliant_row = next(
+        row for row in search["scenarios"] if row["scenario_id"] == "saved-scenario:compliant-first"
+    )
+    compliant_row["scenario_summary"]["estimated_total"] = dict(estimated_total)
+    comparison = workspace_service._build_runtime_scenario_comparison(
+        trip_id=record.trip_id,
+        trip_title=record.title,
+        scenario_search=search,
+        policy_state=FIXTURE_POLICY,
+        trip_mode="business",
+    )
+    workspace_preview = next(
+        row["policy_preview"]
+        for row in comparison["scenarios"]
+        if row["scenario_id"] == "saved-scenario:compliant-first"
+    )
+    assert workspace_preview["status"] == "preview_incomplete"
+    assert workspace_preview["compliant"] is None
+    assert all(
+        item.get("reason") == "currency_uncheckable" for item in workspace_preview["violations"]
+    )
 
 
 def test_policy_import_persists_budget_rules_for_scenario_preview(
