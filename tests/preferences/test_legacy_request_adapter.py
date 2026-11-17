@@ -1,5 +1,9 @@
 import json
+import re
+import socket
 from pathlib import Path
+
+import pytest
 
 from trip_planner.preferences.legacy_request_adapter import (
     adapt_legacy_request,
@@ -140,8 +144,130 @@ def test_coverage_map_path_check_rejects_missing_and_accepts_same_directory_link
     assert _coverage_map_reference_errors("[contract](domain-contracts.md)", root) == []
 
 
-def test_coverage_map_keeps_claims_scoped_to_their_evidence() -> None:
-    import re
+_PROOF_LAYERS = {
+    "fixture_lifecycle",
+    "local_http_transport",
+    "pinned_two_app",
+    "native_lineage",
+    "configured_full_product",
+    "hosted_in_perimeter",
+    "maps_provider",
+    "deployment_restart",
+}
+
+
+def _coverage_claim_errors(claim: dict, root: Path) -> list[str]:
+    """Check a bounded receipt contract offline; never infer execution from paths."""
+
+    def local_file(value: object) -> Path | None:
+        if not isinstance(value, str) or not value or Path(value).is_absolute():
+            return None
+        path = (root / value).resolve()
+        return path if path.is_relative_to(root.resolve()) and path.is_file() else None
+
+    if claim.get("layer") not in _PROOF_LAYERS:
+        return ["Unknown proof layer"]
+    if claim.get("status") == "UNVERIFIED":
+        gate = claim.get("required_gate")
+        return (
+            [] if isinstance(gate, str) and gate.strip() else ["UNVERIFIED needs a required gate"]
+        )
+    if claim.get("status") != "VERIFIED":
+        return ["Unknown execution status"]
+
+    receipt_path = local_file(claim.get("receipt"))
+    if receipt_path is None or receipt_path.suffix != ".json":
+        return ["VERIFIED needs a local JSON receipt, not a workflow filename"]
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ["Unreadable JSON receipt"]
+    if not isinstance(receipt, dict):
+        return ["Receipt must be an object"]
+
+    errors = []
+    for field in ("layer", "consumer_sha", "producer_sha", "environment", "command"):
+        value = claim.get(field)
+        if not isinstance(value, str) or not value.strip():
+            errors.append(f"Missing claim {field}")
+        elif receipt.get(field) != value:
+            errors.append(f"Receipt {field} mismatch")
+        if field.endswith("_sha") and not re.fullmatch(r"[0-9a-f]{40}", str(value)):
+            errors.append(f"{field} must be an exact full SHA")
+    for field in ("run", "artifact"):
+        locator = receipt.get(field)
+        # Remote locators are checked for shape only, never fetched. A local
+        # locator must resolve to a retained file, not workflow configuration.
+        remote_pattern = r"https://github\.com/[^/\s]+/[^/\s]+/actions/runs/[1-9][0-9]*"
+        if field == "artifact":
+            remote_pattern += r"/artifacts/[1-9][0-9]*"
+        path = local_file(locator)
+        if not (
+            isinstance(locator, str)
+            and re.fullmatch(remote_pattern, locator)
+            or path is not None
+            and path.suffix in {".log", ".txt", ".json", ".zip"}
+        ):
+            errors.append(f"Missing or invalid {field} locator")
+    observed = receipt.get("observed_result")
+    if not isinstance(observed, dict) or not (
+        observed.get("status") == "PASS"
+        and isinstance(observed.get("summary"), str)
+        and observed["summary"].strip()
+        and observed.get("skipped") == 0
+    ):
+        errors.append("Receipt needs an observed PASS, summary and zero skips")
+    if claim["layer"] == "configured_full_product" and claim.get("command") != (
+        "python scripts/check_full_product_verification.py --live-tpp=required"
+    ):
+        errors.append("Configured full-product proof needs the required live-TPP gate")
+    return errors
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "repository",
+        "unverified",
+        "unverified-without-gate",
+        "workflow-only",
+        "missing-receipt",
+        "malformed-receipt",
+        "non-object-receipt",
+        "receipt-outside-root",
+        "unknown-layer",
+        "unknown-status",
+        "short-sha",
+        "missing-run",
+        "missing-artifact",
+        "workflow-as-run",
+        "workflow-as-artifact",
+        "missing-local-artifact",
+        "missing-observed-result",
+        "failed-result",
+        "skipped-result",
+        "empty-summary",
+        "optional-gate",
+        "disabled-gate",
+        "remote-locators",
+    ]
+    + [f"missing-{field}" for field in ("consumer_sha", "producer_sha", "environment", "command")]
+    + [
+        f"mismatched-{field}"
+        for field in ("layer", "consumer_sha", "producer_sha", "environment", "command")
+    ]
+    + [f"verified-{layer}" for layer in sorted(_PROOF_LAYERS)],
+)
+def test_coverage_map_keeps_claims_scoped_to_their_evidence(
+    case: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def reject_network(*args, **kwargs):
+        pytest.fail("Receipt validation must not make network requests")
+
+    monkeypatch.setattr(socket, "create_connection", reject_network)
+    monkeypatch.setattr(socket, "getaddrinfo", reject_network)
+    monkeypatch.setattr(socket.socket, "connect", reject_network)
+    monkeypatch.setattr(socket.socket, "connect_ex", reject_network)
 
     root = Path(__file__).resolve().parents[2]
     text = (root / "docs/design-coverage-map.md").read_text(encoding="utf-8")
@@ -152,7 +278,6 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence() -> None:
     assert "tests/preferences/test_legacy_request_adapter.py" in legacy
     assert "no dedicated test" not in legacy
     assert "allow_fixture_fallback=False" in text
-    assert "Current configured execution: UNVERIFIED" in text
     assert "Path validity is a documentation check, not behavioral verification" in normalized
     assert "Historical May baseline (not rerun)" in text
     assert "976 passed, 1 xfailed" in text
@@ -163,17 +288,111 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence() -> None:
     assert pin is not None and pin.group(1) in text
     assert "tests/integration/test_authenticated_two_app_handoff.py" in text
     assert "python scripts/check_full_product_verification.py --live-tpp=required" in text
+    blocks = re.findall(r"```json\n(.*?)\n```", text, re.DOTALL)
+    assert len(blocks) == 1, "Keep execution claims in one structured registry"
+    claims = json.loads(blocks[0])["execution_claims"]
+    assert len(claims) == len(_PROOF_LAYERS)
+    assert {claim["layer"] for claim in claims} == _PROOF_LAYERS
+    for claim in claims:
+        assert _coverage_claim_errors(claim, root) == []
+    configured = next(claim for claim in claims if claim["layer"] == "configured_full_product")
     full_product_row = next(
         line
         for line in text.splitlines()
         if line.startswith("| Current full-product configured TPP transport |")
     )
-    assert "🟡 Partial" in full_product_row
-    assert "UNVERIFIED" in full_product_row and "Required gate" in full_product_row
-    partial_rows = [
-        line for line in text.splitlines() if line.startswith("|") and "🟡 Partial" in line
-    ]
-    for row in partial_rows:
-        if row.startswith("| 🟡 Partial |"):
-            continue  # Legend, not a delivery claim.
-        assert "UNVERIFIED" in row and "Required gate" in row
+    # Compare the prose with its validated entry, allowing either supported
+    # status as receipts become available. Word boundaries distinguish VERIFIED
+    # from the suffix of UNVERIFIED.
+    assert re.search(rf"\b{configured['status']}\b", full_product_row)
+    preamble = next(line for line in text.splitlines() if "Current configured execution:" in line)
+    assert re.search(rf"\b{configured['status']}\b", preamble)
+    if case == "repository":
+        return
+
+    # Synthetic local fixtures exercise validation, never establish a real run.
+    claim = {
+        "layer": "configured_full_product",
+        "status": "VERIFIED",
+        "consumer_sha": "a" * 40,
+        "producer_sha": "b" * 40,
+        "environment": "local Linux / Python 3.14 / HTTP / SQLite / synthetic providers",
+        "command": "python scripts/check_full_product_verification.py --live-tpp=required",
+        "receipt": "receipt.json",
+    }
+    receipt = {key: value for key, value in claim.items() if key not in {"status", "receipt"}}
+    receipt.update(
+        run="run.log",
+        artifact="result.json",
+        observed_result={
+            "status": "PASS",
+            "summary": "Synthetic scoped journey passed",
+            "skipped": 0,
+        },
+    )
+    (tmp_path / "run.log").write_text("Synthetic local run fixture\n", encoding="utf-8")
+    (tmp_path / "result.json").write_text('{"fixture": true}\n', encoding="utf-8")
+    (tmp_path / "workflow.yml").write_text("name: configuration only\n", encoding="utf-8")
+    valid = case in {"unverified", "remote-locators"} or case.startswith("verified-")
+    if case.startswith("verified-"):
+        claim["layer"] = receipt["layer"] = case.removeprefix("verified-")
+    elif case.startswith("missing-") and case.removeprefix("missing-") in claim:
+        claim.pop(case.removeprefix("missing-"))
+    elif case.startswith("mismatched-"):
+        field = case.removeprefix("mismatched-")
+        receipt[field] = "c" * 40 if field.endswith("_sha") else "another scope"
+    elif case == "unverified":
+        claim = {
+            "layer": "configured_full_product",
+            "status": "UNVERIFIED",
+            "required_gate": "Run gate",
+        }
+    elif case == "unverified-without-gate":
+        claim = {"layer": "configured_full_product", "status": "UNVERIFIED"}
+    elif case == "workflow-only":
+        claim = {
+            "layer": "configured_full_product",
+            "status": "VERIFIED",
+            "receipt": "workflow.yml",
+        }
+    elif case == "receipt-outside-root":
+        claim["receipt"] = "../receipt.json"
+    elif case == "unknown-layer":
+        claim["layer"] = "all_layers"
+    elif case == "unknown-status":
+        claim["status"] = "IMPLEMENTED"
+    elif case == "short-sha":
+        claim["consumer_sha"] = receipt["consumer_sha"] = "abcdef0"
+    elif case in {"missing-run", "missing-artifact", "missing-observed-result"}:
+        receipt.pop(case.removeprefix("missing-").replace("-", "_"))
+    elif case in {"workflow-as-run", "workflow-as-artifact"}:
+        receipt[case.removeprefix("workflow-as-")] = "workflow.yml"
+    elif case == "missing-local-artifact":
+        receipt["artifact"] = "absent.json"
+    elif case == "failed-result":
+        receipt["observed_result"]["status"] = "FAIL"
+    elif case == "skipped-result":
+        receipt["observed_result"]["skipped"] = 1
+    elif case == "empty-summary":
+        receipt["observed_result"]["summary"] = " "
+    elif case in {"optional-gate", "disabled-gate"}:
+        command = "python scripts/check_full_product_verification.py"
+        claim["command"] = receipt["command"] = command + (
+            " --live-tpp=off" if case == "disabled-gate" else ""
+        )
+    elif case == "remote-locators":
+        receipt["run"] = "https://github.com/example/fixture/actions/runs/123"
+        receipt["artifact"] = "https://github.com/example/fixture/actions/runs/123/artifacts/456"
+    elif case not in {"missing-receipt", "malformed-receipt", "non-object-receipt"}:
+        raise AssertionError(f"Unhandled fixture case: {case}")
+
+    receipt_path = tmp_path / "receipt.json"
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+    if case == "missing-receipt":
+        receipt_path.unlink()
+    elif case == "malformed-receipt":
+        receipt_path.write_text("{", encoding="utf-8")
+    elif case == "non-object-receipt":
+        receipt_path.write_text("[]", encoding="utf-8")
+    errors = _coverage_claim_errors(claim, tmp_path)
+    assert (errors == []) == valid, errors

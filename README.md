@@ -7,7 +7,7 @@
 
 The runtime baseline now treats the saved trip record as the durable planning container. New scenario, budget, workspace, and policy work should attach to a persisted trip instead of inventing a parallel root object.
 Saved scenarios and trip-level planning history now persist underneath that same trip container, so later comparison and workspace slices should consume those records instead of reintroducing fixture-only storage.
-The shipped full-stack MVP now includes authenticated trip creation, persisted trip and scenario routes, the workspace shell, planner session APIs, stored policy/proposal state, and a provider-backed map adapter seam with bounded fallback rendering. Live external policy transport remains a follow-on integration, so docs and checks in this repo should describe that gap explicitly instead of implying it already ships.
+The shipped full-stack MVP now includes authenticated trip creation, persisted trip and scenario routes, the workspace shell, planner session APIs, stored policy/proposal state, and a provider-backed map adapter seam with bounded fallback rendering. TPP HTTP transport is implemented; observed execution depends on the exact revisions, configuration and environment. Current configured and hosted/in-perimeter execution remain **UNVERIFIED** without a checked receipt.
 
 ## Current MVP Surfaces
 
@@ -18,7 +18,9 @@ The current runtime already ships these inspectable application surfaces:
 - planner session APIs and workspace state hydration for the frontend app shell
 - stored proposal and policy posture state that later `Travel-Plan-Permission` work can consume
 
-The current runtime ships a Google Maps JavaScript adapter boundary for the workspace map surface, with CI-safe mocked rendering and fallback states for missing config, provider load errors, and sparse route data. Remote `Travel-Plan-Permission` execution remains an explicit follow-on integration, so local runtime checks and product docs should continue to call that out as deferred.
+The current runtime ships a Google Maps JavaScript adapter boundary for the workspace map surface, with CI-safe mocked rendering and fallback states for missing config, provider load errors, and sparse route data. The `Travel-Plan-Permission` HTTP client and pinned local two-app checks also exist. Those local boundaries do not establish hosted or in-perimeter execution.
+
+The cross-repo smoke workflow is configured for pushes and pull requests to `main`, plus manual/reusable invocation, with a pinned TPP producer. Configuration does not establish that any particular run started or passed, or that every `main` push succeeds. A verified execution claim needs a checked receipt for its exact consumer/producer SHAs, command, environment, run/artifact locators and observed result. The [coverage map's receipt contract](docs/design-coverage-map.md#execution-receipt-contract) keeps local transport, pinned two-app, full-product and hosted/in-perimeter proof separate. Historical runs do not verify the current revision pair.
 
 ## Persisted Workspace Runtime Behavior
 
@@ -174,7 +176,7 @@ The verification path covers:
 - a smoke test that runs the frontend client against a live backend process
 - a separate full-product check for fresh leisure and business product journeys
 
-These checks validate the local full-stack MVP that already exists in this repo. They exercise the map adapter and fallback seam with mocked provider state. They do not prove live Google Maps rendering or remote Travel-Plan-Permission transport.
+These checks exercise the local full-stack MVP and the map adapter/fallback seam with mocked provider state. Default or skipped integration checks do not prove live Google Maps rendering or configured TPP execution. The explicit `python scripts/check_full_product_verification.py --live-tpp=required` gate requires TPP execution; a successful receipt still proves only its recorded revision pair and environment, and local execution does not establish hosted/in-perimeter acceptance.
 The production-focused testing plan in [docs/local-testing-plan.md](docs/local-testing-plan.md) adds the critical auth, trip, workspace, policy, proposal, and preview-verification journeys on top of that baseline.
 
 ## Demo Deploy (data-zoned)
@@ -303,4 +305,4 @@ That distinction matters for docs and verification messaging:
 - missing live integration env vars are not setup failures for the shipped MVP
 - missing Google Maps configuration or a provider load error should preserve route context through the fallback map instead of blanking the workspace
 - fallback map behavior is intentionally bounded: route-context overlays, markers, route summaries, and detail panels stay visible, but live provider-only interactions do not
-- live remote `Travel-Plan-Permission` execution remains deferred unless you deliberately configure that seam
+- TPP HTTP transport is available when configured; current configured and hosted/in-perimeter execution remain UNVERIFIED without their own checked receipts
