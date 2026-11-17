@@ -83,3 +83,13 @@ def test_acceptance_criterion_deliberate_break_revert_documented() -> None:
     assert "approval-packet-document" in doc
     assert "039d13fb" in doc and "87d7f2eb" in doc
     assert "Deliberate break → revert" in doc or "Deliberate break" in doc
+
+
+def test_reconciled_pr_body_marks_all_acceptance_criteria_complete() -> None:
+    """Keepalive reconciliation: PR body checkboxes when GitHub API is unavailable."""
+    body = Path("docs/verification/pr-2046-reconciled-pr-body.md").read_text(encoding="utf-8")
+    assert "6/6 tasks complete" in body
+    assert "approval-packet-journey.spec.ts" in body
+    assert body.count("- [x]") >= 8
+    assert "- [ ]" not in body.split("### Acceptance criteria")[1]
+    assert "039d13fb" in body and "87d7f2eb" in body

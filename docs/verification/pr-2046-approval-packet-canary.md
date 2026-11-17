@@ -104,3 +104,17 @@ Full canary (ports 8806/5184/8114) after `pip install -e ".[dev]"`, `npm --prefi
 - Summary: **2 passed** — `Two-trip UI canary PASS (simulated TPP transport at http://127.0.0.1:8114)`
 
 All PR tasks and acceptance criteria are satisfied on `cursor/issue-2043`.
+
+## Keepalive re-verification (2026-11-17, PR body reconciliation)
+
+GitHub API tokens are not available in every keepalive sandbox, so the reconciled PR
+checklist lives at `docs/verification/pr-2046-reconciled-pr-body.md` (gated by
+`test_reconciled_pr_body_marks_all_acceptance_criteria_complete`).
+
+Structural guards: `pytest tests/scripts/test_two_trip_ui_canary_wiring.py -m "not slow"` → **9 passed**.
+
+Full canary (ports 8806/5184/8114):
+
+- Named journey → **passed** (3.1s)
+- `two-trip-canary.spec.ts` → **passed** (7.3s)
+- Summary: **2 passed**
