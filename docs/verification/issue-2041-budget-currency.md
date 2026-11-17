@@ -86,3 +86,30 @@ in the working tree. PR #2049 was verified open with `draft=false`.
   bind a local socket (`PermissionError: [Errno 1] Operation not permitted`).
   Per the pre-commit gate, these follow-up changes must remain uncommitted until
   that command passes in a runner permitting the required local operations.
+
+## Follow-up on checked-out commit ab1e6d03
+
+Reviewed `e088174a`, `288091f6`, `aa1e8522`, and `ab1e6d03`. The implementation,
+mutation-check evidence, and spend-write regression are already present. The
+named HTTP acceptance criterion remains unchecked because this runner cannot
+execute its TestClient prerequisite.
+
+Extended the named HTTP regression and the direct-route SQLite regression to
+cover one-cent spend as well as ordinary amounts. Any existing spend must block
+an incompatible currency change, even for the smallest positive cent amount.
+The model rejects zero amounts; zero-valued spend is not a valid HTTP fixture.
+
+- `python3 -m pytest tests/persistence/test_budget_currency_atomicity.py -q -m "not slow"`
+  passes: **2 passed**, 14 dependency warnings. Both cases verify 422, no pending
+  ORM changes or SQL writes, unchanged persisted rows, totals and version count.
+- The named HTTP command and the complete route file both exit unsuccessfully
+  because the unchanged runtime prerequisite cannot send a local socket-pair
+  wakeup byte (`PermissionError`). No test bypasses or transport adapters used.
+- Black formats each changed Python file individually at line length 100. Ruff
+  and `git diff --check` pass. The required repository-wide Black check still
+  fails before formatting checks because the multiprocessing forkserver cannot
+  bind a local socket. No commit was attempted after that failed gate.
+- PR-body reconciliation was attempted before continuing. The GitHub connector
+  rejected it because writes require approval and the approval policy is `never`.
+  The remaining HTTP checkbox must stay unchecked until verified in a runner
+  that permits the required socket operations.

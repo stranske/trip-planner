@@ -441,25 +441,38 @@ def budget_url(client: TestClient) -> str:
     return url
 
 
+@pytest.mark.parametrize(
+    "food_amount,lodging_amount,actual_total",
+    [(30, 45.5, 75.5), (0.01, 0.01, 0.02)],
+    ids=["ordinary-spend", "one-cent-spend"],
+)
 def test_plan_currency_change_rejected_when_spend_in_other_currency(
-    client: TestClient, budget_url: str
+    client: TestClient,
+    budget_url: str,
+    food_amount: float,
+    lodging_amount: float,
+    actual_total: float,
 ) -> None:
     recorded = client.post(
         f"{budget_url}/spend-events",
-        json={"category_key": "food", "amount": 30, "source_context": "Lunch"},
+        json={"category_key": "food", "amount": food_amount, "source_context": "Lunch"},
     )
     assert recorded.status_code == 200
     recorded = client.post(
         f"{budget_url}/spend-events",
-        json={"category_key": "lodging", "amount": 45.5, "source_context": "Hotel deposit"},
+        json={
+            "category_key": "lodging",
+            "amount": lodging_amount,
+            "source_context": "Hotel deposit",
+        },
     )
     assert recorded.status_code == 200
     before = recorded.json()
     plan_id = before["budget_plan"]["budget_plan_id"]
     assert len(before["spend_events"]) == 2
     assert before["summary"]["planned_total"] == 150
-    assert before["summary"]["actual_total"] == 75.5
-    assert before["summary"]["remaining_total"] == 74.5
+    assert before["summary"]["actual_total"] == actual_total
+    assert before["summary"]["remaining_total"] == 150 - actual_total
     assert before["summary"]["version_count"] == 1
     trip_id = before["budget_plan"]["trip_id"]
     persisted_before = _persisted_budget_state(trip_id)

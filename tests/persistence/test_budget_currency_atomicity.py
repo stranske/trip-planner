@@ -88,7 +88,12 @@ def _snapshot(session: Session) -> dict[str, list[dict]]:
     }
 
 
-def test_currency_rejection_precedes_any_sql_mutation(budget_session: Session) -> None:
+@pytest.mark.parametrize(
+    "amount", [Decimal("30.50"), Decimal("0.01")], ids=["ordinary-spend", "one-cent-spend"]
+)
+def test_currency_rejection_precedes_any_sql_mutation(
+    budget_session: Session, amount: Decimal
+) -> None:
     user = AuthenticatedUser(user_id="owner", email="owner@example.com", display_name="Owner")
     initial = save_workspace_budget("trip", _request("USD", 150), user, budget_session)
     assert initial.budget_plan is not None
@@ -98,7 +103,7 @@ def test_currency_rejection_precedes_any_sql_mutation(budget_session: Session) -
             trip_id="trip",
             budget_plan_id="budget-plan:trip",
             category_key="food",
-            amount=Decimal("30.50"),
+            amount=amount,
             currency="USD",
             occurred_at="2026-11-17T00:00:00Z",
             source_kind="manual",
@@ -131,6 +136,6 @@ def test_currency_rejection_precedes_any_sql_mutation(budget_session: Session) -
         payload = get_workspace_budget_payload(reader, user=user, trip_id="trip")
         assert payload["spend_events"][0]["spend_event_id"] == "lunch"
         assert payload["summary"]["planned_total"] == 150
-        assert payload["summary"]["actual_total"] == 30.5
-        assert payload["summary"]["remaining_total"] == 119.5
+        assert payload["summary"]["actual_total"] == float(amount)
+        assert payload["summary"]["remaining_total"] == 150 - float(amount)
         assert payload["summary"]["version_count"] == 1
