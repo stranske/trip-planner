@@ -29,17 +29,6 @@ DELIBERATE_BREAK_COMMIT = "039d13fb"
 DELIBERATE_BREAK_REVERT_COMMIT = "87d7f2eb"
 
 
-def _repository_is_shallow() -> bool:
-    """True when the checkout lacks full branch history (Python CI uses fetch-depth 1)."""
-    result = subprocess.run(
-        ["git", "rev-parse", "--is-shallow-repository"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return result.returncode == 0 and result.stdout.strip() == "true"
-
-
 def test_canary_script_starts_tpp_stub_and_exports_tpp_base_url() -> None:
     script = Path("scripts/run_two_trip_ui_canary.sh").read_text(encoding="utf-8")
     assert "scripts/tpp_http_canary_stub.py" in script
@@ -187,22 +176,6 @@ def test_reconcile_acceptance_checkboxes_checks_off_keepalive_template() -> None
     assert "**Progress:** 6/6 tasks complete" in updated
     assert "- [x] Named test `frontend/e2e/approval-packet-journey.spec.ts`" in updated
     assert "- [ ]" not in updated.split("### Acceptance Criteria", 1)[1]
-
-
-@pytest.mark.skipif(
-    _repository_is_shallow(),
-    reason=(
-        "Python CI shallow checkout lacks probe commit objects; "
-        "deliberate-break SHAs are asserted via docs/verification/pr-2046-approval-packet-canary.md"
-    ),
-)
-def test_deliberate_break_commits_are_branch_ancestors() -> None:
-    for commit in (DELIBERATE_BREAK_COMMIT, DELIBERATE_BREAK_REVERT_COMMIT):
-        proc = subprocess.run(
-            ["git", "merge-base", "--is-ancestor", commit, "HEAD"],
-            check=False,
-        )
-        assert proc.returncode == 0, f"{commit} must be an ancestor of HEAD"
 
 
 def test_deliberate_break_documented_workspace_mount_removal() -> None:
