@@ -3220,6 +3220,14 @@ function WorkspacePageContent({
               ) : null
             }
           />
+          {showApprovalPacket && currentWorkspace.proposal_state ? (
+            <ApprovalPacket
+              workspace={currentWorkspace}
+              prices={tripPrices}
+              requesterName={requesterName}
+              onPrint={() => window.print()}
+            />
+          ) : null}
         </PolicyTabPanel>
       ) : null}
     </section>

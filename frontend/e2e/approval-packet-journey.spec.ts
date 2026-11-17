@@ -4,6 +4,10 @@
  * Covered: signup, business trip creation with origin, entered prices, native policy
  * submission through the live backend + local HTTP TPP stub, approval packet rendering,
  * and print/export.
+ *
+ * Regression anchor: the packet DOM is mounted from WorkspacePage when
+ * showApprovalPacket is true (ApprovalPacket at Policy tab). Removing that mount
+ * makes getByTestId("approval-packet-document") fail here.
  */
 import { expect, test, type Page } from "@playwright/test";
 
