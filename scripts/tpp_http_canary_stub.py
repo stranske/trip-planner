@@ -58,7 +58,7 @@ class TppCanaryStubHandler(BaseHTTPRequestHandler):
     def _unauthorized(self) -> None:
         self._send_json(401, {"detail": "Unauthorized"})
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         if self.path == "/readyz":
             self._send_json(200, {"status": "ready"})
             return
@@ -92,7 +92,7 @@ class TppCanaryStubHandler(BaseHTTPRequestHandler):
             return
         self._send_json(404, {"detail": f"Unknown path {self.path}"})
 
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
         if not self._authorized():
             self._unauthorized()
             return
