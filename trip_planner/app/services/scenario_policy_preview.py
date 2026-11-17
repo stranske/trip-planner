@@ -56,7 +56,18 @@ def _budget_violations(
         return []
     currency = money[1] if money is not None else currency_hint
     if currency != "USD":
-        return []
+        actual_amount = money[0] if money is not None else None
+        return [
+            {
+                "rule_id": rule_id,
+                "message": ("Trip cost is not in USD; the configured spend cap cannot be checked."),
+                "cap_amount": cap_amount,
+                "actual_amount": actual_amount,
+                "currency": currency,
+                "incomplete": True,
+                "reason": "currency_uncheckable",
+            }
+        ]
     if money is None:
         return [
             {
