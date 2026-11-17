@@ -165,6 +165,19 @@ def test_black_format_matches_pre_commit_gate() -> None:
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
+def test_gate_workflow_exposes_python_314_and_cross_repo_smoke_jobs() -> None:
+    """Keepalive PR tasks track Gate jobs that map to Python CI / python 3.14 and cross-repo-full-product."""
+    gate = yaml.safe_load((WORKFLOWS / "pr-00-gate.yml").read_text(encoding="utf-8"))
+    python_ci = gate["jobs"]["python-ci"]
+    assert python_ci["uses"].endswith("reusable-10-ci-python.yml@main")
+    assert python_ci["with"]["primary-python-version"] == "3.14"
+    assert json.loads(python_ci["with"]["python-versions"]) == ["3.13", "3.14"]
+    cross_repo = gate["jobs"]["cross-repo-smoke"]
+    assert cross_repo["uses"] == "./.github/workflows/cross-repo-smoke.yml"
+    smoke = yaml.safe_load((WORKFLOWS / "cross-repo-smoke.yml").read_text(encoding="utf-8"))
+    assert "cross-repo-full-product" in smoke["jobs"]
+
+
 def test_cross_repo_full_product_offline_guards_match_pr_head() -> None:
     """Cross-repo smoke job pin/runtime checks must pass offline before hosted CI is trusted."""
     completed = subprocess.run(

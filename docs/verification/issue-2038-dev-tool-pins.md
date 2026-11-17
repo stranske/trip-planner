@@ -241,3 +241,23 @@ python -m pytest tests/test_ci_python_standard.py -q
 - `make test`: **3027 passed**, 6 skipped (~5m18s)
 - `tests/test_ci_python_standard.py`: **6 passed** (includes `test_make_test_matches_reusable_python_ci_pytest`)
 - Hosted CI readback on `2f7151ff`: **Cross-Repo Smoke / cross-repo-full-product** and **Python CI / python 3.14** success (runs `43982484743`, `43982485280`)
+
+Keepalive round 15/12 (2026-11-17, head `fbfdbec3`): reconcile commits `5f9f0eb2`, `2f7151ff`, and
+`fbfdbec3` (CI proxy guards incl. Makefile pytest parity) and close remaining PR tasks after local
+verification. PR body checkboxes on **#2038** should mark lint/test and hosted smoke done when this
+commit is on the branch head.
+
+```sh
+python -m ruff check --select E4,E7,E9,F --extend-exclude .workflows-lib .
+python -m mypy --config-file pyproject.toml --exclude '(^|/)(?:\.workflows-lib|build)(?:/|$)' .
+black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+make test
+python -m pytest tests/test_ci_python_standard.py -q
+```
+
+- Ruff (reusable Python CI select set): pass
+- mypy: pass
+- Black: pass
+- `make test`: **3027 passed**, 6 skipped (~5m47s)
+- `tests/test_ci_python_standard.py`: **7 passed** (adds `test_gate_workflow_exposes_python_314_and_cross_repo_smoke_jobs`)
+- Hosted CI on `fbfdbec3` (re-run after push): expect **Cross-Repo Smoke / cross-repo-full-product** and **Python CI / python 3.14** green; prior head `2f7151ff` was already green (`43982484743`, `43982485280`)
