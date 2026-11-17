@@ -195,6 +195,7 @@ def _coverage_claim_errors(claim: dict, root: Path) -> list[str]:
             errors.append(f"Receipt {field} mismatch")
         if field.endswith("_sha") and not re.fullmatch(r"[0-9a-f]{40}", str(value)):
             errors.append(f"{field} must be an exact full SHA")
+    remote_locators = {}
     for field in ("run", "artifact"):
         locator = receipt.get(field)
         # Remote locators are checked for shape only, never fetched. A local
@@ -203,13 +204,15 @@ def _coverage_claim_errors(claim: dict, root: Path) -> list[str]:
         if field == "artifact":
             remote_pattern += r"/artifacts/[1-9][0-9]*"
         path = local_file(locator)
-        if not (
-            isinstance(locator, str)
-            and re.fullmatch(remote_pattern, locator)
-            or path is not None
-            and path.suffix in {".log", ".txt", ".json", ".zip"}
-        ):
+        if isinstance(locator, str) and re.fullmatch(remote_pattern, locator):
+            remote_locators[field] = locator
+        elif path is None or path.suffix not in {".log", ".txt", ".json", ".zip"}:
             errors.append(f"Missing or invalid {field} locator")
+    if (
+        len(remote_locators) == 2
+        and remote_locators["artifact"].rsplit("/artifacts/", 1)[0] != remote_locators["run"]
+    ):
+        errors.append("Receipt artifact must belong to its recorded run")
     observed = receipt.get("observed_result")
     if not isinstance(observed, dict) or not (
         observed.get("status") == "PASS"
@@ -285,6 +288,9 @@ def _coverage_map_execution_errors(text: str, root: Path) -> list[str]:
         "optional-gate",
         "disabled-gate",
         "remote-locators",
+        "remote-mismatched-run",
+        "remote-mismatched-repository",
+        "remote-mismatched-owner",
         "document-verified",
         "document-workflow-only",
         "document-missing-receipt",
@@ -528,6 +534,15 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
     elif case == "remote-locators":
         receipt["run"] = "https://github.com/example/fixture/actions/runs/123"
         receipt["artifact"] = "https://github.com/example/fixture/actions/runs/123/artifacts/456"
+    elif case.startswith("remote-mismatched-"):
+        receipt["run"] = "https://github.com/example/fixture/actions/runs/123"
+        artifact_run = {
+            "remote-mismatched-run": "https://github.com/example/fixture/actions/runs/789",
+            "remote-mismatched-repository": "https://github.com/example/other/actions/runs/123",
+            "remote-mismatched-owner": "https://github.com/other/fixture/actions/runs/123",
+        }[case]
+        receipt["artifact"] = artifact_run + "/artifacts/456"
+        expected = ["Receipt artifact must belong to its recorded run"]
     elif case.startswith("remote-"):
         _, field, kind = case.split("-", 2)
         run_url = "https://github.com/example/fixture/actions/runs/123"

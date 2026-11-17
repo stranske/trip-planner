@@ -452,3 +452,66 @@ Git could not create `.git/index.lock` on the read-only filesystem. The intended
 commit is `test: reject remote configuration as receipt evidence`. Changes
 remain in the workspace for committing on the existing PR branch from an
 environment with a writable Git directory.
+
+## Run/artifact consistency follow-up
+
+Observed locally on 2026-11-17 from consumer commit
+`d46789477c09bf870450475c5793f1b6b33d7bf6` with this follow-up applied.
+The baseline whole file passed 91 tests. Added three cases to the existing
+named test for Actions artifact URLs pointing to a different run, repository
+or owner. Before the fix, the named test reported **3 failed, 84 passed**:
+each inconsistent pair was accepted. The shared helper now rejects these pairs
+with `Receipt artifact must belong to its recorded run`, without fetching URLs.
+The receipt contract documents this consistency requirement.
+
+Repeated the required deliberate failure by temporarily making only the
+`workflow-only` case expect acceptance. Its VERIFIED claim supplied only an
+existing workflow filename as its receipt. With DNS and socket guards active,
+the named test exited 1 with **1 failed, 86 passed**, specifically:
+
+```text
+test_coverage_map_keeps_claims_scoped_to_their_evidence[workflow-only]
+AssertionError: assert ['VERIFIED ne...low filename'] == []
+Left contains one more item: 'VERIFIED needs a local JSON receipt, not a workflow filename'
+```
+
+Restored that expectation in a `finally` block, formatted the test with Black,
+and verified:
+
+| Command | Observed result |
+| --- | --- |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py::test_coverage_map_keeps_claims_scoped_to_their_evidence -q -m "not slow"` | Exit 0; 87 passed |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py -q -m "not slow"` | Exit 0; 94 passed |
+| `ruff check tests/preferences/test_legacy_request_adapter.py` | Exit 0 |
+| `black --line-length 100 tests/preferences/test_legacy_request_adapter.py` | Exit 0; unchanged |
+| `BLACK_NUM_WORKERS=1 BLACK_CACHE_DIR=/tmp/black-2044-run-binding black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .` | Exit 0; 530 files unchanged |
+
+The initial parallel Black check stalled and was interrupted. Black's CLI
+source discovery and CHECK-mode reporting were then run with serial
+`reformat_one` calls, checking all 530 files. The unmodified required CLI
+command above subsequently passed using that fresh cache. Existing
+addressability/local-path checks remain intact, and README still distinguishes
+implemented transport, configured checks and observed execution. All actual
+execution claims remain UNVERIFIED; these results concern the validator only.
+
+Verified checklist reconciliation for this follow-up:
+
+- [x] Validate unverified and structured receipt-backed examples through one
+  reusable helper, including missing, mismatched and workflow-only cases.
+- [x] Preserve bounded proof layers and explicit UNVERIFIED claims; README
+  distinguishes implemented transport, configured checks and observed execution.
+- [x] Pass the named test and record workflow-only failure followed by restoration.
+- [x] Pass the whole test file and preserve the original addressability/local-path
+  checks while deliberately updating the existing execution-evidence test.
+
+Delivery remains blocked: after all checks passed, `git add` exited 128 because
+the read-only Git directory prevented creation of `.git/index.lock`. Intended
+commit: `test: bind receipt artifacts to their recorded runs`. The three changed
+files remain local on `codex/issue-2044`; no branch or PR was created.
+
+Automatic approval review also rejected the PR-body checklist reconciliation,
+the evidence/blocker comment and the additive `needs-human` label, each with
+`MCP tool call requires approval, but approval policy is never`. No PR metadata
+changed. A final read confirmed PR #2047 is open with `draft=false`. Publishing
+the evidence/checklist and committing these changes require an environment
+with the corresponding write access.

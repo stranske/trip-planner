@@ -291,6 +291,8 @@ file containing matching layer, SHAs, environment and command, plus:
 
 - `run`: an actual GitHub Actions run URL or repository-relative retained run log.
 - `artifact`: an actual Actions artifact URL or repository-relative retained result file.
+  When both locators are Actions URLs, the artifact must belong to the recorded
+  run in the same owner/repository.
 - `observed_result`: an object with `status` equal to PASS, a nonempty `summary`
   of the observed behavior, and `skipped` equal to zero for the claimed layer.
 
