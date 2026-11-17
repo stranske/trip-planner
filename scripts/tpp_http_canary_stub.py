@@ -8,11 +8,24 @@ import json
 import re
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import BaseServer
 from typing import Any
 
 CANARY_ACCESS_TOKEN = "canary-tpp-access-token"
 CANARY_EXECUTION_ID = "exec-canary-approval-packet"
 GENERATED_AT = "2026-11-16T12:00:00Z"
+
+
+def _listen_address(server: BaseServer) -> tuple[str, int]:
+    addr = server.server_address
+    if isinstance(addr, tuple) and len(addr) >= 2:
+        return str(addr[0]), int(addr[1])
+    raise TypeError(f"unexpected server address: {addr!r}")
+
+
+def _stub_base_url(server: BaseServer) -> str:
+    host, port = _listen_address(server)
+    return f"http://{host}:{port}"
 
 
 class TppCanaryStubHandler(BaseHTTPRequestHandler):
@@ -63,7 +76,9 @@ class TppCanaryStubHandler(BaseHTTPRequestHandler):
         if poll:
             self._send_json(
                 200,
-                self._poll_response(proposal_id=poll.group("proposal"), execution_id=poll.group("execution")),
+                self._poll_response(
+                    proposal_id=poll.group("proposal"), execution_id=poll.group("execution")
+                ),
             )
             return
         evaluation = re.fullmatch(
@@ -71,7 +86,9 @@ class TppCanaryStubHandler(BaseHTTPRequestHandler):
             self.path,
         )
         if evaluation:
-            self._send_json(200, self._evaluation_response(body, execution_id=evaluation.group("execution")))
+            self._send_json(
+                200, self._evaluation_response(body, execution_id=evaluation.group("execution"))
+            )
             return
         self._send_json(404, {"detail": f"Unknown path {self.path}"})
 
@@ -114,10 +131,13 @@ class TppCanaryStubHandler(BaseHTTPRequestHandler):
         }
 
     def _submit_response(self, body: dict[str, Any]) -> dict[str, Any]:
-        request = body.get("request") if isinstance(body.get("request"), dict) else {}
-        trip_id = str(request.get("trip_id") or body.get("trip_plan", {}).get("trip_id") or "trip-unknown")
+        raw_request = body.get("request")
+        request: dict[str, Any] = raw_request if isinstance(raw_request, dict) else {}
+        trip_plan = body.get("trip_plan")
+        trip_plan_dict = trip_plan if isinstance(trip_plan, dict) else {}
+        trip_id = str(request.get("trip_id") or trip_plan_dict.get("trip_id") or "trip-unknown")
         proposal_id = str(request.get("proposal_id") or f"proposal:{trip_id}")
-        base_url = f"http://{self.server.server_address[0]}:{self.server.server_address[1]}"
+        base_url = _stub_base_url(self.server)
         status_endpoint = (
             f"{base_url}/api/planner/proposals/{proposal_id}/executions/{CANARY_EXECUTION_ID}"
         )
@@ -146,7 +166,7 @@ class TppCanaryStubHandler(BaseHTTPRequestHandler):
         }
 
     def _poll_response(self, *, proposal_id: str, execution_id: str) -> dict[str, Any]:
-        base_url = f"http://{self.server.server_address[0]}:{self.server.server_address[1]}"
+        base_url = _stub_base_url(self.server)
         return {
             "operation": "poll_execution_status",
             "transport_pattern": "deferred",
@@ -172,7 +192,7 @@ class TppCanaryStubHandler(BaseHTTPRequestHandler):
         trip_id = str(request.get("trip_id") or "trip-unknown")
         proposal_id = str(request.get("proposal_id") or f"proposal:{trip_id}")
         proposal_version = str(request.get("proposal_version") or "proposal-v3")
-        base_url = f"http://{self.server.server_address[0]}:{self.server.server_address[1]}"
+        base_url = _stub_base_url(self.server)
         return {
             "trip_id": trip_id,
             "proposal_id": proposal_id,
@@ -207,7 +227,7 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=0)
     args = parser.parse_args()
     server = ThreadingHTTPServer((args.host, args.port), TppCanaryStubHandler)
-    host, port = server.server_address
+    host, port = _listen_address(server)
     print(f"TPP canary stub listening on http://{host}:{port}", flush=True)
     try:
         server.serve_forever()
