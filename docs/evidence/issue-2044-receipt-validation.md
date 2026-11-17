@@ -82,11 +82,11 @@ configured exclusions and the required command's exclusion expression.
 - [x] Run the named test, demonstrate workflow-only failure and restoration, and
   pass the whole file while preserving the existing path checks.
 
-## Delivery blocker
+## Previous delivery blocker
 
 The initial receipt rewrite was committed by automation as `463b4660`. The
 follow-up adds precise diagnostic assertions and 14 receipt validation cases;
-the follow-up remains uncommitted because `git add` exited 128:
+the follow-up could not be committed in that run because `git add` exited 128:
 
 ```text
 fatal: Unable to create '/home/runner/work/trip-planner/trip-planner/.git/index.lock': Read-only file system
@@ -101,3 +101,65 @@ Updating the PR with the verified checklist and failure/restoration results was
 also rejected by the GitHub connector: `MCP tool call requires approval, but
 approval policy is never`. Adding the requested `needs-human` label received the
 same rejection. Neither the PR body nor its labels were changed by this run.
+
+## Skip-count validation follow-up
+
+Observed locally on 2026-11-17, starting from consumer commit
+`15ad8d0767a2c4d702c5798146e7c8e9d63cfa57` with this follow-up applied.
+That commit contains the previously blocked diagnostic assertions and evidence
+record. Reviewed it alongside `463b4660` and `db869e25` before proceeding; the
+baseline whole-file run passed all 61 tests. The PR checklist still needed the
+verified task reconciliation listed above, including duplicate task entries.
+
+Added five malformed skip-count fixtures: JSON `false`, `0.0`, `"0"`, `null`
+and an omitted count. Before the fix, the named test reported **2 failed,
+57 passed**: Boolean false and floating-point zero were accepted because Python
+compares both equal to integer zero. The shared receipt helper now requires an
+integer count of zero, so these malformed observations cannot promote a claim.
+
+Repeated the deliberate workflow-only acceptance expectation by temporarily
+setting its expected diagnostics to `[]`. With DNS/socket calls still blocked,
+the named test reported **1 failed, 58 passed**, exit 1, specifically:
+
+```text
+test_coverage_map_keeps_claims_scoped_to_their_evidence[workflow-only]
+AssertionError: assert ['VERIFIED ne...low filename'] == []
+Left contains one more item: 'VERIFIED needs a local JSON receipt, not a workflow filename'
+```
+
+Restored the rejection expectation, then verified:
+
+| Command | Observed result |
+| --- | --- |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py::test_coverage_map_keeps_claims_scoped_to_their_evidence -q -m "not slow"` | Exit 0; 59 passed |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py -q -m "not slow"` | Exit 0; 66 passed |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py tests/test_repo_hygiene.py -q -m "not slow"` | Exit 0; 82 passed, 1 existing skip |
+| `ruff check tests/preferences/test_legacy_request_adapter.py` | Exit 0 |
+| `git diff --check` | Exit 0 |
+
+Ran Black on the changed Python file, then checked all 530 sources through its
+serial `reformat_one` API in CHECK mode with the CLI's source discovery and
+configuration. The standard CLI's multiprocessing socket was blocked by the
+sandbox. Reusing that freshly populated cache, the required gate passed with
+exit 0, **530 files would be left unchanged**:
+
+```bash
+BLACK_NUM_WORKERS=1 BLACK_CACHE_DIR=/tmp/black-issue-2044-final black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .
+```
+
+Existing addressability and local-path tests are preserved, and all repository
+execution claims remain UNVERIFIED. These synthetic fixture results establish
+only validator behavior.
+
+### Current delivery blockers
+
+The attempted commit, `test: reject malformed receipt skip counts`, could not
+proceed: `git add` exited 128 because `.git/index.lock` is on a read-only file
+system. The changed test and this evidence record remain in the working tree
+for committing on the existing PR branch from a writable Git environment.
+
+The GitHub connector rejected the verified checklist update, the results/blocker
+comment and the additive `needs-human` label with `MCP tool call requires
+approval, but approval policy is never`. No PR body, comment or label was changed.
+Apply the verified reconciliation above when PR writes are available. A final
+read confirmed PR #2047 is open and ready for review (`draft=false`).

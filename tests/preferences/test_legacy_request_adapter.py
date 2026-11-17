@@ -214,6 +214,7 @@ def _coverage_claim_errors(claim: dict, root: Path) -> list[str]:
         observed.get("status") == "PASS"
         and isinstance(observed.get("summary"), str)
         and observed["summary"].strip()
+        and type(observed.get("skipped")) is int
         and observed.get("skipped") == 0
     ):
         errors.append("Receipt needs an observed PASS, summary and zero skips")
@@ -262,7 +263,8 @@ def _coverage_claim_errors(claim: dict, root: Path) -> list[str]:
         for field in ("layer", "consumer_sha", "producer_sha", "environment", "command")
     ]
     + [f"unverified-{layer}" for layer in sorted(_PROOF_LAYERS)]
-    + [f"verified-{layer}" for layer in sorted(_PROOF_LAYERS)],
+    + [f"verified-{layer}" for layer in sorted(_PROOF_LAYERS)]
+    + [f"invalid-skips-{kind}" for kind in ("boolean", "float", "string", "null", "missing")],
 )
 def test_coverage_map_keeps_claims_scoped_to_their_evidence(
     case: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -425,6 +427,18 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
         receipt["observed_result"]["status"] = "FAIL"
     elif case == "skipped-result":
         receipt["observed_result"]["skipped"] = 1
+    elif case.startswith("invalid-skips-"):
+        kind = case.removeprefix("invalid-skips-")
+        if kind == "missing":
+            receipt["observed_result"].pop("skipped")
+        else:
+            receipt["observed_result"]["skipped"] = {
+                "boolean": False,
+                "float": 0.0,
+                "string": "0",
+                "null": None,
+            }[kind]
+        expected = ["Receipt needs an observed PASS, summary and zero skips"]
     elif case == "empty-summary":
         receipt["observed_result"]["summary"] = " "
     elif case in {"optional-gate", "disabled-gate"}:
