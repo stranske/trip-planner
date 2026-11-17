@@ -60,7 +60,9 @@ def _budget_violations(
         return [
             {
                 "rule_id": rule_id,
-                "message": ("Trip cost is not in USD; the configured spend cap cannot be checked."),
+                "message": (
+                    "Trip cost is not in USD; the configured spend cap cannot be checked."
+                ),
                 "cap_amount": cap_amount,
                 "actual_amount": actual_amount,
                 "currency": currency,
@@ -85,7 +87,9 @@ def _budget_violations(
     return [
         {
             "rule_id": rule_id,
-            "message": (f"Estimated trip total exceeds the configured spend cap ({rule_id})."),
+            "message": (
+                f"Estimated trip total exceeds the configured spend cap ({rule_id})."
+            ),
             "cap_amount": cap_amount,
             "actual_amount": actual_amount,
             "currency": currency,
@@ -139,7 +143,9 @@ def _lodging_violations(
     return [
         {
             "rule_id": rule_id,
-            "message": (f"Selected nightly rate exceeds the configured lodging cap ({rule_id})."),
+            "message": (
+                f"Selected nightly rate exceeds the configured lodging cap ({rule_id})."
+            ),
             "cap_amount": nightly_cap,
             "actual_amount": nightly_actual,
             "currency": currency,
@@ -147,7 +153,9 @@ def _lodging_violations(
     ]
 
 
-def _tradeoff_violations(unresolved_tradeoffs: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+def _tradeoff_violations(
+    unresolved_tradeoffs: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
     violations: list[dict[str, Any]] = []
     for tradeoff in unresolved_tradeoffs or []:
         if not isinstance(tradeoff, dict):
@@ -229,7 +237,9 @@ def build_scenario_policy_preview(
             if isinstance(estimated_total, dict)
             else "USD"
         )
-        violations.extend(_budget_violations(budget_rules, money, currency_hint=currency_hint))
+        violations.extend(
+            _budget_violations(budget_rules, money, currency_hint=currency_hint)
+        )
 
     lodging_rules = constraint_set.get("lodging_rules")
     if isinstance(lodging_rules, dict):

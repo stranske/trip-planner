@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.app.saved_scenario_search_fixture import build_saved_scenario_search
 from trip_planner.app.main import create_app
 from trip_planner.app.services import workspace as workspace_service
 from trip_planner.app.services.scenario_policy_preview import (
@@ -13,8 +14,6 @@ from trip_planner.app.services.scenario_policy_preview import (
 from trip_planner.persistence.db import get_session_factory, reset_database_state
 from trip_planner.persistence.models.policy import PersistedPolicyState
 from trip_planner.persistence.models.trip import PersistedTrip
-
-from tests.app.saved_scenario_search_fixture import build_saved_scenario_search
 
 FIXTURE_POLICY = {
     "constraint_set": {
@@ -63,7 +62,9 @@ def test_exception_nearest_saved_scenario_surfaces_pol_exc_preview_violation(
         policy_state=FIXTURE_POLICY,
         trip_mode=trip_mode,
     )
-    previews = {row["scenario_id"]: row["policy_preview"] for row in comparison["scenarios"]}
+    previews = {
+        row["scenario_id"]: row["policy_preview"] for row in comparison["scenarios"]
+    }
     exception = previews["saved-scenario:exception-nearest"]
     compliant = previews["saved-scenario:compliant-first"]
     assert exception["authoritative"] is False
@@ -74,12 +75,16 @@ def test_exception_nearest_saved_scenario_surfaces_pol_exc_preview_violation(
         # "we checked and it was fine" and "we could not check" must never read alike.
         def _breaches(preview: dict[str, Any]) -> list[str]:
             return [
-                str(item["rule_id"]) for item in preview["violations"] if not item.get("incomplete")
+                str(item["rule_id"])
+                for item in preview["violations"]
+                if not item.get("incomplete")
             ]
 
         def _uncheckable(preview: dict[str, Any]) -> list[str]:
             return [
-                str(item["rule_id"]) for item in preview["violations"] if item.get("incomplete")
+                str(item["rule_id"])
+                for item in preview["violations"]
+                if item.get("incomplete")
             ]
 
         assert _breaches(exception) == ["POL-EXC"]
@@ -127,7 +132,9 @@ def test_missing_estimated_total_does_not_mark_compliant_under_budget_cap(
     assert preview["status_label"] == "Trip cost unavailable (preview)"
     assert preview["snapshot_available"] is True
     assert preview["authoritative"] is False
-    incomplete = next(item for item in preview["violations"] if item["rule_id"] == "BUD-001")
+    incomplete = next(
+        item for item in preview["violations"] if item["rule_id"] == "BUD-001"
+    )
     assert incomplete["incomplete"] is True
     assert incomplete["actual_amount"] is None
     assert incomplete["cap_amount"] == 2300
@@ -199,7 +206,9 @@ def test_non_compliant_scenario_preview_includes_cap_vs_actual() -> None:
     )
 
     assert preview["compliant"] is False
-    bud_violation = next(item for item in preview["violations"] if item["rule_id"] == "BUD-001")
+    bud_violation = next(
+        item for item in preview["violations"] if item["rule_id"] == "BUD-001"
+    )
     assert bud_violation["cap_amount"] == 2300
     assert bud_violation["actual_amount"] == 2410
     assert sum(item["rule_id"] == "POL-EXC" for item in preview["violations"]) == 1
@@ -273,7 +282,10 @@ def test_lodging_preview_is_compliant_at_or_under_cap(nightly_amount: float) -> 
     preview = build_scenario_policy_preview(
         policy_state=FIXTURE_POLICY,
         trip_mode="business",
-        estimated_total={"typical_amount": 1000, "nightly_typical_amount": nightly_amount},
+        estimated_total={
+            "typical_amount": 1000,
+            "nightly_typical_amount": nightly_amount,
+        },
     )
 
     assert preview["compliant"] is True
@@ -294,7 +306,9 @@ def test_lodging_preview_is_compliant_at_or_under_cap(nightly_amount: float) -> 
 )
 def test_invalid_lodging_cap_does_not_create_lodging_finding(cap: Any) -> None:
     preview = build_scenario_policy_preview(
-        policy_state={"constraint_set": {"lodging_rules": {"max_nightly_rate_usd": cap}}},
+        policy_state={
+            "constraint_set": {"lodging_rules": {"max_nightly_rate_usd": cap}}
+        },
         trip_mode="business",
         estimated_total=None,
     )
@@ -325,7 +339,9 @@ def test_lodging_cap_violation_includes_nightly_cap_vs_actual() -> None:
         },
     )
 
-    lodging = next(item for item in preview["violations"] if item["rule_id"] == "LOD-001")
+    lodging = next(
+        item for item in preview["violations"] if item["rule_id"] == "LOD-001"
+    )
     assert lodging["cap_amount"] == 325
     assert lodging["actual_amount"] == 400
 
@@ -337,7 +353,9 @@ def test_non_usd_scenario_skips_usd_budget_cap_comparison() -> None:
         estimated_total={"currency": "EUR", "typical_amount": 9999},
     )
 
-    budget = next(item for item in preview["violations"] if item["rule_id"] == "BUD-001")
+    budget = next(
+        item for item in preview["violations"] if item["rule_id"] == "BUD-001"
+    )
     assert budget["incomplete"] is True
     assert budget["reason"] == "currency_uncheckable"
 
@@ -354,8 +372,12 @@ def test_non_usd_scenario_skips_usd_budget_cap_comparison() -> None:
         pytest.param(-(10**1000), id="negative-overflow"),
     ],
 )
-@pytest.mark.parametrize("estimated_total", [None, {"currency": "USD", "typical_amount": 2400}])
-def test_invalid_budget_cap_does_not_create_budget_finding(cap: Any, estimated_total: Any) -> None:
+@pytest.mark.parametrize(
+    "estimated_total", [None, {"currency": "USD", "typical_amount": 2400}]
+)
+def test_invalid_budget_cap_does_not_create_budget_finding(
+    cap: Any, estimated_total: Any
+) -> None:
     preview = build_scenario_policy_preview(
         policy_state={"constraint_set": {"budget_rules": {"max_trip_total_usd": cap}}},
         trip_mode="business",
@@ -381,7 +403,9 @@ def test_non_usd_missing_amount_skips_usd_budget_cap(amount: Any) -> None:
     assert preview["status"] == "preview_incomplete"
     assert preview["status_label"] == "Non-USD trip cost (preview)"
     assert {item["rule_id"] for item in preview["violations"]} == {"BUD-001", "LOD-001"}
-    assert all(item.get("reason") == "currency_uncheckable" for item in preview["violations"])
+    assert all(
+        item.get("reason") == "currency_uncheckable" for item in preview["violations"]
+    )
 
 
 def test_non_usd_absent_amount_preserves_known_policy_violation() -> None:
@@ -408,7 +432,9 @@ def test_non_usd_absent_amount_preserves_known_policy_violation() -> None:
         {"currency": "EUR"},
     ],
 )
-def test_non_usd_total_with_usd_caps_is_preview_incomplete(estimated_total: dict[str, Any]) -> None:
+def test_non_usd_total_with_usd_caps_is_preview_incomplete(
+    estimated_total: dict[str, Any],
+) -> None:
     preview = build_scenario_policy_preview(
         policy_state=FIXTURE_POLICY,
         trip_mode="business",
@@ -444,7 +470,9 @@ def test_non_usd_total_with_usd_caps_is_preview_incomplete(estimated_total: dict
     compliant_scenario["versions"][0]["notes"] = []
     search = build_saved_scenario_search(record, saved_scenarios=saved_scenarios)
     compliant_row = next(
-        row for row in search["scenarios"] if row["scenario_id"] == "saved-scenario:compliant-first"
+        row
+        for row in search["scenarios"]
+        if row["scenario_id"] == "saved-scenario:compliant-first"
     )
     compliant_row["scenario_summary"]["estimated_total"] = dict(estimated_total)
     comparison = workspace_service._build_runtime_scenario_comparison(
@@ -462,21 +490,26 @@ def test_non_usd_total_with_usd_caps_is_preview_incomplete(estimated_total: dict
     assert workspace_preview["status"] == "preview_incomplete"
     assert workspace_preview["compliant"] is None
     assert all(
-        item.get("reason") == "currency_uncheckable" for item in workspace_preview["violations"]
+        item.get("reason") == "currency_uncheckable"
+        for item in workspace_preview["violations"]
     )
 
 
 def test_policy_import_persists_budget_rules_for_scenario_preview(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'budget.db'}")
+    monkeypatch.setenv(
+        "TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'budget.db'}"
+    )
     fixture_path = (
         Path(__file__).resolve().parents[1]
         / "fixtures/integrations/tpp/policy/standard_policy_sync.json"
     )
     fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
     budget_rules = {"rule_id": "BUD-IMPORT", "max_trip_total_usd": 2300}
-    fixture["response"]["result_payload"]["constraint_set"]["budget_rules"] = budget_rules
+    fixture["response"]["result_payload"]["constraint_set"]["budget_rules"] = (
+        budget_rules
+    )
     reset_database_state()
     try:
         with TestClient(create_app()) as client:
@@ -500,7 +533,10 @@ def test_policy_import_persists_budget_rules_for_scenario_preview(
                 json={"request": fixture["request"], "response": fixture["response"]},
             )
             assert imported.status_code == 200
-            assert imported.json()["policy_state"]["constraint_set"]["budget_rules"] == budget_rules
+            assert (
+                imported.json()["policy_state"]["constraint_set"]["budget_rules"]
+                == budget_rules
+            )
             with get_session_factory()() as session:
                 stored = session.get(PersistedPolicyState, f"policy-state:{trip_id}")
                 assert stored is not None
@@ -525,10 +561,16 @@ def test_policy_import_persists_budget_rules_for_scenario_preview(
             )
             assert preview["compliant"] is False
             violation = next(
-                (item for item in preview["violations"] if item["rule_id"] == "BUD-IMPORT"),
+                (
+                    item
+                    for item in preview["violations"]
+                    if item["rule_id"] == "BUD-IMPORT"
+                ),
                 None,
             )
-            assert violation is not None, "Expected the persisted BUD-IMPORT cap to be violated"
+            assert violation is not None, (
+                "Expected the persisted BUD-IMPORT cap to be violated"
+            )
             assert violation["cap_amount"] == 2300
             assert violation["actual_amount"] == 2410
             assert preview["authoritative"] is False
