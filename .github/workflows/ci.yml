@@ -104,8 +104,16 @@ jobs:
           npm --prefix frontend ci
           npm --prefix frontend exec playwright install --with-deps chromium
 
-      - name: Run required signup and workspace browser journey
+      - name: Run required signup, workspace, and approval-packet browser journeys
         run: ./scripts/run_two_trip_ui_canary.sh
+
+      - name: Upload browser canary artifacts (simulated TPP transport)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-canary-simulated-tpp-transport
+          path: /tmp/trip-planner-two-trip-canary-artifacts
+          if-no-files-found: warn
 
   product-probe:
     name: Product contract observations
