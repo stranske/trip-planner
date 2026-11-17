@@ -49,6 +49,22 @@ The repository frontend runner entry point is `npm --prefix frontend run test:e2
 Structural CI guards: `tests/scripts/test_two_trip_ui_canary_wiring.py` (canary script, npm
 entry point, e2e regression anchor, and `WorkspacePage` ApprovalPacket mount).
 
-**PR body update (when API token available):** check both acceptance-criteria boxes under
-`#### Acceptance criteria` — verification above satisfies them; keepalive does not auto-check
-acceptance criteria.
+## Keepalive re-verification (2026-11-17)
+
+Structural guards: `pytest tests/scripts/test_two_trip_ui_canary_wiring.py -m "not slow"` → **6 passed**.
+
+Full canary (ports 8806/5184/8114, uv on PATH):
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+TRIP_PLANNER_CANARY_BACKEND_PORT=8806 \
+TRIP_PLANNER_CANARY_FRONTEND_PORT=5184 \
+TRIP_PLANNER_CANARY_TPP_PORT=8114 \
+  ./scripts/run_two_trip_ui_canary.sh
+```
+
+- Named test `approval-packet-journey.spec.ts` → **passed** (4.2s)
+- `two-trip-canary.spec.ts` → **passed** (8.2s)
+- Summary: **2 passed** — `Two-trip UI canary PASS (simulated TPP transport …)`
+
+Both acceptance criteria are satisfied on `cursor/issue-2043` (break `039d13fb`, revert `87d7f2eb`).
