@@ -14,6 +14,12 @@ from pathlib import Path
 
 import pytest
 
+from scripts.reconcile_pr_acceptance_checkboxes import (
+    reconcile_acceptance_checkboxes,
+    reconciled_checklist_complete,
+    verification_doc_gates_pass,
+)
+
 NAMED_JOURNEY_TITLE_FRAGMENT = (
     "policy (check -> native submit -> approval packet print "
     "(real frontend/backend + local HTTP TPP stub verifies packet renders trip title, "
@@ -150,6 +156,35 @@ def test_playwright_lists_named_approval_packet_journey_in_frontend_runner() -> 
     assert len(titles) == 1, f"expected exactly one Playwright test, found {titles!r}"
     assert NAMED_JOURNEY_TITLE_FRAGMENT in titles[0]
     assert titles[0].endswith("window.print)")
+
+
+def test_verification_doc_gates_pass() -> None:
+    assert verification_doc_gates_pass()
+    assert reconciled_checklist_complete()
+
+
+def test_reconcile_acceptance_checkboxes_checks_off_keepalive_template() -> None:
+    sample = """**Progress:** 4/6 tasks complete, 2 remaining
+
+### Acceptance Criteria
+
+- [ ] Named test `frontend/e2e/approval-packet-journey.spec.ts` :: policy (check -> native submit -> approval packet print (real frontend/backend + local HTTP TPP stub verifies packet renders trip title, fare, verdict, and triggers window.print) passes in the repository's frontend test runner.
+- [ ] Deliberate break → revert, shown in the PR: Remove ApprovalPacket mount in frontend/src/routes/WorkspacePage.tsx:3223-3224 (state at :1324); packet never opens and browser test fails; record that the named test fails, then revert and record that it passes.
+"""
+    updated, count = reconcile_acceptance_checkboxes(sample)
+    assert count == 2
+    assert "**Progress:** 6/6 tasks complete" in updated
+    assert "- [x] Named test `frontend/e2e/approval-packet-journey.spec.ts`" in updated
+    assert "- [ ]" not in updated.split("### Acceptance Criteria", 1)[1]
+
+
+def test_deliberate_break_commits_are_branch_ancestors() -> None:
+    for commit in (DELIBERATE_BREAK_COMMIT, DELIBERATE_BREAK_REVERT_COMMIT):
+        proc = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", commit, "HEAD"],
+            check=False,
+        )
+        assert proc.returncode == 0, f"{commit} must be an ancestor of HEAD"
 
 
 def test_deliberate_break_documented_workspace_mount_removal() -> None:

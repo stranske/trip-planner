@@ -147,3 +147,16 @@ Full canary (ports 8806/5184/8114):
 - Summary: **2 passed** — simulated TPP at `http://127.0.0.1:8114`
 
 Both acceptance criteria remain satisfied (`039d13fb` break, `87d7f2eb` revert on branch).
+
+## Keepalive re-verification (2026-11-17, acceptance checkbox reconciliation)
+
+Added `scripts/reconcile_pr_acceptance_checkboxes.py` to check off acceptance criteria on the
+GitHub PR body when verification doc gates pass (`gh pr edit` when `GH_TOKEN` is set).
+
+Structural guards: `pytest tests/scripts/test_two_trip_ui_canary_wiring.py -m "not slow"` → **16 passed**.
+
+Full canary (ports 8806/5184/8114):
+
+- Named journey → **passed** (3.2s)
+- `two-trip-canary.spec.ts` → **passed** (8.0s)
+- Summary: **2 passed** — simulated TPP at `http://127.0.0.1:8114`
