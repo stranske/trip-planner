@@ -362,3 +362,45 @@ checklist/results body update and the additive `needs-human` label with
 was changed. Publishing the failure/restoration evidence and reconciling the
 PR checkboxes still require PR write access. PR #2047 was confirmed open and
 ready for review (`draft=false`).
+
+## Existing-file confinement fixtures
+
+Observed locally on 2026-11-17 from consumer commit `4c7b9289` with this
+follow-up applied. The baseline whole-file run passed 81 tests. The existing
+parent-directory receipt fixture referenced a missing file; it now creates a
+real, otherwise valid receipt outside the fixture root. Added escaped symlinks
+for receipt, run and artifact files, plus accepted nested local paths. These
+cases exercise the same offline validator and preserve the addressability and
+existing local-path checks.
+
+Temporarily changed the workflow-only expected diagnostic to an empty list,
+leaving the validator and socket/DNS guards unchanged. The named test exited 1:
+**9 failed, 69 passed**, each failure reporting
+`VERIFIED needs a local JSON receipt, not a workflow filename`. Restored the
+rejection expectation in a `finally` block, then verified:
+
+| Command | Observed result |
+| --- | --- |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py::test_coverage_map_keeps_claims_scoped_to_their_evidence -q -m "not slow"` | Exit 0; 78 passed |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py -q -m "not slow"` | Exit 0; 85 passed |
+| `ruff check tests/preferences/test_legacy_request_adapter.py` | Exit 0 |
+| `black --line-length 100 tests/preferences/test_legacy_request_adapter.py` | Exit 0; unchanged |
+| `BLACK_NUM_WORKERS=1 BLACK_CACHE_DIR=/tmp/black-2044-boundaries black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .` | Exit 0; 530 files unchanged |
+
+The initial parallel Black check stalled and was interrupted. Ran Black's CLI
+with its batch formatter replaced by serial calls to `reformat_one`, retaining
+the CLI's source discovery, configuration, CHECK mode and report. All 530 files
+passed; the required unmodified CLI command above then passed with that cache.
+
+Reconciliation of all implemented checklist entries was attempted before this
+follow-up. The connector rejected the PR body update, results/blocker comment
+and additive `needs-human` label with
+`MCP tool call requires approval, but approval policy is never`. No PR metadata
+was changed. The receipt fixtures verify validator behavior only; actual
+product execution claims remain UNVERIFIED.
+
+The commit attempt `test: exercise retained receipt path confinement` was
+blocked at `git add` (exit 128): `.git/index.lock` could not be created on the
+read-only filesystem. The changed test and this evidence record remain local;
+committing them on the existing branch and publishing the checklist/evidence
+require an environment with Git and PR write access.

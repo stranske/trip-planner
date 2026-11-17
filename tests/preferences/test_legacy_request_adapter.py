@@ -265,6 +265,10 @@ def _coverage_map_execution_errors(text: str, root: Path) -> list[str]:
         "malformed-receipt",
         "non-object-receipt",
         "receipt-outside-root",
+        "receipt-symlink-outside-root",
+        "run-symlink-outside-root",
+        "artifact-symlink-outside-root",
+        "nested-local-locators",
         "unknown-layer",
         "unknown-status",
         "short-sha",
@@ -369,6 +373,11 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
         "malformed-receipt": ["Unreadable JSON receipt"],
         "non-object-receipt": ["Receipt must be an object"],
         "receipt-outside-root": ["VERIFIED needs a local JSON receipt, not a workflow filename"],
+        "receipt-symlink-outside-root": [
+            "VERIFIED needs a local JSON receipt, not a workflow filename"
+        ],
+        "run-symlink-outside-root": ["Missing or invalid run locator"],
+        "artifact-symlink-outside-root": ["Missing or invalid artifact locator"],
         "unknown-layer": ["Unknown proof layer"],
         "unknown-status": ["Unknown execution status"],
         "short-sha": ["consumer_sha must be an exact full SHA"],
@@ -451,8 +460,30 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
         claim["layer"] = receipt["layer"] = case.removeprefix("workflow-only-")
         claim["receipt"] = "workflow.yml"
         expected = expected_errors["workflow-only"]
-    elif case == "receipt-outside-root":
-        claim["receipt"] = "../receipt.json"
+    elif case == "receipt-outside-root" or case.endswith("-symlink-outside-root"):
+        field = case.split("-", 1)[0]
+        suffix = ".log" if field == "run" else ".json"
+        outside = tmp_path.parent / f"{tmp_path.name}-outside{suffix}"
+        outside.write_text(json.dumps(receipt), encoding="utf-8")
+        assert outside.is_file() and not outside.resolve().is_relative_to(tmp_path.resolve())
+        if case == "receipt-outside-root":
+            claim["receipt"] = f"../{outside.name}"
+        else:
+            link = tmp_path / f"linked{suffix}"
+            link.symlink_to(outside)
+            assert link.is_file()
+            if field == "receipt":
+                claim[field] = link.name
+            else:
+                receipt[field] = link.name
+    elif case == "nested-local-locators":
+        retained = tmp_path / "retained"
+        retained.mkdir()
+        (tmp_path / "run.log").rename(retained / "run.log")
+        (tmp_path / "result.json").rename(retained / "result.json")
+        receipt["run"] = "retained/run.log"
+        receipt["artifact"] = "retained/result.json"
+        claim["receipt"] = "retained/receipt.json"
     elif case == "unknown-layer":
         claim["layer"] = "all_layers"
     elif case == "unknown-status":
@@ -499,7 +530,9 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
     }:
         raise AssertionError(f"Unhandled fixture case: {case}")
 
-    receipt_path = tmp_path / "receipt.json"
+    receipt_path = tmp_path / (
+        "retained/receipt.json" if case == "nested-local-locators" else "receipt.json"
+    )
     receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
     if case == "missing-receipt":
         receipt_path.unlink()
