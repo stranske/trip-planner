@@ -280,7 +280,10 @@ def _coverage_map_execution_errors(text: str, root: Path) -> list[str]:
         "missing-artifact",
         "workflow-as-run",
         "workflow-as-artifact",
+        "missing-local-run",
         "missing-local-artifact",
+        "directory-as-run",
+        "directory-as-artifact",
         "missing-observed-result",
         "failed-result",
         "skipped-result",
@@ -397,7 +400,10 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
         "missing-artifact": ["Missing or invalid artifact locator"],
         "workflow-as-run": ["Missing or invalid run locator"],
         "workflow-as-artifact": ["Missing or invalid artifact locator"],
+        "missing-local-run": ["Missing or invalid run locator"],
         "missing-local-artifact": ["Missing or invalid artifact locator"],
+        "directory-as-run": ["Missing or invalid run locator"],
+        "directory-as-artifact": ["Missing or invalid artifact locator"],
         "missing-observed-result": ["Receipt needs an observed PASS, summary and zero skips"],
         "failed-result": ["Receipt needs an observed PASS, summary and zero skips"],
         "skipped-result": ["Receipt needs an observed PASS, summary and zero skips"],
@@ -506,8 +512,13 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
         receipt.pop(case.removeprefix("missing-").replace("-", "_"))
     elif case in {"workflow-as-run", "workflow-as-artifact"}:
         receipt[case.removeprefix("workflow-as-")] = "workflow.yml"
-    elif case == "missing-local-artifact":
-        receipt["artifact"] = "absent.json"
+    elif case.startswith(("missing-local-", "directory-as-")):
+        field = case.rsplit("-", 1)[1]
+        retained_path = tmp_path / receipt[field]
+        retained_path.unlink()
+        if case.startswith("directory-as-"):
+            # An allowed extension cannot make a directory retained evidence.
+            retained_path.mkdir()
     elif case == "failed-result":
         receipt["observed_result"]["status"] = "FAIL"
     elif case == "skipped-result":

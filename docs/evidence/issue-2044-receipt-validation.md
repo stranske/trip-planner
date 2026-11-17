@@ -515,3 +515,45 @@ the evidence/blocker comment and the additive `needs-human` label, each with
 changed. A final read confirmed PR #2047 is open with `draft=false`. Publishing
 the evidence/checklist and committing these changes require an environment
 with the corresponding write access.
+
+## Retained local evidence instances
+
+Observed locally on 2026-11-17 from consumer commit
+`0bdaeb2f7204e2e71280f094449208aabb90f8d2` with this follow-up applied.
+Reviewed the recent commits and verified the baseline whole file: **94 passed**.
+All implementation tasks and acceptance checks were already satisfied by those
+commits and the failure/restoration observations above. Attempted to reconcile
+every remaining PR checkbox before further changes; automatic approval review
+rejected the body update with `MCP tool call requires approval, but approval
+policy is never`.
+
+Added three cases to the existing named test: a retained run file removed before
+validation, and run/artifact directories whose names have otherwise allowed
+extensions. The existing missing-local-artifact case now removes its retained
+file too. These checks use the same helper, exact diagnostic assertions and
+socket/DNS guards. They preserve the original addressability/local-path checks
+and do not promote actual execution claims beyond UNVERIFIED.
+
+| Command | Observed result |
+| --- | --- |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py::test_coverage_map_keeps_claims_scoped_to_their_evidence -q -m "not slow"` | Exit 0; 90 passed |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py -q -m "not slow"` | Exit 0; 97 passed |
+| `black --line-length 100 tests/preferences/test_legacy_request_adapter.py` | Exit 0; unchanged |
+| `ruff check tests/preferences/test_legacy_request_adapter.py` | Exit 0 |
+| `BLACK_NUM_WORKERS=1 BLACK_CACHE_DIR=/tmp/black-2044-retained-files black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .` | Exit 0; 530 files unchanged |
+
+The default repository-wide Black invocation failed because the sandbox denied
+its worker socket. The single-worker asynchronous fallback stalled and was
+interrupted. Ran Black's CLI with serial `reformat_one` calls replacing only
+batch dispatch, retaining CLI discovery, configuration and CHECK-mode reporting.
+All 530 files passed, followed by the unmodified required command above using
+that freshly populated cache. No formatting failure was suppressed.
+
+Commit attempt `test: require retained local receipt evidence files` stopped at
+`git add` (exit 128): `.git/index.lock` could not be created on the read-only
+filesystem. The test and this record remain uncommitted on `codex/issue-2044`.
+Automatic approval review also rejected the evidence/blocker comment and the
+additive `needs-human` label with the same approval-policy error as the body
+update. No PR metadata changed. Final read: PR #2047 is open with `draft=false`.
+Completing delivery requires writable Git metadata and permission to publish
+the already verified checklist and evidence to the existing PR.
