@@ -63,3 +63,26 @@ commit because writes require approval while the approval policy is `never`.
 PR-body checkbox reconciliation, a blocker comment and the `needs-human` label
 were rejected for the same reason. The verified test changes remain uncommitted
 in the working tree. PR #2049 was verified open with `draft=false`.
+
+## Follow-up on checked-out commit aa1e8522
+
+- Extended the named rejected-update test to preserve two events in different
+  categories, including fractional spending, and assert planned, actual and
+  remaining totals before comparing the full response after rejection.
+- Added `tests/persistence/test_budget_currency_atomicity.py`, which calls the
+  real route function against SQLite without an HTTP transport. It verifies
+  HTTPException status 422, no pending ORM changes, no SQL INSERT/UPDATE/DELETE,
+  identical plan/version/spend/trip/session rows in a separate session, and
+  unchanged aggregate totals and version count. Command:
+  `python3 -m pytest tests/persistence/test_budget_currency_atomicity.py -q -m "not slow"`
+  — **1 passed**, 14 dependency warnings.
+- [ ] The named HTTP acceptance test remains unverified in this follow-up.
+  Both the named test and the whole route test file exit unsuccessfully from
+  the unchanged runtime prerequisite because socket-pair `sendall` is denied.
+  No transport adapters or runtime-check bypasses were used.
+- Both changed Python files pass individual Black checks at line length 100.
+  Ruff and `git diff --check` pass. The required full-repository Black command
+  fails before checking formatting because multiprocessing's forkserver cannot
+  bind a local socket (`PermissionError: [Errno 1] Operation not permitted`).
+  Per the pre-commit gate, these follow-up changes must remain uncommitted until
+  that command passes in a runner permitting the required local operations.

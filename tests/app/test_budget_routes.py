@@ -449,9 +449,17 @@ def test_plan_currency_change_rejected_when_spend_in_other_currency(
         json={"category_key": "food", "amount": 30, "source_context": "Lunch"},
     )
     assert recorded.status_code == 200
+    recorded = client.post(
+        f"{budget_url}/spend-events",
+        json={"category_key": "lodging", "amount": 45.5, "source_context": "Hotel deposit"},
+    )
+    assert recorded.status_code == 200
     before = recorded.json()
     plan_id = before["budget_plan"]["budget_plan_id"]
-    assert before["summary"]["actual_total"] == 30
+    assert len(before["spend_events"]) == 2
+    assert before["summary"]["planned_total"] == 150
+    assert before["summary"]["actual_total"] == 75.5
+    assert before["summary"]["remaining_total"] == 74.5
     assert before["summary"]["version_count"] == 1
     trip_id = before["budget_plan"]["trip_id"]
     persisted_before = _persisted_budget_state(trip_id)
