@@ -68,3 +68,17 @@ TRIP_PLANNER_CANARY_TPP_PORT=8114 \
 - Summary: **2 passed** — `Two-trip UI canary PASS (simulated TPP transport …)`
 
 Both acceptance criteria are satisfied on `cursor/issue-2043` (break `039d13fb`, revert `87d7f2eb`).
+
+## Keepalive re-verification (2026-11-17, backend launcher)
+
+`run_two_trip_ui_canary.sh` now starts the FastAPI backend with the same `.venv`/system
+`PYTHON` resolution as `check_full_stack_runtime.sh` instead of `uv run`, matching CI
+(`pip install -e ".[dev]"` before the canary).
+
+Structural guards: `pytest tests/scripts/test_two_trip_ui_canary_wiring.py -m "not slow"` → **7 passed**.
+
+Full canary (ports 8806/5184/8114):
+
+- Named test `approval-packet-journey.spec.ts` → **passed** (3.8s)
+- `two-trip-canary.spec.ts` → **passed** (7.2s)
+- Summary: **2 passed**

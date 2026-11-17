@@ -17,6 +17,8 @@ def test_canary_script_starts_tpp_stub_and_exports_tpp_base_url() -> None:
     assert 'TPP_BASE_URL="${tpp_url}"' in script
     assert "npm --prefix frontend run test:e2e:canary" in script
     assert "simulated TPP transport" in script
+    assert '"${PYTHON}" -m uvicorn trip_planner.app.main:app' in script
+    assert "uv run" not in script
 
 
 def test_frontend_canary_runner_includes_approval_packet_journey() -> None:

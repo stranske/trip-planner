@@ -3,6 +3,11 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -x "${repo_root}/.venv/bin/python" ]; then
+  PYTHON="${repo_root}/.venv/bin/python"
+else
+  PYTHON="python3"
+fi
 backend_port="${TRIP_PLANNER_CANARY_BACKEND_PORT:-8000}"
 frontend_port="${TRIP_PLANNER_CANARY_FRONTEND_PORT:-5173}"
 backend_url="http://127.0.0.1:${backend_port}"
@@ -72,7 +77,7 @@ TPP_BASE_URL="${tpp_url}" \
 TPP_ACCESS_TOKEN="${tpp_access_token}" \
 TPP_OIDC_PROVIDER="${TRIP_PLANNER_CANARY_TPP_OIDC_PROVIDER:-google}" \
 TPP_ORGANIZATION_ID="${TRIP_PLANNER_CANARY_TPP_ORGANIZATION_ID:-org-canary}" \
-  uv run --extra dev python -m uvicorn trip_planner.app.main:app \
+  "${PYTHON}" -m uvicorn trip_planner.app.main:app \
   --host 127.0.0.1 --port "${backend_port}" >"${backend_log}" 2>&1 &
 backend_pid=$!
 wait_for_url "${backend_url}/api/health"
