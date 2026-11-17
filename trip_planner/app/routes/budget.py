@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from trip_planner.app.routes.errors import public_http_error
@@ -10,6 +11,7 @@ from trip_planner.app.schemas.budget import (
 from trip_planner.app.services.auth import AuthenticatedUser, require_authenticated_user
 from trip_planner.app.services.budget import (
     WorkspaceBudgetNotFoundError,
+    WorkspaceBudgetPlanCurrencyMismatchError,
     get_workspace_budget_payload,
     record_workspace_spend_event,
     update_workspace_spend_event,
@@ -18,6 +20,15 @@ from trip_planner.app.services.budget import (
 from trip_planner.persistence.db import get_db_session
 
 router = APIRouter(tags=["budget"])
+
+
+async def budget_currency_conflict_response(_request: Request, error: Exception) -> JSONResponse:
+    http_error = public_http_error(
+        error,
+        status_code=409,
+        message="Recorded spend currencies conflict with the workspace budget currency.",
+    )
+    return JSONResponse(status_code=http_error.status_code, content={"detail": http_error.detail})
 
 
 @router.get("/workspace/{trip_id}/budget", response_model=BudgetWorkspaceResponse)
@@ -58,6 +69,12 @@ def save_workspace_budget(
     except WorkspaceBudgetNotFoundError as error:
         raise public_http_error(
             error, status_code=404, message="The requested workspace budget was not found."
+        ) from error
+    except WorkspaceBudgetPlanCurrencyMismatchError as error:
+        raise public_http_error(
+            error,
+            status_code=422,
+            message="The budget plan currency must match all recorded spend currencies.",
         ) from error
     except ValueError as error:
         status_code = 422 if "must be finite" in str(error) else 400
