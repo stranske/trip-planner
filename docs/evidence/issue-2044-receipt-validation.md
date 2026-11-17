@@ -614,3 +614,51 @@ and additive `needs-human` label with the same approval-policy error as the
 PR-body update. No PR metadata changed. A final read confirmed PR #2047 is open
 with `draft=false`. Completing delivery requires writable Git metadata and
 PR write access to publish the verified checklist and failure/restoration evidence.
+
+## Malformed local path diagnostics
+
+Observed locally on 2026-11-17 from consumer commit
+`fd89e5d6b887091f6c0f2339dc56eb3b54b2a034`, using Linux and CPython 3.14.10.
+The baseline whole file passed 109 tests. The existing receipt contract, README
+distinctions and addressability/local-path checks already satisfy the original
+implementation requirements; the PR checklist still contains stale unchecked items.
+
+Added three cases to the existing named test for null characters in receipt,
+run and artifact path strings. Before the fix, all three raised `ValueError`
+from `Path.resolve()` instead of returning receipt diagnostics. The shared
+helper now treats path resolution errors as invalid evidence; all three cases
+pass with their exact expected diagnostics. Actual execution claims stay UNVERIFIED.
+
+For the deliberate break, temporarily replaced the shared `workflow-only`
+expected diagnostics with an empty list, expecting workflow configuration to
+validate as VERIFIED. The named test exited 1 with **9 failed, 96 passed**:
+`workflow-only` and all eight layer-specific workflow-only cases rejected the
+claim with `VERIFIED needs a local JSON receipt, not a workflow filename`.
+The temporary expectation was restored byte-for-byte in a `finally` block.
+Socket connection and DNS guards remained active throughout.
+
+| Command | Observed result |
+| --- | --- |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py::test_coverage_map_keeps_claims_scoped_to_their_evidence -q -m "not slow" --tb=short` | Exit 0 after restoration; 105 passed |
+| `python3 -m pytest tests/preferences/test_legacy_request_adapter.py -q -m "not slow"` | Exit 0; 112 passed |
+| `black --line-length 100 tests/preferences/test_legacy_request_adapter.py` | Exit 0; unchanged |
+| `ruff check tests/preferences/test_legacy_request_adapter.py` | Exit 0 |
+| `BLACK_NUM_WORKERS=1 BLACK_CACHE_DIR=/tmp/black-2044-paths black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .` | Exit 0; 530 files unchanged |
+
+The first repository-wide Black check timed out after checking 484 files.
+Completed Black's CLI check with serial `reformat_one` dispatch, preserving
+discovery, configuration and CHECK-mode reporting for all 530 files. The required
+unmodified CLI command then passed using that checked cache.
+
+- [x] Validate unverified and receipt-backed examples through the shared helper.
+- [x] Preserve bounded proof layers, unverified documentation and README distinctions.
+- [x] Verify the named test and deliberate workflow-only failure/restoration.
+- [x] Verify the whole file and preserve addressability/local-path checks.
+
+Commit attempt `test: report malformed receipt paths as validation errors`
+stopped at staging (exit 128): `.git/index.lock` is on a read-only filesystem.
+The source change and these observations remain uncommitted on `codex/issue-2044`.
+Automatic approval review rejected the PR evidence comment, checklist update
+and additive `needs-human` label with `MCP tool call requires approval, but
+approval policy is never`. No PR metadata changed. Completing delivery requires
+writable Git metadata and permission to publish the verified results/checklist.

@@ -163,8 +163,11 @@ def _coverage_claim_errors(claim: dict, root: Path) -> list[str]:
     def local_file(value: object) -> Path | None:
         if not isinstance(value, str) or not value or Path(value).is_absolute():
             return None
-        path = (root / value).resolve()
-        return path if path.is_relative_to(root.resolve()) and path.is_file() else None
+        try:
+            path = (root / value).resolve()
+            return path if path.is_relative_to(root.resolve()) and path.is_file() else None
+        except (OSError, ValueError):
+            return None
 
     if claim.get("layer") not in _PROOF_LAYERS:
         return ["Unknown proof layer"]
@@ -314,6 +317,7 @@ def _coverage_map_execution_errors(text: str, root: Path) -> list[str]:
     + [f"unverified-{layer}" for layer in sorted(_PROOF_LAYERS)]
     + [f"verified-{layer}" for layer in sorted(_PROOF_LAYERS)]
     + [f"workflow-only-{layer}" for layer in sorted(_PROOF_LAYERS)]
+    + [f"invalid-local-path-{field}" for field in ("receipt", "run", "artifact")]
     + [
         f"remote-{field}-{kind}"
         for field in ("run", "artifact")
@@ -482,6 +486,16 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
         claim["layer"] = receipt["layer"] = case.removeprefix("workflow-only-")
         claim["receipt"] = "workflow.yml"
         expected = expected_errors["workflow-only"]
+    elif case.startswith("invalid-local-path-"):
+        field = case.removeprefix("invalid-local-path-")
+        # Malformed JSON path values must produce the normal receipt diagnostic,
+        # rather than letting pathlib raise before validation can report it.
+        if field == "receipt":
+            claim[field] = "invalid\0receipt.json"
+            expected = expected_errors["missing-receipt"]
+        else:
+            receipt[field] = "invalid\0evidence.log"
+            expected = [f"Missing or invalid {field} locator"]
     elif case == "receipt-outside-root" or case.endswith("-symlink-outside-root"):
         field = case.split("-", 1)[0]
         suffix = ".log" if field == "run" else ".json"
