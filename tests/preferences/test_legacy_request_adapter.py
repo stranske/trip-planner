@@ -156,6 +156,14 @@ _PROOF_LAYERS = {
     "deployment_restart",
 }
 
+_LAYER_SECTION_15_ROWS = {
+    "fixture_lifecycle": "| Fixture-envelope lifecycle / reload |",
+    "local_http_transport": "| TPP client and policy/result contracts |",
+    "pinned_two_app": "| Local pinned authenticated two-app handoff |",
+    "native_lineage": "| Native lineage and reoptimization |",
+    "configured_full_product": "| Current full-product configured TPP transport |",
+}
+
 
 def _coverage_claim_errors(claim: dict, root: Path) -> list[str]:
     """Check a bounded receipt contract offline; never infer execution from paths."""
@@ -240,23 +248,25 @@ def _coverage_map_execution_errors(text: str, root: Path) -> list[str]:
     assert len(claims) == len(_PROOF_LAYERS)
     assert {claim["layer"] for claim in claims} == _PROOF_LAYERS
     errors = [error for claim in claims for error in _coverage_claim_errors(claim, root)]
-    configured = next(claim for claim in claims if claim["layer"] == "configured_full_product")
-    # Read the current-status declaration, not status words in later caveats.
-    # Word boundaries distinguish VERIFIED from the suffix of UNVERIFIED.
-    for prefix, pattern in (
-        (
-            "| Current full-product configured TPP transport |",
-            r"\bcurrent configured execution (UNVERIFIED|VERIFIED)\b",
-        ),
-        (
-            "> **Current configured execution:",
-            r"^> \*\*Current configured execution: (UNVERIFIED|VERIFIED)\b",
-        ),
-    ):
-        line = next(line for line in text.splitlines() if line.startswith(prefix))
-        status = re.search(pattern, line)
-        if status is None or status.group(1) != configured["status"]:
-            errors.append(f"Configured execution status mismatch: {prefix}")
+    claim_by_layer = {claim["layer"]: claim for claim in claims}
+    # Compare Section 15 table prose to the registry, skipping the historical row.
+    for layer, prefix in _LAYER_SECTION_15_ROWS.items():
+        line = next((line for line in text.splitlines() if line.startswith(prefix)), None)
+        if line is None:
+            continue
+        registry_status = claim_by_layer[layer]["status"]
+        if layer == "configured_full_product":
+            status = re.search(r"\bcurrent configured execution (UNVERIFIED|VERIFIED)\b", line)
+        else:
+            status = re.search(r"\b(UNVERIFIED|VERIFIED)\b", line)
+        if status is not None and status.group(1) != registry_status:
+            errors.append(f"Layer {layer} execution status mismatch: {prefix}")
+    configured = claim_by_layer["configured_full_product"]
+    preamble = "> **Current configured execution:"
+    line = next(line for line in text.splitlines() if line.startswith(preamble))
+    status = re.search(r"^> \*\*Current configured execution: (UNVERIFIED|VERIFIED)\b", line)
+    if status is None or status.group(1) != configured["status"]:
+        errors.append(f"Configured execution status mismatch: {preamble}")
     return errors
 
 
@@ -304,6 +314,7 @@ def _coverage_map_execution_errors(text: str, root: Path) -> list[str]:
         "document-preamble-status-mismatch",
         "document-row-status-decoy",
         "document-preamble-status-decoy",
+        "document-non-configured-row-status-mismatch",
     ]
     + [f"missing-{field}" for field in ("consumer_sha", "producer_sha", "environment", "command")]
     + [
@@ -424,16 +435,19 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
             "VERIFIED needs a local JSON receipt, not a workflow filename"
         ],
         "document-row-status-mismatch": [
-            "Configured execution status mismatch: | Current full-product configured TPP transport |"
+            "Layer configured_full_product execution status mismatch: | Current full-product configured TPP transport |"
         ],
         "document-preamble-status-mismatch": [
             "Configured execution status mismatch: > **Current configured execution:"
         ],
         "document-row-status-decoy": [
-            "Configured execution status mismatch: | Current full-product configured TPP transport |"
+            "Layer configured_full_product execution status mismatch: | Current full-product configured TPP transport |"
         ],
         "document-preamble-status-decoy": [
             "Configured execution status mismatch: > **Current configured execution:"
+        ],
+        "document-non-configured-row-status-mismatch": [
+            "Layer pinned_two_app execution status mismatch: | Local pinned authenticated two-app handoff |"
         ],
     }
     expected = expected_errors.get(case, [])
@@ -623,6 +637,13 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
         block = re.search(r"```json\n(.*?)\n```", text, re.DOTALL)
         assert block is not None
         registry = json.loads(block.group(1))
+        if case == "document-non-configured-row-status-mismatch":
+            lines = text.splitlines()
+            for index, line in enumerate(lines):
+                if line.startswith("| Local pinned authenticated two-app handoff |"):
+                    lines[index] = f"{line} Current execution VERIFIED."
+            assert _coverage_map_execution_errors("\n".join(lines), tmp_path) == expected
+            return
         configured = next(
             item
             for item in registry["execution_claims"]
