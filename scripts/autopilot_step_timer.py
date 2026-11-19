@@ -9,6 +9,12 @@ import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING or __package__:  # `python -m scripts.autopilot_step_timer`
+    from scripts.autopilot_summary_environment import summary_environment_details
+else:  # `python scripts/autopilot_step_timer.py`
+    from autopilot_summary_environment import summary_environment_details
 
 
 def _utc_now_epoch_ms() -> int:
@@ -44,24 +50,6 @@ def env_path(var_name: str) -> Path:
     return Path(value)
 
 
-def _summary_env_details() -> dict[str, str]:
-    keys = (
-        "GITHUB_RUN_ID",
-        "GITHUB_WORKFLOW",
-        "GITHUB_JOB",
-        "GITHUB_RUN_ATTEMPT",
-        "GITHUB_REF",
-        "GITHUB_SHA",
-        "RUNNER_OS",
-    )
-    details: dict[str, str] = {}
-    for key in keys:
-        value = os.environ.get(key)
-        if value:
-            details[key.lower()] = value
-    return details
-
-
 def _write_failure_summary(*, error: BaseException, exit_code: int, step_name: str | None) -> None:
     summary_path = os.environ.get("AUTOPILOT_METRICS_SUMMARY_PATH")
     if not summary_path:
@@ -77,7 +65,7 @@ def _write_failure_summary(*, error: BaseException, exit_code: int, step_name: s
         "error_category": error_category.strip(),
         "exit_code": exit_code,
         "message": str(error),
-        "environment": _summary_env_details(),
+        "environment": summary_environment_details(),
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = json.dumps(record, separators=(",", ":"), sort_keys=True)
