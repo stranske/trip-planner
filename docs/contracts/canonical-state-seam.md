@@ -86,6 +86,21 @@ piece of evidence required by acceptance criterion 1 of #960 ("One test
 demonstrates the canonical state model across planner turn, checkpoint,
 feedback, and policy follow-up").
 
+### Typed in-trip events
+
+An authenticated trip owner can submit a typed disruption at
+`POST /api/planner/{trip_id}/in-trip-events`. The planner calculates the
+transition against the active saved scenario and writes the activity,
+pending decision, proposed revision and structured planner turn in one
+transaction. The proposed revision retains its base version for review.
+A repeated event ID with an identical payload returns the current session
+without adding duplicates. A different payload with the same ID returns
+HTTP 409.
+
+The [restart and replay test](../../tests/integrations/test_in_trip_planner_persistence.py)
+submits two concurrent copies to the real route, then reopens the same
+SQLite file and checks the workspace scenario and the planner turn.
+
 ## Out of scope
 
 - Live external travel providers (TPP is exercised via the workspace handler
