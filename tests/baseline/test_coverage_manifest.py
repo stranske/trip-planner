@@ -146,6 +146,7 @@ def test_non_transport_roundtrips_use_canonical_models(tmp_path: Path, record_pr
     from trip_planner.options import LodgingOption, TransportOption
     from trip_planner.ranking import RankedResultSet
 
+    assert isinstance(adapter.load_option("coastal_flight.json"), TransportOption)
     assert isinstance(adapter.load_model("coastal_flight.json"), TransportOption)
     assert isinstance(
         adapter.load_model("tests/fixtures/options/lodging/central_urban_hotel.json"),
@@ -166,6 +167,10 @@ def test_non_transport_roundtrips_use_canonical_models(tmp_path: Path, record_pr
     non_object_payload = tmp_path / "non_object_fixture.json"
     non_object_payload.write_text("[]", encoding="utf-8")
     assert adapter.roundtrip_is_stable(str(non_object_payload)) is False
+
+    unsupported_payload = tmp_path / "unsupported_fixture.json"
+    unsupported_payload.write_text("{}", encoding="utf-8")
+    assert adapter.roundtrip_is_stable(str(unsupported_payload)) is False
 
     central_lodging_path = REPO_ROOT / "tests/fixtures/options/lodging/central_urban_hotel.json"
     central_payload = json.loads(central_lodging_path.read_text(encoding="utf-8"))
@@ -211,12 +216,65 @@ def test_non_transport_roundtrips_use_canonical_models(tmp_path: Path, record_pr
     assert central_metrics["commerciality"] == pytest.approx(0.732)
     assert central_metrics["commerciality"] > low_commerciality_metrics["commerciality"]
 
+    multi_source_lodging = tmp_path / "multi_source_central_hotel.json"
+    multi_source_payload = copy.deepcopy(central_payload)
+    multi_source_payload["source_refs"].append(
+        {
+            "provenance_id": "prov-kyoto-central-official",
+            "source_id": "official-hotel-feed",
+            "source_category": "official_operational",
+            "subject_kind": "option",
+            "subject_id": "lodg-kyoto-central-hotel",
+            "contribution_kind": "inventory",
+            "summary": "Official feed without trust_snapshot metrics.",
+            "freshness_days_at_capture": 0,
+            "quality_value_fit": {
+                "quality_signal": 0.95,
+                "value_signal": 0.95,
+                "fit_signal": 0.95,
+                "confidence": 0.99,
+            },
+        }
+    )
+    multi_source_lodging.write_text(json.dumps(multi_source_payload), encoding="utf-8")
+    multi_source_metrics = adapter.metrics_for(str(multi_source_lodging))
+    assert multi_source_metrics["freshness_confidence"] == pytest.approx(
+        central_metrics["freshness_confidence"]
+    )
+    assert multi_source_metrics["commerciality"] == pytest.approx(central_metrics["commerciality"])
+
+    business_ranking_path = (
+        REPO_ROOT / "tests/fixtures/ranking/results/business_candidate_result.json"
+    )
+    business_payload = json.loads(business_ranking_path.read_text(encoding="utf-8"))
     business_metrics = adapter.metrics_for(
         "tests/fixtures/ranking/results/business_candidate_result.json"
     )
     assert business_metrics["anchor_alignment"] == 0.0
     assert business_metrics["quality_floor_fit"] == 0.0
     assert business_metrics["discovery_fit"] == 0.0
+
+    bypassed_business = tmp_path / "bypassed_keys_business_result.json"
+    bypassed_business_payload = copy.deepcopy(business_payload)
+    bypassed_business_payload["results"][0]["target_option"]["fit_signals"].update(
+        {
+            "anchor_alignment": 0.95,
+            "quality_floor_fit": 0.92,
+            "discovery_fit": 0.88,
+            "freshness_confidence": 0.91,
+        }
+    )
+    bypassed_business.write_text(json.dumps(bypassed_business_payload), encoding="utf-8")
+    assert adapter.roundtrip_is_stable(str(bypassed_business)) is True
+    bypassed_business_eval = adapter.evaluate_fixture(str(bypassed_business))
+    for bypassed_key in (
+        "anchor_alignment",
+        "quality_floor_fit",
+        "discovery_fit",
+        "freshness_confidence",
+    ):
+        assert bypassed_business_eval.metrics[bypassed_key] == 0.0
+        assert bypassed_key not in bypassed_business_eval.observed_reads
 
     route_metrics = adapter.metrics_for("tests/fixtures/ranking/results/route_bundle_result.json")
     assert route_metrics["anchor_alignment"] == 0.0
@@ -234,6 +292,9 @@ def test_non_transport_roundtrips_use_canonical_models(tmp_path: Path, record_pr
         "tests/fixtures/ranking/results/leisure_candidate_result.json"
     )
     reordered_metrics = adapter.metrics_for(str(reordered_leisure))
+    assert leisure_metrics["anchor_alignment"] == pytest.approx(1.0)
+    assert leisure_metrics["quality_floor_fit"] == pytest.approx(0.8225)
+    assert leisure_metrics["discovery_fit"] == pytest.approx(0.97)
     for key in ("anchor_alignment", "quality_floor_fit", "discovery_fit"):
         assert leisure_metrics[key] > 0.0
         assert leisure_metrics[key] == pytest.approx(reordered_metrics[key])
@@ -389,6 +450,19 @@ def test_non_transport_roundtrips_use_canonical_models(tmp_path: Path, record_pr
                 for key in ("freshness_confidence", "commerciality", "quality_signal")
             },
             "low_commerciality_lodging": low_commerciality_metrics["commerciality"],
+            "multi_source_lodging_attributed": (
+                multi_source_metrics["freshness_confidence"],
+                multi_source_metrics["commerciality"],
+            ),
+            "bypassed_business_keys_absent": not (
+                {
+                    "anchor_alignment",
+                    "quality_floor_fit",
+                    "discovery_fit",
+                    "freshness_confidence",
+                }
+                & bypassed_business_eval.observed_reads
+            ),
             "partial_canonical_ranking_discovery_absent": (
                 "discovery_fit" not in partial_eval.observed_reads
             ),
