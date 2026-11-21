@@ -20,8 +20,10 @@ from trip_planner.business import (
     PolicyConstraintSet,
 )
 from trip_planner.candidates import CandidateSet
-from trip_planner.itinerary import evaluate_bundle_feasibility
-from trip_planner.itinerary.feasibility import FeasibilityAssessment
+from trip_planner.itinerary.feasibility import (
+    FeasibilityAssessment,
+    evaluate_bundle_feasibility,
+)
 from trip_planner.options import InventoryBundle
 
 from .base import BaseRankingEngine
