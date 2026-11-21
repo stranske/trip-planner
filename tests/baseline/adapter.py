@@ -84,7 +84,7 @@ def _fixture_path(fixture_name: str) -> Path:
 def _load_payload(fixture_name: str) -> dict[str, Any]:
     payload = json.loads(_fixture_path(fixture_name).read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
-        raise ValueError(f"Baseline fixture must be a JSON object: {fixture_name}")
+        raise TypeError(f"Baseline fixture must be a JSON object: {fixture_name}")
     return payload
 
 

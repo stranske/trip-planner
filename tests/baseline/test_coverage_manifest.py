@@ -110,7 +110,10 @@ def test_non_transport_roundtrips_use_canonical_models(tmp_path: Path, record_pr
         [
             sys.executable,
             "-c",
-            "from trip_planner.ranking import RankedResultSet; print(RankedResultSet.__name__)",
+            (
+                "from trip_planner.ranking import ExplanationRecord, RankedResultSet; "
+                "print(f'{RankedResultSet.__name__}:{ExplanationRecord.__name__}')"
+            ),
         ],
         cwd=REPO_ROOT,
         env=env,
@@ -119,7 +122,39 @@ def test_non_transport_roundtrips_use_canonical_models(tmp_path: Path, record_pr
         check=False,
     )
     assert import_probe.returncode == 0, import_probe.stderr
-    assert import_probe.stdout.strip() == "RankedResultSet"
+    assert import_probe.stdout.strip() == "RankedResultSet:ExplanationRecord"
+
+    reverse_import_probe = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "from trip_planner.itinerary import ItineraryScenario; "
+                "from trip_planner.ranking import RankedResultSet; "
+                "print(f'{ItineraryScenario.__name__}:{RankedResultSet.__name__}')"
+            ),
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert reverse_import_probe.returncode == 0, reverse_import_probe.stderr
+    assert reverse_import_probe.stdout.strip() == "ItineraryScenario:RankedResultSet"
+
+    from trip_planner.options import LodgingOption, TransportOption
+    from trip_planner.ranking import RankedResultSet
+
+    assert isinstance(adapter.load_model("coastal_flight.json"), TransportOption)
+    assert isinstance(
+        adapter.load_model("tests/fixtures/options/lodging/central_urban_hotel.json"),
+        LodgingOption,
+    )
+    assert isinstance(
+        adapter.load_model("tests/fixtures/ranking/results/leisure_candidate_result.json"),
+        RankedResultSet,
+    )
 
     catalog = load_catalog(CATALOG_PATH)
     fixtures = _catalog_fixtures(catalog)
@@ -127,6 +162,10 @@ def test_non_transport_roundtrips_use_canonical_models(tmp_path: Path, record_pr
         assert (
             adapter.roundtrip_is_stable(fixture) is True
         ), f"Expected canonical roundtrip: {fixture}"
+
+    non_object_payload = tmp_path / "non_object_fixture.json"
+    non_object_payload.write_text("[]", encoding="utf-8")
+    assert adapter.roundtrip_is_stable(str(non_object_payload)) is False
 
     central_lodging_path = REPO_ROOT / "tests/fixtures/options/lodging/central_urban_hotel.json"
     central_payload = json.loads(central_lodging_path.read_text(encoding="utf-8"))
@@ -154,12 +193,23 @@ def test_non_transport_roundtrips_use_canonical_models(tmp_path: Path, record_pr
     aged_lodging_payload["source_refs"][0]["trust_snapshot"]["freshness_days"] = 180
     aged_lodging.write_text(json.dumps(aged_lodging_payload), encoding="utf-8")
 
+    low_commerciality_lodging = tmp_path / "low_commerciality_central_hotel.json"
+    low_commerciality_payload = copy.deepcopy(central_payload)
+    low_commerciality_payload["source_refs"][0]["trust_snapshot"]["commerciality"] = 0.1
+    low_commerciality_lodging.write_text(
+        json.dumps(low_commerciality_payload),
+        encoding="utf-8",
+    )
+
     central_metrics = adapter.metrics_for("tests/fixtures/options/lodging/central_urban_hotel.json")
     aged_metrics = adapter.metrics_for(str(aged_lodging))
+    low_commerciality_metrics = adapter.metrics_for(str(low_commerciality_lodging))
     assert central_metrics["quality_signal"] == pytest.approx(0.81)
     assert central_metrics["value_signal"] == pytest.approx(0.73)
     assert central_metrics["fit_signal"] == pytest.approx(0.76)
     assert central_metrics["freshness_confidence"] > aged_metrics["freshness_confidence"]
+    assert central_metrics["commerciality"] == pytest.approx(0.732)
+    assert central_metrics["commerciality"] > low_commerciality_metrics["commerciality"]
 
     business_metrics = adapter.metrics_for(
         "tests/fixtures/ranking/results/business_candidate_result.json"
@@ -187,6 +237,81 @@ def test_non_transport_roundtrips_use_canonical_models(tmp_path: Path, record_pr
     for key in ("anchor_alignment", "quality_floor_fit", "discovery_fit"):
         assert leisure_metrics[key] > 0.0
         assert leisure_metrics[key] == pytest.approx(reordered_metrics[key])
+
+    canonical_engine_contributions = [
+        {
+            "contribution_id": "anchor_alignment",
+            "label": "Anchor alignment",
+            "axis_key": "anchor_alignment",
+            "direction": "higher_better",
+            "raw_value": 0.91,
+            "normalized_signal": 0.91,
+            "weighted_impact": 0.15,
+            "summary": "Aligned with primary anchor.",
+        },
+        {
+            "contribution_id": "quality_floor_fit",
+            "label": "Quality floor fit",
+            "axis_key": "quality_floor_fit",
+            "direction": "higher_better",
+            "raw_value": 0.77,
+            "normalized_signal": 0.77,
+            "weighted_impact": 0.10,
+            "summary": "Meets lodging quality floor.",
+        },
+        {
+            "contribution_id": "discovery_fit",
+            "label": "Discovery fit",
+            "axis_key": "discovery_fit",
+            "direction": "higher_better",
+            "raw_value": 0.64,
+            "normalized_signal": 0.64,
+            "weighted_impact": 0.08,
+            "summary": "Supports neighborhood wandering.",
+        },
+    ]
+    canonical_ranking_file = tmp_path / "canonical_engine_ranking.json"
+    canonical_ranking_payload = copy.deepcopy(leisure_payload)
+    canonical_ranking_payload["results"][0]["score_breakdown"][
+        "component_contributions"
+    ] = canonical_engine_contributions
+    canonical_ranking_file.write_text(json.dumps(canonical_ranking_payload), encoding="utf-8")
+    assert adapter.roundtrip_is_stable(str(canonical_ranking_file)) is True
+
+    reversed_canonical_ranking_file = tmp_path / "reversed_canonical_engine_ranking.json"
+    reversed_canonical_payload = copy.deepcopy(canonical_ranking_payload)
+    reversed_canonical_payload["results"][0]["score_breakdown"]["component_contributions"] = list(
+        reversed(canonical_engine_contributions)
+    )
+    reversed_canonical_ranking_file.write_text(
+        json.dumps(reversed_canonical_payload),
+        encoding="utf-8",
+    )
+
+    canonical_ranking_metrics = adapter.metrics_for(str(canonical_ranking_file))
+    reversed_canonical_metrics = adapter.metrics_for(str(reversed_canonical_ranking_file))
+    assert canonical_ranking_metrics["anchor_alignment"] == pytest.approx(0.91)
+    assert canonical_ranking_metrics["quality_floor_fit"] == pytest.approx(0.77)
+    assert canonical_ranking_metrics["discovery_fit"] == pytest.approx(0.64)
+    for key in ("anchor_alignment", "quality_floor_fit", "discovery_fit"):
+        assert canonical_ranking_metrics[key] == pytest.approx(reversed_canonical_metrics[key])
+
+    partial_canonical_ranking_file = tmp_path / "partial_canonical_engine_ranking.json"
+    partial_canonical_payload = copy.deepcopy(canonical_ranking_payload)
+    partial_canonical_payload["results"][0]["score_breakdown"]["component_contributions"] = (
+        canonical_engine_contributions[:2]
+    )
+    partial_canonical_payload["results"][0]["score"] = 0.61
+    partial_canonical_payload["results"][0]["score_breakdown"]["final_score"] = 0.61
+    partial_canonical_ranking_file.write_text(
+        json.dumps(partial_canonical_payload),
+        encoding="utf-8",
+    )
+    assert adapter.roundtrip_is_stable(str(partial_canonical_ranking_file)) is True
+    partial_eval = adapter.evaluate_fixture(str(partial_canonical_ranking_file))
+    assert partial_eval.metrics["discovery_fit"] == 0.0
+    assert {"anchor_alignment", "quality_floor_fit"} <= partial_eval.observed_reads
+    assert "discovery_fit" not in partial_eval.observed_reads
 
     unused_control_key = "unused_baseline_control_signal"
     manifest_with_control = _build_manifest(extra_keys={unused_control_key})
@@ -263,5 +388,9 @@ def test_non_transport_roundtrips_use_canonical_models(tmp_path: Path, record_pr
                 key: central_metrics[key]
                 for key in ("freshness_confidence", "commerciality", "quality_signal")
             },
+            "low_commerciality_lodging": low_commerciality_metrics["commerciality"],
+            "partial_canonical_ranking_discovery_absent": (
+                "discovery_fit" not in partial_eval.observed_reads
+            ),
         },
     )
