@@ -12,7 +12,7 @@ from trip_planner.itinerary.feasibility import (
     evaluate_bundle_feasibility,
 )
 from trip_planner.options import InventoryBundle
-from trip_planner.ranking import RankedResult, RankedResultSet, RiskFlag
+from trip_planner.ranking.models import RankedResult, RankedResultSet, RiskFlag
 
 from .scenarios import (
     ItineraryScenario,
