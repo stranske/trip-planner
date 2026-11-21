@@ -3,8 +3,10 @@
 import json
 from datetime import UTC, datetime
 from hashlib import sha256
+from typing import Any, cast
 
 from sqlalchemy import update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
 from trip_planner.app.services.auth import AuthenticatedUser
@@ -95,15 +97,11 @@ def persist_in_trip_event(
         .where(PersistedTrip.trip_id == trip_id, PersistedTrip.user_id == user.user_id)
         .values(updated_at=PersistedTrip.updated_at)
     )
-    if locked.rowcount != 1:
+    if cast(CursorResult[Any], locked).rowcount != 1:
         raise WorkspaceTripNotFoundError("The trip was not found.")
 
-    key = sha256(json.dumps([trip_id, event.trigger_event_id]).encode()).hexdigest()[
-        :32
-    ]
-    fingerprint = sha256(
-        json.dumps(event.to_dict(), sort_keys=True).encode()
-    ).hexdigest()
+    key = sha256(json.dumps([trip_id, event.trigger_event_id]).encode()).hexdigest()[:32]
+    fingerprint = sha256(json.dumps(event.to_dict(), sort_keys=True).encode()).hexdigest()
     activity_id = f"activity:in-trip:{key}"
     existing = db.get(PersistedActivityLogEvent, activity_id)
     if existing is not None:
@@ -148,20 +146,14 @@ def persist_in_trip_event(
         event_key=key,
     )
     updated = result.updated_session_state
-    record.pending_decisions = [
-        decision.to_dict() for decision in updated.pending_decisions
-    ]
+    record.pending_decisions = [decision.to_dict() for decision in updated.pending_decisions]
     record.tags = list(updated.tags)
     record.notes = list(updated.notes)
     record.last_updated_at = updated.updated_at
 
     previous_ids = {decision.decision_id for decision in session.pending_decisions}
     decision_id = next(
-        (
-            d.decision_id
-            for d in updated.pending_decisions
-            if d.decision_id not in previous_ids
-        ),
+        (d.decision_id for d in updated.pending_decisions if d.decision_id not in previous_ids),
         None,
     )
     activity = result.activity_event

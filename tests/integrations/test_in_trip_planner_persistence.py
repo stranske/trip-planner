@@ -33,15 +33,12 @@ def _revision_and_turn(client, trip_id, event_id):
         block["metadata"]
         for message in planner["messages"]
         for block in message["structured_blocks"]
-        if block["kind"] == "in_trip_turn"
-        and block["metadata"]["trigger_event_id"] == event_id
+        if block["kind"] == "in_trip_turn" and block["metadata"]["trigger_event_id"] == event_id
     ]
     assert len(revisions) == len(turns) == 1
     activity_id = turns[0]["activity_event_id"]
     activities = [
-        row
-        for row in workspace["activity_log"]
-        if row["activity_event_id"] == activity_id
+        row for row in workspace["activity_log"] if row["activity_event_id"] == activity_id
     ]
     assert len(activities) == 1
     decisions = [
@@ -65,15 +62,11 @@ def _submit_concurrently(client, path, event, monkeypatch):
     with monkeypatch.context() as concurrent:
         concurrent.setattr(planner, "persist_in_trip_event", reach_writer_together)
         with ThreadPoolExecutor(max_workers=2) as pool:
-            responses = [
-                pool.submit(client.post, path, json=event.to_dict()) for _ in range(2)
-            ]
+            responses = [pool.submit(client.post, path, json=event.to_dict()) for _ in range(2)]
             return [_checked(response.result(timeout=10)) for response in responses]
 
 
-def test_typed_closure_deduplicates_concurrent_requests_and_survives_restart(
-    tmp_path, monkeypatch
-):
+def test_typed_closure_deduplicates_concurrent_requests_and_survives_restart(tmp_path, monkeypatch):
     monkeypatch.setenv("TPP_ORGANIZATION_ID", "org-acme")
     monkeypatch.setenv("TPP_BASE_URL", "http://tpp.invalid")
     monkeypatch.setenv("TPP_ACCESS_TOKEN", "test-token-long-enough")
@@ -99,10 +92,7 @@ def test_typed_closure_deduplicates_concurrent_requests_and_survives_restart(
             _checked(writer.post(f"/api/workspace/{trip_id}/policy/sync", json={}))
             workspace = _checked(writer.get(f"/api/workspace/{trip_id}"))
             policy_before = workspace["policy_state"]
-            assert (
-                policy_before["constraint_set"]["policy_id"]
-                == "policy-standard-2026-02"
-            )
+            assert policy_before["constraint_set"]["policy_id"] == "policy-standard-2026-02"
             session = workspace["session"]
             original_id = session["current_saved_scenario_id"]
             original = next(
@@ -120,18 +110,11 @@ def test_typed_closure_deduplicates_concurrent_requests_and_survives_restart(
             path = f"/api/planner/{trip_id}/in-trip-events"
             results = _submit_concurrently(writer, path, event, monkeypatch)
             assert results[0]["messages"] == results[1]["messages"]
-            revision, turn, active_id = _revision_and_turn(
-                writer, trip_id, event.trigger_event_id
-            )
+            revision, turn, active_id = _revision_and_turn(writer, trip_id, event.trigger_event_id)
             assert active_id == original_id
-            assert (
-                revision["versions"][0]["based_on_version_id"]
-                == original["current_version_id"]
-            )
+            assert revision["versions"][0]["based_on_version_id"] == original["current_version_id"]
             assert turn["saved_scenario_id"] == revision["saved_scenario_id"]
-            assert (
-                turn["planner_turn"]["workflow_state"]["current_stage"] == "replanning"
-            )
+            assert turn["planner_turn"]["workflow_state"]["current_stage"] == "replanning"
         clear_inter_app_restart_caches(lifecycle)
         with clients(reload=True) as reader:
             assert _revision_and_turn(reader, trip_id, event.trigger_event_id) == (
@@ -140,21 +123,12 @@ def test_typed_closure_deduplicates_concurrent_requests_and_survives_restart(
                 original_id,
             )
             assert (
-                _checked(reader.get(f"/api/workspace/{trip_id}"))["policy_state"]
-                == policy_before
+                _checked(reader.get(f"/api/workspace/{trip_id}"))["policy_state"] == policy_before
             )
             replays = _submit_concurrently(reader, path, event, monkeypatch)
-            assert (
-                replays[0]["messages"]
-                == replays[1]["messages"]
-                == results[0]["messages"]
-            )
-            conflicting_event = replace(
-                event, summary="Different closure with the same ID"
-            )
-            assert (
-                reader.post(path, json=conflicting_event.to_dict()).status_code == 409
-            )
+            assert replays[0]["messages"] == replays[1]["messages"] == results[0]["messages"]
+            conflicting_event = replace(event, summary="Different closure with the same ID")
+            assert reader.post(path, json=conflicting_event.to_dict()).status_code == 409
             assert _revision_and_turn(reader, trip_id, event.trigger_event_id) == (
                 revision,
                 turn,

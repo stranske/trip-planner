@@ -83,9 +83,7 @@ def process_in_trip_event(
     db_session: Session = Depends(get_db_session),
 ) -> PlannerSessionResponse:
     try:
-        result = submit_in_trip_event(
-            db_session, user=user, trip_id=trip_id, event=event
-        )
+        result = submit_in_trip_event(db_session, user=user, trip_id=trip_id, event=event)
     except WorkspaceTripNotFoundError as error:
         raise public_http_error(
             error,
