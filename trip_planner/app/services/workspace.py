@@ -5,9 +5,10 @@ import secrets
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -1865,6 +1866,19 @@ def _create_bootstrap_saved_scenarios(
     return persisted_records
 
 
+def _workspace_bootstrap_decision_needs_link(
+    session: PersistedPlanningSessionState, trip_id: str
+) -> bool:
+    return any(
+        item.get("decision_id") == f"decision:{trip_id}:bootstrap-direction"
+        and (
+            item.get("related_option_set_id") != _bootstrap_option_set_id(trip_id)
+            or item.get("related_saved_scenario_id") is None
+        )
+        for item in session.pending_decisions
+    )
+
+
 def _sync_workspace_session_record(
     session_record: PersistedPlanningSessionState,
     *,
@@ -1923,19 +1937,21 @@ def _sync_workspace_session_record(
         ]
         updated = True
 
-    if session_record.pending_decisions:
-        decision = dict(session_record.pending_decisions[0])
-        if (
-            decision.get("related_option_set_id") != option_set_id
-            or decision.get("related_saved_scenario_id") is None
-        ):
-            decision["related_saved_scenario_id"] = ordered_ids[0]
-            decision["related_option_set_id"] = option_set_id
-            session_record.pending_decisions = [
-                decision,
-                *session_record.pending_decisions[1:],
-            ]
-            updated = True
+    if _workspace_bootstrap_decision_needs_link(session_record, record.trip_id):
+        bootstrap_id = f"decision:{record.trip_id}:bootstrap-direction"
+        session_record.pending_decisions = [
+            (
+                {
+                    **decision,
+                    "related_saved_scenario_id": ordered_ids[0],
+                    "related_option_set_id": option_set_id,
+                }
+                if decision["decision_id"] == bootstrap_id
+                else decision
+            )
+            for decision in session_record.pending_decisions
+        ]
+        updated = True
 
     if updated:
         session_record.last_updated_at = _isoformat(datetime.now(UTC))
@@ -2450,6 +2466,9 @@ def _load_persisted_workspace_inputs(
         inventory_status=inventory_status,
         organization_comparable_requirements=_policy_comparable_requirements(policy_context),
     )
+    if _workspace_bootstrap_decision_needs_link(session_record, trip_id):
+        _lock_workspace_trip(db_session, trip_id=trip_id, user_id=record.user_id)
+        db_session.refresh(session_record, attribute_names=["pending_decisions"])
     if _sync_workspace_session_record(
         session_record,
         record=record,
@@ -2628,6 +2647,17 @@ def get_workspace_scenario_comparison_payload(
     if payload is None:
         return None
     return dict(payload)
+
+
+def _lock_workspace_trip(db: Session, *, trip_id: str, user_id: str) -> None:
+    """Serialize decisions on the trip row in PostgreSQL and the writer in SQLite."""
+    locked = db.execute(
+        update(PersistedTrip)
+        .where(PersistedTrip.trip_id == trip_id, PersistedTrip.user_id == user_id)
+        .values(updated_at=PersistedTrip.updated_at)
+    )
+    if cast(CursorResult[Any], locked).rowcount != 1:
+        raise WorkspaceTripNotFoundError("The trip was not found.")
 
 
 def _get_owned_trip_record(
@@ -3057,6 +3087,7 @@ def answer_workspace_planner_decision(
     choice: str,
     include_debug: bool = True,
 ) -> dict[str, Any]:
+    _lock_workspace_trip(db_session, trip_id=trip_id, user_id=user.user_id)
     record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
     session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
@@ -3139,6 +3170,7 @@ def submit_workspace_option_feedback(
     decision_id: str | None = None,
     include_debug: bool = True,
 ) -> dict[str, Any]:
+    _lock_workspace_trip(db_session, trip_id=trip_id, user_id=user.user_id)
     record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
     session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
@@ -3351,6 +3383,7 @@ def submit_workspace_route_option_action(
     if action_type not in ROUTE_OPTION_ACTIONS:
         raise ValueError(f"action_type must be one of {', '.join(ROUTE_OPTION_ACTIONS)}")
 
+    _lock_workspace_trip(db_session, trip_id=trip_id, user_id=user.user_id)
     record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
     session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
