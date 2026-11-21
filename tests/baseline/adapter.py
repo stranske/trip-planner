@@ -161,9 +161,7 @@ def _evaluate_source_refs(
     from trip_planner.sources import schema as source_schema
 
     option_kind = (
-        intended_option_kind
-        if intended_option_kind in source_schema.SOURCE_OPTION_KINDS
-        else None
+        intended_option_kind if intended_option_kind in source_schema.SOURCE_OPTION_KINDS else None
     )
     summary = summarize_sources(
         source_refs,
@@ -217,10 +215,10 @@ def _evaluate_transport(
         "cost_taxes_and_fees": _amount(c.taxes_and_fees),
         "transfer_count": float(t.transfer_count),
         "minimum_connection_minutes": float(t.minimum_connection_minutes or 0.0),
-        "self_navigation_burden_signal": float(t.self_navigation_burden_signal),
-        "baggage_complexity_signal": float(t.baggage_complexity_signal),
-        "schedule_protection_signal": float(t.schedule_protection_signal),
-        "connection_risk_signal": float(t.connection_risk_signal),
+        "self_navigation_burden_signal": float(t.self_navigation_burden_signal or 0.0),
+        "baggage_complexity_signal": float(t.baggage_complexity_signal or 0.0),
+        "schedule_protection_signal": float(t.schedule_protection_signal or 0.0),
+        "connection_risk_signal": float(t.connection_risk_signal or 0.0),
     }
     raw_metrics: dict[str, float] = {}
     observed: set[str] = set()

@@ -104,9 +104,7 @@ def test_non_transport_roundtrips_use_canonical_models(tmp_path: Path, record_pr
     env = os.environ.copy()
     existing_pythonpath = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = (
-        f"{REPO_ROOT}{os.pathsep}{existing_pythonpath}"
-        if existing_pythonpath
-        else str(REPO_ROOT)
+        f"{REPO_ROOT}{os.pathsep}{existing_pythonpath}" if existing_pythonpath else str(REPO_ROOT)
     )
     import_probe = subprocess.run(
         [
@@ -126,9 +124,9 @@ def test_non_transport_roundtrips_use_canonical_models(tmp_path: Path, record_pr
     catalog = load_catalog(CATALOG_PATH)
     fixtures = _catalog_fixtures(catalog)
     for fixture in [*fixtures, "tests/fixtures/ranking/results/route_bundle_result.json"]:
-        assert adapter.roundtrip_is_stable(fixture) is True, (
-            f"Expected canonical roundtrip: {fixture}"
-        )
+        assert (
+            adapter.roundtrip_is_stable(fixture) is True
+        ), f"Expected canonical roundtrip: {fixture}"
 
     central_lodging_path = REPO_ROOT / "tests/fixtures/options/lodging/central_urban_hotel.json"
     central_payload = json.loads(central_lodging_path.read_text(encoding="utf-8"))
@@ -156,9 +154,7 @@ def test_non_transport_roundtrips_use_canonical_models(tmp_path: Path, record_pr
     aged_lodging_payload["source_refs"][0]["trust_snapshot"]["freshness_days"] = 180
     aged_lodging.write_text(json.dumps(aged_lodging_payload), encoding="utf-8")
 
-    central_metrics = adapter.metrics_for(
-        "tests/fixtures/options/lodging/central_urban_hotel.json"
-    )
+    central_metrics = adapter.metrics_for("tests/fixtures/options/lodging/central_urban_hotel.json")
     aged_metrics = adapter.metrics_for(str(aged_lodging))
     assert central_metrics["quality_signal"] == pytest.approx(0.81)
     assert central_metrics["value_signal"] == pytest.approx(0.73)
