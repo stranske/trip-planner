@@ -99,6 +99,84 @@ def _require(condition: bool, message: str, **details: Any) -> None:
         raise VerificationFailure(message, **details)
 
 
+def _assert_live_tpp_record_invariants(
+    live_details: Mapping[str, Any],
+    *,
+    expected_evaluation_status: str,
+) -> None:
+    compatibility_control = live_details.get("compatibility_control")
+    if isinstance(compatibility_control, Mapping):
+        _require(
+            compatibility_control.get("offline_fixture_journey_retained") is True,
+            "live TPP compatibility control did not retain the offline fixture journey",
+            compatibility_control=dict(compatibility_control),
+            trip_id=live_details.get("trip_id"),
+        )
+        _require(
+            compatibility_control.get("saved_scenario_lineage_preserved") is True,
+            "live TPP compatibility control did not preserve saved scenario lineage",
+            compatibility_control=dict(compatibility_control),
+            trip_id=live_details.get("trip_id"),
+        )
+        if "compatible_with_planner_cache" in compatibility_control:
+            _require(
+                compatibility_control.get("compatible_with_planner_cache") is True,
+                "live TPP compatibility control reported incompatible planner cache",
+                compatibility_control=dict(compatibility_control),
+                trip_id=live_details.get("trip_id"),
+            )
+        if "organization_id" in compatibility_control and "organization_id" in live_details:
+            _require(
+                compatibility_control.get("organization_id") == live_details.get("organization_id"),
+                "live TPP compatibility control organization disagreed with live organization",
+                compatibility_control=dict(compatibility_control),
+                live_organization_id=live_details.get("organization_id"),
+                trip_id=live_details.get("trip_id"),
+            )
+    external_ids = live_details.get("external_ids")
+    if isinstance(external_ids, Mapping):
+        for field_name in ("policy_id", "execution_id", "evaluation_id"):
+            _require(
+                bool(str(external_ids.get(field_name) or "").strip()),
+                "live TPP verification did not record required external identifier",
+                field=field_name,
+                external_ids=dict(external_ids),
+                trip_id=live_details.get("trip_id"),
+            )
+    verdict_readback = live_details.get("verdict_readback")
+    if isinstance(verdict_readback, Mapping):
+        _require(
+            verdict_readback.get("status") == expected_evaluation_status,
+            "live TPP persisted verdict readback did not match the expected outcome",
+            expected_evaluation_status=expected_evaluation_status,
+            verdict_readback=dict(verdict_readback),
+            trip_id=live_details.get("trip_id"),
+        )
+        if isinstance(external_ids, Mapping):
+            _require(
+                verdict_readback.get("evaluation_id") == external_ids.get("evaluation_id"),
+                "live TPP persisted verdict readback evaluation_id disagreed with external IDs",
+                external_ids=dict(external_ids),
+                verdict_readback=dict(verdict_readback),
+                trip_id=live_details.get("trip_id"),
+            )
+        if "scenario_id" in live_details:
+            _require(
+                verdict_readback.get("scenario_id") == live_details.get("scenario_id"),
+                "live TPP persisted verdict readback scenario_id disagreed with submitted scenario",
+                expected_scenario_id=live_details.get("scenario_id"),
+                verdict_readback=dict(verdict_readback),
+                trip_id=live_details.get("trip_id"),
+            )
+        _require(
+            bool(str(verdict_readback.get("saved_scenario_id") or "").strip())
+            and bool(str(verdict_readback.get("source_version_id") or "").strip()),
+            "live TPP persisted verdict readback did not retain saved scenario lineage",
+            verdict_readback=dict(verdict_readback),
+            trip_id=live_details.get("trip_id"),
+        )
+
+
 def _assert_business_verification_outcomes(
     local_details: Mapping[str, Any],
     *,
@@ -169,61 +247,10 @@ def _assert_business_verification_outcomes(
         trip_id=live_details.get("trip_id"),
         proposal_id=live_details.get("proposal_id"),
     )
-    compatibility_control = live_details.get("compatibility_control")
-    if isinstance(compatibility_control, Mapping):
-        _require(
-            compatibility_control.get("offline_fixture_journey_retained") is True,
-            "live TPP compatibility control did not retain the offline fixture journey",
-            compatibility_control=dict(compatibility_control),
-            trip_id=live_details.get("trip_id"),
-        )
-        _require(
-            compatibility_control.get("saved_scenario_lineage_preserved") is True,
-            "live TPP compatibility control did not preserve saved scenario lineage",
-            compatibility_control=dict(compatibility_control),
-            trip_id=live_details.get("trip_id"),
-        )
-        if "compatible_with_planner_cache" in compatibility_control:
-            _require(
-                compatibility_control.get("compatible_with_planner_cache") is True,
-                "live TPP compatibility control reported incompatible planner cache",
-                compatibility_control=dict(compatibility_control),
-                trip_id=live_details.get("trip_id"),
-            )
-    external_ids = live_details.get("external_ids")
-    if isinstance(external_ids, Mapping):
-        for field_name in ("policy_id", "execution_id", "evaluation_id"):
-            _require(
-                bool(str(external_ids.get(field_name) or "").strip()),
-                "live TPP verification did not record required external identifier",
-                field=field_name,
-                external_ids=dict(external_ids),
-                trip_id=live_details.get("trip_id"),
-            )
-    verdict_readback = live_details.get("verdict_readback")
-    if isinstance(verdict_readback, Mapping):
-        _require(
-            verdict_readback.get("status") == expected_evaluation_status,
-            "live TPP persisted verdict readback did not match the expected outcome",
-            expected_evaluation_status=expected_evaluation_status,
-            verdict_readback=dict(verdict_readback),
-            trip_id=live_details.get("trip_id"),
-        )
-        if isinstance(external_ids, Mapping):
-            _require(
-                verdict_readback.get("evaluation_id") == external_ids.get("evaluation_id"),
-                "live TPP persisted verdict readback evaluation_id disagreed with external IDs",
-                external_ids=dict(external_ids),
-                verdict_readback=dict(verdict_readback),
-                trip_id=live_details.get("trip_id"),
-            )
-        _require(
-            bool(str(verdict_readback.get("saved_scenario_id") or "").strip())
-            and bool(str(verdict_readback.get("source_version_id") or "").strip()),
-            "live TPP persisted verdict readback did not retain saved scenario lineage",
-            verdict_readback=dict(verdict_readback),
-            trip_id=live_details.get("trip_id"),
-        )
+    _assert_live_tpp_record_invariants(
+        live_details,
+        expected_evaluation_status=expected_evaluation_status,
+    )
 
 
 def _fixture(*parts: str) -> dict[str, Any]:
@@ -1007,6 +1034,7 @@ def _assert_native_live_tpp_policy_state(
     trip_id: str,
     configured_organization_id: str,
     policy_state: Mapping[str, Any],
+    policy_summary: Mapping[str, Any] | None = None,
 ) -> str:
     policy_id = str(policy_state.get("policy_id") or "")
     policy_version = str(policy_state.get("policy_version") or "")
@@ -1037,6 +1065,26 @@ def _assert_native_live_tpp_policy_state(
         source_correlation_id=policy_state.get("source_correlation_id"),
         tags=policy_state.get("tags"),
     )
+    if policy_summary is not None:
+        _require(
+            policy_summary.get("status") != "stored_policy_fallback",
+            "live TPP policy sync fell back to stored policy instead of live sync",
+            trip_id=trip_id,
+            policy_summary=dict(policy_summary),
+        )
+        _require(
+            policy_summary.get("compatible_with_planner_cache") is True,
+            "live TPP policy sync reported incompatible planner cache",
+            trip_id=trip_id,
+            policy_summary=dict(policy_summary),
+        )
+        _require(
+            policy_summary.get("sync_status") == "current"
+            and policy_summary.get("is_stale") is not True,
+            "live TPP policy sync did not return a current policy snapshot",
+            trip_id=trip_id,
+            policy_summary=dict(policy_summary),
+        )
     return policy_id
 
 
@@ -1157,6 +1205,7 @@ def _assert_native_live_tpp_transitions(
     submitted_state: Mapping[str, Any],
     readback_state: Mapping[str, Any],
     readback_summary: Mapping[str, Any],
+    policy_summary: Mapping[str, Any] | None = None,
 ) -> None:
     _assert_native_live_tpp_route_order(
         trip_id=trip_id,
@@ -1166,6 +1215,7 @@ def _assert_native_live_tpp_transitions(
         trip_id=trip_id,
         configured_organization_id=configured_organization_id,
         policy_state=policy_state,
+        policy_summary=policy_summary,
     )
     execution_id = _assert_native_live_tpp_submission_state(
         trip_id=trip_id,
@@ -1358,6 +1408,7 @@ def _run_live_tpp_journey(
                 readback_state = dict(readback_payload.get("proposal_state") or {})
                 readback_summary = dict(readback_payload.get("summary") or {})
 
+            policy_summary = dict(policy_payload.get("summary") or {})
             _assert_native_live_tpp_transitions(
                 trip_id=trip_id,
                 configured_organization_id=configured_organization_id,
@@ -1369,6 +1420,7 @@ def _run_live_tpp_journey(
                 submitted_state=submitted_state,
                 readback_state=readback_state,
                 readback_summary=readback_summary,
+                policy_summary=policy_summary,
             )
 
             policy_id = str(policy_state["policy_id"])
@@ -1381,7 +1433,6 @@ def _run_live_tpp_journey(
             readback_source_version = dict(
                 dict(readback_state.get("proposal") or {}).get("source_version") or {}
             )
-            policy_summary = dict(policy_payload.get("summary") or {})
             compatibility_control = _build_compatibility_control(
                 trip_id=trip_id,
                 proposal_id=proposal_id,

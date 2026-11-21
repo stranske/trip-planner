@@ -1001,3 +1001,176 @@ def test_started_tpp_service_forwards_configured_organization_id(
         pass
 
     assert captured_env["TPP_ORGANIZATION_ID"] == "org-northwind"
+
+
+def test_live_tpp_journey_fails_on_wrong_org_or_incompatible_policy_cache_or_stored_fallback(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scripts import check_full_product_verification as verifier
+    from trip_planner.integrations.tpp import client as tpp_client_module
+
+    env = _focused_live_tpp_env()
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    _install_focused_live_tpp_transport(monkeypatch)
+    real_fake = tpp_client_module.HTTPTPPIntegrationClient._send_json_request
+
+    # 1) Wrong organization recorded on policy state fails native transition verification.
+    trip_id = verifier._create_trip(
+        client,
+        mode="business",
+        title="Wrong org rejection",
+        region="Chicago",
+    )
+    with pytest.raises(verifier.VerificationFailure, match="configured organization"):
+        verifier._assert_native_live_tpp_policy_state(
+            trip_id=trip_id,
+            configured_organization_id="org-northwind",
+            policy_state={
+                "organization_id": "org-acme",
+                "policy_id": "policy-ext-northwind-2026-11",
+                "policy_version": "2026.11",
+                "source_kind": "tpp_sync",
+                "source_request_id": "policy-sync:test",
+                "source_correlation_id": f"policy-sync:{trip_id}",
+                "tags": ["workspace-sync"],
+            },
+        )
+
+    # 2) Stored-policy fallback summary must be rejected even when policy_state looks native.
+    with pytest.raises(verifier.VerificationFailure, match="fell back to stored policy"):
+        verifier._assert_native_live_tpp_policy_state(
+            trip_id=trip_id,
+            configured_organization_id="org-northwind",
+            policy_state={
+                "organization_id": "org-northwind",
+                "policy_id": "policy-ext-northwind-2026-11",
+                "policy_version": "2026.11",
+                "source_kind": "tpp_sync",
+                "source_request_id": "policy-sync:test",
+                "source_correlation_id": f"policy-sync:{trip_id}",
+                "tags": ["workspace-sync"],
+            },
+            policy_summary={
+                "status": "stored_policy_fallback",
+                "compatible_with_planner_cache": True,
+                "sync_status": "current",
+                "is_stale": False,
+            },
+        )
+
+    # 3) Incompatible planner cache from live TPP policy sync fails closed at the sync boundary.
+    def incompatible_cache_transport(
+        self: Any,
+        *,
+        method: str,
+        path: str,
+        url: str,
+        json_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        payload = real_fake(self, method=method, path=path, url=url, json_payload=json_payload)
+        if method == "GET" and path == "/api/planner/policy-snapshot":
+            payload["versioning"]["compatible_with_planner_cache"] = False
+        return payload
+
+    monkeypatch.setattr(
+        tpp_client_module.HTTPTPPIntegrationClient,
+        "_send_json_request",
+        incompatible_cache_transport,
+    )
+    with pytest.raises(verifier.VerificationFailure, match="incompatible planner cache"):
+        verifier._run_live_tpp_journey(
+            client,
+            trip_id,
+            env,
+            expected_evaluation_status="non_compliant",
+        )
+
+
+def test_supported_cli_entrypoint_records_native_two_app_gate_and_compatibility_control(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from scripts import check_full_product_verification as verifier
+
+    env = _focused_live_tpp_env()
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    for name in (
+        "TRIP_PLANNER_DATA_ZONE",
+        "TRIP_PLANNER_OPENAI_AUTHORIZED_ENDPOINT",
+        "TRIP_PLANNER_PLANNER_MODEL_PROVIDER",
+        "TRIP_PLANNER_PLANNER_MODEL",
+        "OPENAI_API_KEY",
+        "VITE_GOOGLE_MAPS_PROVIDER_STATE",
+        "VITE_GOOGLE_MAPS_BROWSER_API_KEY",
+        "VITE_GOOGLE_MAPS_EMBED_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    _install_focused_live_tpp_transport(monkeypatch)
+
+    exit_code = verifier.main(["--live-tpp", "required", "--skip-frontend-smoke"])
+    assert exit_code == 0
+
+    output_lines = capsys.readouterr().out.splitlines()
+    parsed: dict[str, dict[str, Any]] = {}
+    for line in output_lines:
+        if line.startswith("- PASS "):
+            name_and_json = line[len("- PASS ") :]
+            name, payload_text = name_and_json.split(": ", 1)
+            parsed[name] = json.loads(payload_text)
+
+    assert {"local-leisure-journey", "local-business-journey", "live-tpp"} <= set(parsed)
+    live_output = parsed["live-tpp"]
+    trip_id = live_output["trip_id"]
+    assert live_output["organization_id"] == "org-northwind"
+    assert live_output["native_transitions"] == {
+        "policy_sync": f"POST /api/workspace/{trip_id}/policy/sync",
+        "proposal_submit": f"POST /api/workspace/{trip_id}/proposal/submit",
+        "proposal_refresh": f"POST /api/workspace/{trip_id}/proposal/refresh",
+        "verdict_readback": f"GET /api/workspace/{trip_id}/proposal",
+    }
+    assert live_output["external_ids"]["policy_id"] == "policy-ext-northwind-2026-11"
+    assert live_output["external_ids"]["execution_id"] == "exec-ext-northwind-001"
+    assert live_output["external_ids"]["evaluation_id"] == "eval-ext-northwind-001"
+    assert live_output["verdict_readback"]["status"] == "non_compliant"
+    assert live_output["verdict_readback"]["evaluation_id"] == "eval-ext-northwind-001"
+    assert live_output["verdict_readback"]["saved_scenario_id"] == (
+        live_output["input"]["saved_scenario_id"]
+    )
+    assert live_output["verdict_readback"]["source_version_id"] == (
+        live_output["input"]["source_version_id"]
+    )
+    assert live_output["observed_output"]["organization_id"] == "org-northwind"
+    assert live_output["compatibility_control"]["offline_control_scope"] == "two_app_gate"
+    assert live_output["compatibility_control"]["offline_fixture_journey_retained"] is True
+    assert live_output["compatibility_control"]["compatible_with_planner_cache"] is True
+    assert live_output["compatibility_control"]["organization_id"] == "org-northwind"
+    assert live_output["compatibility_control"]["saved_scenario_lineage_preserved"] is True
+
+    # Bypassing native submission at runtime causes the supported CLI gate to exit non-zero.
+    original_request = TestClient.request
+
+    def inject_proposal_put_bypass(
+        self: TestClient, method: str, url: str, *args: Any, **kwargs: Any
+    ) -> Any:
+        if method.upper() == "POST" and str(url).endswith("/proposal/submit"):
+            trip_segment = str(url).split("/api/workspace/", 1)[1].split("/", 1)[0]
+            proposal = verifier._proposal_payload(trip_segment)
+            self.put(
+                f"/api/workspace/{trip_segment}/proposal",
+                json={
+                    "proposal": proposal,
+                    "request": verifier._prepared_submission_request(
+                        trip_segment, proposal["proposal_id"]
+                    ),
+                    "response": None,
+                    "proposal_version": "proposal-v3",
+                    "scenario_id": "scenario-a",
+                },
+            )
+        return original_request(self, method, url, *args, **kwargs)
+
+    monkeypatch.setattr(TestClient, "request", inject_proposal_put_bypass)
+    failed_exit = verifier.main(["--live-tpp", "required", "--skip-frontend-smoke"])
+    assert failed_exit == 1
+    assert "bypassed native transition with caller-staged PUT" in capsys.readouterr().err
