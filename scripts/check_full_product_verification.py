@@ -183,12 +183,44 @@ def _assert_business_verification_outcomes(
             compatibility_control=dict(compatibility_control),
             trip_id=live_details.get("trip_id"),
         )
+        if "compatible_with_planner_cache" in compatibility_control:
+            _require(
+                compatibility_control.get("compatible_with_planner_cache") is True,
+                "live TPP compatibility control reported incompatible planner cache",
+                compatibility_control=dict(compatibility_control),
+                trip_id=live_details.get("trip_id"),
+            )
+    external_ids = live_details.get("external_ids")
+    if isinstance(external_ids, Mapping):
+        for field_name in ("policy_id", "execution_id", "evaluation_id"):
+            _require(
+                bool(str(external_ids.get(field_name) or "").strip()),
+                "live TPP verification did not record required external identifier",
+                field=field_name,
+                external_ids=dict(external_ids),
+                trip_id=live_details.get("trip_id"),
+            )
     verdict_readback = live_details.get("verdict_readback")
     if isinstance(verdict_readback, Mapping):
         _require(
             verdict_readback.get("status") == expected_evaluation_status,
             "live TPP persisted verdict readback did not match the expected outcome",
             expected_evaluation_status=expected_evaluation_status,
+            verdict_readback=dict(verdict_readback),
+            trip_id=live_details.get("trip_id"),
+        )
+        if isinstance(external_ids, Mapping):
+            _require(
+                verdict_readback.get("evaluation_id") == external_ids.get("evaluation_id"),
+                "live TPP persisted verdict readback evaluation_id disagreed with external IDs",
+                external_ids=dict(external_ids),
+                verdict_readback=dict(verdict_readback),
+                trip_id=live_details.get("trip_id"),
+            )
+        _require(
+            bool(str(verdict_readback.get("saved_scenario_id") or "").strip())
+            and bool(str(verdict_readback.get("source_version_id") or "").strip()),
+            "live TPP persisted verdict readback did not retain saved scenario lineage",
             verdict_readback=dict(verdict_readback),
             trip_id=live_details.get("trip_id"),
         )
@@ -749,6 +781,7 @@ def _started_tpp_service(
         "TPP_AUTH_MODE": "static-token",
         "TPP_ACCESS_TOKEN": env["TPP_ACCESS_TOKEN"],
         "TPP_OIDC_PROVIDER": env["TPP_OIDC_PROVIDER"],
+        "TPP_ORGANIZATION_ID": _resolved_tpp_organization_id(env),
     }
     # These files must remain addressable after their handles close so readiness failures can tail them.
     stdout_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
@@ -1154,14 +1187,8 @@ def _assert_native_live_tpp_transitions(
     )
 
 
-def _run_live_tpp_journey(
-    client: TestClient,
-    trip_id: str,
-    env: dict[str, str],
-    *,
-    expected_evaluation_status: str = EXPECTED_BUSINESS_EVALUATION_STATUS,
-) -> dict[str, Any]:
-    _evaluation_fixture_name(expected_evaluation_status)
+@contextmanager
+def _record_client_transitions(client: TestClient) -> Iterator[list[tuple[str, str]]]:
     observed_transitions: list[tuple[str, str]] = []
     original_request = client.request
 
@@ -1170,11 +1197,73 @@ def _run_live_tpp_journey(
         observed_transitions.append((method.upper(), path))
         return original_request(method, url, *args, **kwargs)
 
+    client.request = _recording_request  # type: ignore[method-assign,assignment]
+    try:
+        yield observed_transitions
+    finally:
+        client.request = original_request  # type: ignore[method-assign]
+
+
+def _build_compatibility_control(
+    *,
+    trip_id: str,
+    proposal_id: str,
+    expected_evaluation_status: str,
+    configured_organization_id: str,
+    policy_summary: Mapping[str, Any],
+    readback_source_version: Mapping[str, Any],
+    expected_source_version: Mapping[str, Any],
+    offline_control: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    if offline_control is not None:
+        offline_retained = (
+            offline_control.get("trip_id") == trip_id
+            and offline_control.get("proposal_id") == proposal_id
+            and offline_control.get("evaluation_status") == expected_evaluation_status
+        )
+        control: dict[str, Any] = {
+            "offline_control_scope": "two_app_gate",
+            "offline_fixture_journey_retained": offline_retained,
+            "offline_business_proposal_id": str(offline_control.get("proposal_id") or ""),
+            "offline_business_evaluation_status": str(
+                offline_control.get("evaluation_status") or ""
+            ),
+            "offline_business_follow_up_status": str(offline_control.get("follow_up_status") or ""),
+        }
+    else:
+        control = {
+            "offline_control_scope": "standalone",
+            "offline_fixture_journey_retained": True,
+        }
+    control.update(
+        {
+            "compatible_with_planner_cache": bool(
+                policy_summary.get("compatible_with_planner_cache")
+            ),
+            "contract_version": str(policy_summary.get("contract_version") or ""),
+            "organization_id": configured_organization_id,
+            "saved_scenario_lineage_preserved": (
+                dict(readback_source_version) == dict(expected_source_version)
+            ),
+        }
+    )
+    return control
+
+
+def _run_live_tpp_journey(
+    client: TestClient,
+    trip_id: str,
+    env: dict[str, str],
+    *,
+    expected_evaluation_status: str = EXPECTED_BUSINESS_EVALUATION_STATUS,
+    offline_control: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    _evaluation_fixture_name(expected_evaluation_status)
+
     with _started_tpp_service(env) as (base_url, _process):  # noqa: SIM117
         with _temporary_tpp_client_environment(base_url, env):
             configured_organization_id = os.environ["TPP_ORGANIZATION_ID"]
-            setattr(client, "request", _recording_request)
-            try:
+            with _record_client_transitions(client) as observed_transitions:
                 policy_response = client.post(
                     f"/api/workspace/{trip_id}/policy/sync",
                     json={},
@@ -1268,8 +1357,6 @@ def _run_live_tpp_journey(
                 readback_payload = readback_response.json()
                 readback_state = dict(readback_payload.get("proposal_state") or {})
                 readback_summary = dict(readback_payload.get("summary") or {})
-            finally:
-                setattr(client, "request", original_request)
 
             _assert_native_live_tpp_transitions(
                 trip_id=trip_id,
@@ -1295,6 +1382,16 @@ def _run_live_tpp_journey(
                 dict(readback_state.get("proposal") or {}).get("source_version") or {}
             )
             policy_summary = dict(policy_payload.get("summary") or {})
+            compatibility_control = _build_compatibility_control(
+                trip_id=trip_id,
+                proposal_id=proposal_id,
+                expected_evaluation_status=expected_evaluation_status,
+                configured_organization_id=configured_organization_id,
+                policy_summary=policy_summary,
+                readback_source_version=readback_source_version,
+                expected_source_version=expected_source_version,
+                offline_control=offline_control,
+            )
 
             return {
                 "base_url": base_url,
@@ -1360,17 +1457,7 @@ def _run_live_tpp_journey(
                     "saved_scenario_id": str(readback_source_version["saved_scenario_id"]),
                     "source_version_id": str(readback_source_version["version_id"]),
                 },
-                "compatibility_control": {
-                    "offline_fixture_journey_retained": True,
-                    "compatible_with_planner_cache": bool(
-                        policy_summary.get("compatible_with_planner_cache")
-                    ),
-                    "contract_version": str(policy_summary.get("contract_version") or ""),
-                    "organization_id": configured_organization_id,
-                    "saved_scenario_lineage_preserved": (
-                        readback_source_version == expected_source_version
-                    ),
-                },
+                "compatibility_control": compatibility_control,
             }
 
 
@@ -1713,6 +1800,7 @@ def run_product_journeys(
                     business_trip_id,
                     {key: str(value) for key, value in tpp_status.details.items()},
                     expected_evaluation_status=expected_business_evaluation_status,
+                    offline_control=local_business_details,
                 )
                 _assert_business_verification_outcomes(
                     local_business_details,

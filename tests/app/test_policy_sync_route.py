@@ -791,7 +791,20 @@ def test_native_two_app_verification_gate_retains_offline_cases_and_fails_when_n
     assert live_details["external_ids"]["evaluation_id"] == "eval-ext-northwind-001"
     assert live_details["verdict_readback"]["status"] == "non_compliant"
     assert live_details["verdict_readback"]["follow_up_status"] == "reoptimization_required"
+    assert live_details["compatibility_control"]["offline_control_scope"] == "two_app_gate"
     assert live_details["compatibility_control"]["offline_fixture_journey_retained"] is True
+    assert (
+        live_details["compatibility_control"]["offline_business_proposal_id"]
+        == by_name["local-business-journey"].details["proposal_id"]
+    )
+    assert (
+        live_details["compatibility_control"]["offline_business_evaluation_status"]
+        == "non_compliant"
+    )
+    assert (
+        live_details["compatibility_control"]["offline_business_follow_up_status"]
+        == "no_scenario_lineage"
+    )
     assert live_details["compatibility_control"]["saved_scenario_lineage_preserved"] is True
 
     # Verify the gate reports failure when a required native transition is omitted/bypassed.
@@ -812,3 +825,179 @@ def test_native_two_app_verification_gate_retains_offline_cases_and_fails_when_n
             readback_state={},
             readback_summary={},
         )
+
+
+def test_native_two_app_verification_gate_supports_compliant_readback_and_records_compatibility_control(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts import check_full_product_verification as verifier
+
+    env = _focused_live_tpp_env()
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    for name in (
+        "TRIP_PLANNER_DATA_ZONE",
+        "TRIP_PLANNER_OPENAI_AUTHORIZED_ENDPOINT",
+        "TRIP_PLANNER_PLANNER_MODEL_PROVIDER",
+        "TRIP_PLANNER_PLANNER_MODEL",
+        "OPENAI_API_KEY",
+        "VITE_GOOGLE_MAPS_PROVIDER_STATE",
+        "VITE_GOOGLE_MAPS_BROWSER_API_KEY",
+        "VITE_GOOGLE_MAPS_EMBED_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    _install_focused_live_tpp_transport(monkeypatch)
+
+    checks = verifier.run_product_journeys(
+        live_tpp="required",
+        expected_business_evaluation_status="compliant",
+    )
+    by_name = {check.name: check for check in checks}
+
+    assert by_name["local-leisure-journey"].status == "PASS"
+    assert by_name["local-business-journey"].status == "PASS"
+    assert by_name["local-business-journey"].details["evaluation_status"] == "compliant"
+    assert by_name["live-tpp"].status == "PASS"
+    live_details = by_name["live-tpp"].details
+    assert live_details["organization_id"] == "org-northwind"
+    assert live_details["external_ids"]["policy_id"] == "policy-ext-northwind-2026-11"
+    assert live_details["external_ids"]["execution_id"] == "exec-ext-northwind-001"
+    assert live_details["external_ids"]["evaluation_id"] == "eval-ext-northwind-001"
+    assert live_details["verdict_readback"]["status"] == "compliant"
+    assert live_details["verdict_readback"]["follow_up_status"] == "resolved"
+    assert live_details["compatibility_control"]["offline_control_scope"] == "two_app_gate"
+    assert live_details["compatibility_control"]["offline_fixture_journey_retained"] is True
+    assert live_details["compatibility_control"]["compatible_with_planner_cache"] is True
+    assert live_details["compatibility_control"]["saved_scenario_lineage_preserved"] is True
+
+
+def test_live_tpp_journey_fails_when_native_submit_returns_canned_execution_or_wrong_org(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scripts import check_full_product_verification as verifier
+    from trip_planner.integrations.tpp import client as tpp_client_module
+
+    env = _focused_live_tpp_env()
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    _install_focused_live_tpp_transport(monkeypatch)
+    real_fake = tpp_client_module.HTTPTPPIntegrationClient._send_json_request
+
+    def canned_exec_transport(
+        self: Any,
+        *,
+        method: str,
+        path: str,
+        url: str,
+        json_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        payload = real_fake(self, method=method, path=path, url=url, json_payload=json_payload)
+        if method == "POST" and path == "/api/planner/proposals":
+            payload["result_payload"]["execution_id"] = "exec-001"
+        return payload
+
+    monkeypatch.setattr(
+        tpp_client_module.HTTPTPPIntegrationClient,
+        "_send_json_request",
+        canned_exec_transport,
+    )
+    trip_id = verifier._create_trip(
+        client,
+        mode="business",
+        title="Canned exec rejection",
+        region="Chicago",
+    )
+    with pytest.raises(
+        verifier.VerificationFailure,
+        match="native external submission identifiers",
+    ):
+        verifier._run_live_tpp_journey(
+            client,
+            trip_id,
+            env,
+            expected_evaluation_status="non_compliant",
+        )
+
+
+def test_live_tpp_gate_fails_when_runtime_bypasses_native_transition_with_put(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scripts import check_full_product_verification as verifier
+
+    env = _focused_live_tpp_env()
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    _install_focused_live_tpp_transport(monkeypatch)
+
+    trip_id = verifier._create_trip(
+        client,
+        mode="business",
+        title="Runtime PUT bypass detection",
+        region="Chicago",
+    )
+    original_request = client.request
+
+    def inject_caller_put(method: str, url: str, *args: Any, **kwargs: Any) -> Any:
+        if method.upper() == "POST" and str(url) == f"/api/workspace/{trip_id}/policy/sync":
+            # Simulate a regression that stages caller-built PUT /policy during the live run.
+            client.put(
+                f"/api/workspace/{trip_id}/policy",
+                json={
+                    "request": verifier._prepared_policy_request(trip_id),
+                    "response": None,
+                    "tags": ["bypassed-put"],
+                },
+            )
+        return original_request(method, url, *args, **kwargs)
+
+    monkeypatch.setattr(client, "request", inject_caller_put)
+
+    with pytest.raises(
+        verifier.VerificationFailure,
+        match="bypassed native transition with caller-staged PUT",
+    ):
+        verifier._run_live_tpp_journey(
+            client,
+            trip_id,
+            env,
+            expected_evaluation_status="non_compliant",
+        )
+
+
+def test_started_tpp_service_forwards_configured_organization_id(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from scripts import check_full_product_verification as verifier
+
+    repo_path = tmp_path / "Travel-Plan-Permission"
+    venv_python = repo_path / ".venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.write_text("#!/usr/bin/env python\n", encoding="utf-8")
+
+    captured_env: dict[str, str] = {}
+
+    class FakeProcess:
+        def __init__(self, _command: Any, **kwargs: Any) -> None:
+            captured_env.update(kwargs["env"])
+
+        def poll(self) -> int | None:
+            return 0
+
+        def terminate(self) -> None:
+            return None
+
+    monkeypatch.setattr(verifier.subprocess, "Popen", FakeProcess)
+    monkeypatch.setattr(verifier, "_wait_for_http", lambda _url: None)
+    monkeypatch.setattr(verifier, "_free_local_port", lambda _preferred: 42199)
+
+    with verifier._started_tpp_service(
+        {
+            "TPP_REPO_PATH": str(repo_path),
+            "TPP_ACCESS_TOKEN": "token",
+            "TPP_OIDC_PROVIDER": "okta",
+            "TPP_ORGANIZATION_ID": "org-northwind",
+        }
+    ):
+        pass
+
+    assert captured_env["TPP_ORGANIZATION_ID"] == "org-northwind"
