@@ -256,23 +256,37 @@ def test_submit_builds_costed_proposal_not_policy_preview(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Server submit must not reuse the zero-cost policy preview envelope."""
-    monkeypatch.setenv("TPP_ORGANIZATION_ID", "org-northwind")
+    for key, value in _focused_live_tpp_env().items():
+        monkeypatch.setenv(key, value)
+    _install_focused_live_tpp_transport(monkeypatch)
+
     trip_id = _business_trip(client)
     sync_response = client.post(f"/api/workspace/{trip_id}/policy/sync", json={})
-    assert sync_response.status_code not in {404, 405}
-    if sync_response.status_code != 200:
-        pytest.skip(f"TPP unavailable in this environment: {sync_response.status_code}")
+    assert sync_response.status_code == 200, sync_response.text
+
+    price_response = client.put(
+        f"/api/workspace/{trip_id}/prices",
+        json={
+            "component": "transport",
+            "amount": 620.0,
+            "lowest_amount": 400.0,
+            "currency": "USD",
+            "note": "Entered fare for native proposal submit test",
+            "evidence_attested": True,
+            "cabin_class": "economy",
+            "flight_hours": 2.5,
+        },
+    )
+    assert price_response.status_code == 200, price_response.text
 
     submit_response = client.post(f"/api/workspace/{trip_id}/proposal/submit", json={})
-    if submit_response.status_code == 400 and "scenario" in submit_response.text.lower():
-        pytest.skip("Workspace has no runtime scenario comparison in this fixture trip.")
-    assert submit_response.status_code in {200, 502, 503}, submit_response.text
-    if submit_response.status_code == 200:
-        proposal_state = submit_response.json()["proposal_state"]
-        proposal_payload = proposal_state["proposal_payload"]
-        assert proposal_payload["proposal_id"] == f"proposal:{trip_id}"
-        assert "proposal-preview" not in proposal_payload["proposal_id"]
-        assert proposal_payload["cost_summary"]["total_estimated_cost"] >= 0
+    assert submit_response.status_code == 200, submit_response.text
+    proposal_state = submit_response.json()["proposal_state"]
+    proposal_payload = proposal_state["proposal"]
+    assert proposal_state["organization_id"] == "org-northwind"
+    assert proposal_payload["proposal_id"] == f"proposal:{trip_id}"
+    assert "proposal-preview" not in proposal_payload["proposal_id"]
+    assert proposal_payload["cost_summary"]["total_estimated_cost"] == 620.0
 
 
 def _focused_live_tpp_env() -> dict[str, str]:
