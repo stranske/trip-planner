@@ -41,12 +41,27 @@ from trip_planner.persistence.db import (  # noqa: E402
 )
 
 DEFAULT_TPP_REPO_PATH = REPO_ROOT.parent / "Travel-Plan-Permission"
+DEFAULT_TPP_ORGANIZATION_ID = "org-acme"
 TPP_PORT = 8765
 EXPECTED_BUSINESS_EVALUATION_STATUS = "non_compliant"
+_SUPPORTED_LINEAGE_LABELS = frozenset(
+    {"compliant_first", "exception_nearest", "baseline", "fallback"}
+)
 _EVALUATION_FIXTURE_BY_STATUS = {
     "compliant": "approved_evaluation.json",
     "non_compliant": "non_compliant_evaluation.json",
 }
+
+
+def _resolved_tpp_organization_id(env: Mapping[str, str] | None = None) -> str:
+    if env is not None:
+        configured = str(env.get("TPP_ORGANIZATION_ID") or "").strip()
+        if configured:
+            return configured
+    env_configured = os.environ.get("TPP_ORGANIZATION_ID", "").strip()
+    if env_configured:
+        return env_configured
+    return DEFAULT_TPP_ORGANIZATION_ID
 
 
 def _evaluation_fixture_name(expected_status: str) -> str:
@@ -154,6 +169,29 @@ def _assert_business_verification_outcomes(
         trip_id=live_details.get("trip_id"),
         proposal_id=live_details.get("proposal_id"),
     )
+    compatibility_control = live_details.get("compatibility_control")
+    if isinstance(compatibility_control, Mapping):
+        _require(
+            compatibility_control.get("offline_fixture_journey_retained") is True,
+            "live TPP compatibility control did not retain the offline fixture journey",
+            compatibility_control=dict(compatibility_control),
+            trip_id=live_details.get("trip_id"),
+        )
+        _require(
+            compatibility_control.get("saved_scenario_lineage_preserved") is True,
+            "live TPP compatibility control did not preserve saved scenario lineage",
+            compatibility_control=dict(compatibility_control),
+            trip_id=live_details.get("trip_id"),
+        )
+    verdict_readback = live_details.get("verdict_readback")
+    if isinstance(verdict_readback, Mapping):
+        _require(
+            verdict_readback.get("status") == expected_evaluation_status,
+            "live TPP persisted verdict readback did not match the expected outcome",
+            expected_evaluation_status=expected_evaluation_status,
+            verdict_readback=dict(verdict_readback),
+            trip_id=live_details.get("trip_id"),
+        )
 
 
 def _fixture(*parts: str) -> dict[str, Any]:
@@ -592,7 +630,18 @@ def tpp_prerequisite_status(
         if remediations:
             details["remediation"] = " ".join(remediations)
         return CheckResult("live-tpp", "BLOCKED", details)
-    return CheckResult("live-tpp", "READY", configured)
+    return CheckResult(
+        "live-tpp",
+        "READY",
+        {
+            **configured,
+            **(
+                {"TPP_ORGANIZATION_ID": env_map["TPP_ORGANIZATION_ID"].strip()}
+                if env_map.get("TPP_ORGANIZATION_ID", "").strip()
+                else {}
+            ),
+        },
+    )
 
 
 def _wait_for_http(url: str, *, timeout_seconds: float = 20.0) -> None:
@@ -758,6 +807,353 @@ def _started_tpp_service(
         stderr_path.unlink(missing_ok=True)
 
 
+def _matching_saved_scenario_version(
+    saved_scenarios: list[dict[str, Any]],
+    *,
+    selected_scenario_id: str,
+    current_saved_scenario_id: str | None,
+) -> dict[str, Any] | None:
+    ordered = sorted(
+        saved_scenarios,
+        key=lambda saved: (
+            saved.get("saved_scenario_id") != selected_scenario_id,
+            saved.get("saved_scenario_id") != current_saved_scenario_id,
+        ),
+    )
+    for saved in ordered:
+        current_version_id = saved.get("current_version_id")
+        for version in saved.get("versions") or []:
+            if not isinstance(version, dict) or version.get("version_id") != current_version_id:
+                continue
+            refs = version.get("snapshot_refs")
+            if not isinstance(refs, dict):
+                continue
+            if selected_scenario_id not in (
+                saved.get("saved_scenario_id"),
+                refs.get("itinerary_scenario_id"),
+            ):
+                continue
+            if version.get("label") in _SUPPORTED_LINEAGE_LABELS:
+                return dict(version)
+    return None
+
+
+def _ensure_live_saved_scenario_lineage(
+    client: TestClient,
+    *,
+    trip_id: str,
+    policy_state_id: str,
+) -> tuple[str, dict[str, Any]]:
+    workspace_response = client.get(f"/api/workspace/{trip_id}?debug=true")
+    _require(
+        workspace_response.status_code == 200,
+        "live TPP workspace load before submission failed",
+        status=workspace_response.status_code,
+        body=workspace_response.text,
+        trip_id=trip_id,
+        route=f"/api/workspace/{trip_id}?debug=true",
+    )
+    workspace_payload = workspace_response.json()
+    runtime_comparison = dict(workspace_payload.get("runtime_scenario_comparison") or {})
+    scenario_rows = [
+        row for row in (runtime_comparison.get("scenarios") or []) if isinstance(row, dict)
+    ]
+    _require(
+        bool(scenario_rows),
+        "live TPP workspace has no runtime scenarios for native submission",
+        trip_id=trip_id,
+    )
+    lead_id = runtime_comparison.get("lead_scenario_id")
+    lead_row = next(
+        (row for row in scenario_rows if row.get("scenario_id") == lead_id),
+        scenario_rows[0],
+    )
+    selected_scenario_id = str(lead_row["scenario_id"])
+    saved_scenarios = [
+        item for item in (workspace_payload.get("saved_scenarios") or []) if isinstance(item, dict)
+    ]
+    _require(
+        bool(saved_scenarios),
+        "live TPP workspace has no saved scenarios for lineage",
+        trip_id=trip_id,
+    )
+    matching_version = _matching_saved_scenario_version(
+        saved_scenarios,
+        selected_scenario_id=selected_scenario_id,
+        current_saved_scenario_id=dict(workspace_payload.get("session") or {}).get(
+            "current_saved_scenario_id"
+        ),
+    )
+    if matching_version is not None:
+        return selected_scenario_id, matching_version
+
+    base_versions = [
+        version
+        for version in (saved_scenarios[0].get("versions") or [])
+        if isinstance(version, dict)
+    ]
+    base_refs = dict((base_versions[0].get("snapshot_refs") if base_versions else None) or {})
+    base_refs["itinerary_scenario_id"] = selected_scenario_id
+    base_refs["policy_state_id"] = policy_state_id
+    saved_response = client.post(
+        f"/api/trips/{trip_id}/saved-scenarios",
+        json={
+            "title": "Selected business route",
+            "label": "compliant_first",
+            "snapshot_refs": base_refs,
+        },
+    )
+    _require(
+        saved_response.status_code == 201,
+        "live TPP saved scenario materialization failed",
+        status=saved_response.status_code,
+        body=saved_response.text,
+        trip_id=trip_id,
+        scenario_id=selected_scenario_id,
+        route=f"/api/trips/{trip_id}/saved-scenarios",
+    )
+    saved_scenario = dict(saved_response.json().get("saved_scenario") or {})
+    current_version_id = saved_scenario.get("current_version_id")
+    active_version = next(
+        (
+            dict(version)
+            for version in (saved_scenario.get("versions") or [])
+            if isinstance(version, dict) and version.get("version_id") == current_version_id
+        ),
+        None,
+    )
+    _require(
+        active_version is not None,
+        "live TPP saved scenario is missing active version lineage",
+        trip_id=trip_id,
+        scenario_id=selected_scenario_id,
+        saved_scenario_id=saved_scenario.get("saved_scenario_id"),
+    )
+    assert active_version is not None
+    return selected_scenario_id, active_version
+
+
+def _assert_native_live_tpp_route_order(
+    *,
+    trip_id: str,
+    observed_transitions: list[tuple[str, str]],
+) -> None:
+    forbidden_put_routes = {
+        ("PUT", f"/api/workspace/{trip_id}/policy"),
+        ("PUT", f"/api/workspace/{trip_id}/proposal"),
+        ("PUT", f"/api/workspace/{trip_id}/proposal/evaluation"),
+    }
+    bypassed_puts = [route for route in observed_transitions if route in forbidden_put_routes]
+    _require(
+        not bypassed_puts,
+        "live TPP journey bypassed native transition with caller-staged PUT",
+        trip_id=trip_id,
+        bypassed_routes=[f"{method} {path}" for method, path in bypassed_puts],
+    )
+    required_native_routes = (
+        ("POST", f"/api/workspace/{trip_id}/policy/sync"),
+        ("POST", f"/api/workspace/{trip_id}/proposal/submit"),
+        ("POST", f"/api/workspace/{trip_id}/proposal/refresh"),
+        ("GET", f"/api/workspace/{trip_id}/proposal"),
+    )
+    cursor = 0
+    for expected_route in required_native_routes:
+        try:
+            cursor = observed_transitions.index(expected_route, cursor) + 1
+        except ValueError as exc:
+            raise VerificationFailure(
+                "live TPP journey bypassed required native transition",
+                trip_id=trip_id,
+                missing_transition=f"{expected_route[0]} {expected_route[1]}",
+                observed_transitions=[f"{method} {path}" for method, path in observed_transitions],
+            ) from exc
+
+
+def _assert_native_live_tpp_policy_state(
+    *,
+    trip_id: str,
+    configured_organization_id: str,
+    policy_state: Mapping[str, Any],
+) -> str:
+    policy_id = str(policy_state.get("policy_id") or "")
+    policy_version = str(policy_state.get("policy_version") or "")
+    policy_request_id = str(policy_state.get("source_request_id") or "")
+    _require(
+        policy_state.get("organization_id") == configured_organization_id,
+        "live TPP policy sync did not use the configured organization",
+        trip_id=trip_id,
+        expected_organization_id=configured_organization_id,
+        actual_organization_id=policy_state.get("organization_id"),
+    )
+    _require(
+        bool(policy_id) and bool(policy_version),
+        "live TPP policy sync did not return external policy identifiers",
+        trip_id=trip_id,
+        policy_id=policy_id,
+        policy_version=policy_version,
+    )
+    _require(
+        policy_state.get("source_kind") == "tpp_sync"
+        and policy_request_id.startswith("policy-sync:")
+        and policy_state.get("source_correlation_id") == f"policy-sync:{trip_id}"
+        and "workspace-sync" in list(policy_state.get("tags") or []),
+        "live TPP policy state was not produced by native POST policy sync",
+        trip_id=trip_id,
+        source_kind=policy_state.get("source_kind"),
+        source_request_id=policy_request_id,
+        source_correlation_id=policy_state.get("source_correlation_id"),
+        tags=policy_state.get("tags"),
+    )
+    return policy_id
+
+
+def _assert_native_live_tpp_submission_state(
+    *,
+    trip_id: str,
+    configured_organization_id: str,
+    policy_id: str,
+    selected_scenario_id: str,
+    expected_source_version: Mapping[str, Any],
+    submitted_state: Mapping[str, Any],
+) -> str:
+    submitted_proposal = dict(submitted_state.get("proposal") or {})
+    submitted_record = dict(submitted_state.get("submission") or {})
+    submission_request_id = str(submitted_record.get("request_id") or "")
+    execution_id = str(submitted_state.get("execution_id") or "")
+    _require(
+        submitted_state.get("organization_id") == configured_organization_id,
+        "live TPP proposal submission did not use the configured organization",
+        trip_id=trip_id,
+        expected_organization_id=configured_organization_id,
+        actual_organization_id=submitted_state.get("organization_id"),
+    )
+    _require(
+        submitted_state.get("scenario_id") == selected_scenario_id
+        and submitted_proposal.get("source_version") == dict(expected_source_version),
+        "live TPP proposal submission did not preserve saved scenario lineage",
+        trip_id=trip_id,
+        expected_scenario_id=selected_scenario_id,
+        actual_scenario_id=submitted_state.get("scenario_id"),
+        expected_source_version=dict(expected_source_version),
+        actual_source_version=submitted_proposal.get("source_version"),
+    )
+    _require(
+        submitted_proposal.get("constraint_set_id") == policy_id
+        and submission_request_id.startswith("submit-proposal:")
+        and submitted_record.get("correlation_id") == f"submit-proposal:{trip_id}"
+        and bool(execution_id)
+        and execution_id != "exec-001",
+        "live TPP proposal submission did not record native external submission identifiers",
+        trip_id=trip_id,
+        constraint_set_id=submitted_proposal.get("constraint_set_id"),
+        expected_policy_id=policy_id,
+        submission_request_id=submission_request_id,
+        correlation_id=submitted_record.get("correlation_id"),
+        execution_id=execution_id,
+    )
+    return execution_id
+
+
+def _assert_native_live_tpp_verdict_readback(
+    *,
+    trip_id: str,
+    configured_organization_id: str,
+    execution_id: str,
+    selected_scenario_id: str,
+    expected_source_version: Mapping[str, Any],
+    expected_evaluation_status: str,
+    readback_state: Mapping[str, Any],
+    readback_summary: Mapping[str, Any],
+) -> None:
+    readback_proposal = dict(readback_state.get("proposal") or {})
+    readback_evaluation = dict(readback_state.get("evaluation") or {})
+    readback_evaluation_result = dict(readback_evaluation.get("evaluation_result") or {})
+    readback_linkage = dict(readback_evaluation.get("linkage") or {})
+    evaluation_id = str(readback_evaluation_result.get("evaluation_id") or "")
+    expected_follow_up_status = (
+        "resolved" if expected_evaluation_status == "compliant" else "reoptimization_required"
+    )
+    _require(
+        readback_state.get("organization_id") == configured_organization_id
+        and readback_state.get("execution_id") == execution_id
+        and readback_state.get("scenario_id") == selected_scenario_id
+        and readback_proposal.get("source_version") == dict(expected_source_version),
+        "live TPP persisted proposal readback did not match the submitted scenario lineage",
+        trip_id=trip_id,
+        expected_organization_id=configured_organization_id,
+        actual_organization_id=readback_state.get("organization_id"),
+        expected_execution_id=execution_id,
+        actual_execution_id=readback_state.get("execution_id"),
+        expected_scenario_id=selected_scenario_id,
+        actual_scenario_id=readback_state.get("scenario_id"),
+        expected_source_version=dict(expected_source_version),
+        actual_source_version=readback_proposal.get("source_version"),
+    )
+    _require(
+        bool(evaluation_id)
+        and str(readback_evaluation.get("request_id") or "").startswith("fetch_evaluation_result:")
+        and readback_evaluation.get("correlation_id") == f"submit-proposal:{trip_id}"
+        and readback_linkage.get("scenario_id") == selected_scenario_id
+        and readback_linkage.get("organization_id") == configured_organization_id
+        and readback_linkage.get("execution_id") == execution_id
+        and readback_evaluation_result.get("status") == expected_evaluation_status
+        and readback_summary.get("evaluation_result_status") == expected_evaluation_status
+        and readback_summary.get("follow_up_status") == expected_follow_up_status,
+        "live TPP persisted verdict readback did not match native evaluation and scenario lineage",
+        trip_id=trip_id,
+        evaluation_id=evaluation_id,
+        evaluation_request_id=readback_evaluation.get("request_id"),
+        evaluation_correlation_id=readback_evaluation.get("correlation_id"),
+        linkage=readback_linkage,
+        expected_evaluation_status=expected_evaluation_status,
+        actual_evaluation_status=readback_evaluation_result.get("status"),
+        expected_follow_up_status=expected_follow_up_status,
+        actual_follow_up_status=readback_summary.get("follow_up_status"),
+    )
+
+
+def _assert_native_live_tpp_transitions(
+    *,
+    trip_id: str,
+    configured_organization_id: str,
+    selected_scenario_id: str,
+    expected_source_version: Mapping[str, Any],
+    expected_evaluation_status: str,
+    observed_transitions: list[tuple[str, str]],
+    policy_state: Mapping[str, Any],
+    submitted_state: Mapping[str, Any],
+    readback_state: Mapping[str, Any],
+    readback_summary: Mapping[str, Any],
+) -> None:
+    _assert_native_live_tpp_route_order(
+        trip_id=trip_id,
+        observed_transitions=observed_transitions,
+    )
+    policy_id = _assert_native_live_tpp_policy_state(
+        trip_id=trip_id,
+        configured_organization_id=configured_organization_id,
+        policy_state=policy_state,
+    )
+    execution_id = _assert_native_live_tpp_submission_state(
+        trip_id=trip_id,
+        configured_organization_id=configured_organization_id,
+        policy_id=policy_id,
+        selected_scenario_id=selected_scenario_id,
+        expected_source_version=expected_source_version,
+        submitted_state=submitted_state,
+    )
+    _assert_native_live_tpp_verdict_readback(
+        trip_id=trip_id,
+        configured_organization_id=configured_organization_id,
+        execution_id=execution_id,
+        selected_scenario_id=selected_scenario_id,
+        expected_source_version=expected_source_version,
+        expected_evaluation_status=expected_evaluation_status,
+        readback_state=readback_state,
+        readback_summary=readback_summary,
+    )
+
+
 def _run_live_tpp_journey(
     client: TestClient,
     trip_id: str,
@@ -765,32 +1161,42 @@ def _run_live_tpp_journey(
     *,
     expected_evaluation_status: str = EXPECTED_BUSINESS_EVALUATION_STATUS,
 ) -> dict[str, Any]:
-    evaluation_fixture_name = _evaluation_fixture_name(expected_evaluation_status)
+    _evaluation_fixture_name(expected_evaluation_status)
+    observed_transitions: list[tuple[str, str]] = []
+    original_request = client.request
+
+    def _recording_request(method: str, url: str, *args: Any, **kwargs: Any) -> Any:
+        path = str(url).split("?", 1)[0]
+        observed_transitions.append((method.upper(), path))
+        return original_request(method, url, *args, **kwargs)
+
     with _started_tpp_service(env) as (base_url, _process):  # noqa: SIM117
         with _temporary_tpp_client_environment(base_url, env):
-            policy_request = _prepared_policy_request(trip_id)
-            policy_response = client.put(
-                f"/api/workspace/{trip_id}/policy",
-                json={
-                    "request": policy_request,
-                    "response": None,
-                    "tags": ["full-product-live"],
-                },
-            )
-            _require(
-                policy_response.status_code == 200,
-                "live TPP policy sync failed",
-                status=policy_response.status_code,
-                body=policy_response.text,
-                trip_id=trip_id,
-            )
+            configured_organization_id = os.environ["TPP_ORGANIZATION_ID"]
+            setattr(client, "request", _recording_request)
+            try:
+                policy_response = client.post(
+                    f"/api/workspace/{trip_id}/policy/sync",
+                    json={},
+                )
+                _require(
+                    policy_response.status_code == 200,
+                    "live TPP policy sync failed",
+                    status=policy_response.status_code,
+                    body=policy_response.text,
+                    trip_id=trip_id,
+                    route=f"/api/workspace/{trip_id}/policy/sync",
+                )
+                policy_payload = policy_response.json()
+                policy_state = dict(policy_payload.get("policy_state") or {})
+                policy_state_id = str(
+                    policy_state.get("policy_state_id") or f"policy-state:{trip_id}"
+                )
 
-            # This is synthetic verifier input, entered through the same API as a
-            # traveler. Real TPP policy must see complete fare/cabin/expense facts;
-            # production must continue to reject missing traveler-supplied facts.
-            price_response = client.put(
-                f"/api/workspace/{trip_id}/prices",
-                json={
+                # This is synthetic verifier input, entered through the same API as a
+                # traveler. Real TPP policy must see complete fare/cabin/expense facts;
+                # production must continue to reject missing traveler-supplied facts.
+                price_input: dict[str, Any] = {
                     "component": "transport",
                     "amount": 620.0,
                     "lowest_amount": (
@@ -801,83 +1207,170 @@ def _run_live_tpp_journey(
                     "evidence_attested": True,
                     "cabin_class": "economy",
                     "flight_hours": 2.5,
-                },
-            )
-            _require(
-                price_response.status_code == 200,
-                "live TPP synthetic fare setup failed",
-                status=price_response.status_code,
-                body=price_response.text,
-                trip_id=trip_id,
-            )
-            proposal = _proposal_payload(trip_id)
-            submission_request = _prepared_submission_request(trip_id, proposal["proposal_id"])
-            submission_response = client.put(
-                f"/api/workspace/{trip_id}/proposal",
-                json={
-                    "proposal": proposal,
-                    "request": submission_request,
-                    "response": None,
-                    "proposal_version": "proposal-v3",
-                    "scenario_id": "scenario-a",
-                },
-            )
-            _require(
-                submission_response.status_code == 200,
-                "live TPP proposal submission failed",
-                status=submission_response.status_code,
-                body=submission_response.text,
-                trip_id=trip_id,
-                proposal_id=proposal["proposal_id"],
-            )
-            submission_payload = submission_response.json()
-            execution_id = submission_payload["proposal_state"]["execution_id"]
+                }
+                price_response = client.put(
+                    f"/api/workspace/{trip_id}/prices",
+                    json=price_input,
+                )
+                _require(
+                    price_response.status_code == 200,
+                    "live TPP synthetic fare setup failed",
+                    status=price_response.status_code,
+                    body=price_response.text,
+                    trip_id=trip_id,
+                )
 
-            status_response = client.post(f"/api/workspace/{trip_id}/proposal/refresh")
-            _require(
-                status_response.status_code == 200,
-                "live TPP proposal status poll failed",
-                status=status_response.status_code,
-                body=status_response.text,
+                selected_scenario_id, expected_source_version = _ensure_live_saved_scenario_lineage(
+                    client,
+                    trip_id=trip_id,
+                    policy_state_id=policy_state_id,
+                )
+
+                submission_response = client.post(
+                    f"/api/workspace/{trip_id}/proposal/submit",
+                    json={},
+                )
+                _require(
+                    submission_response.status_code == 200,
+                    "live TPP proposal submission failed",
+                    status=submission_response.status_code,
+                    body=submission_response.text,
+                    trip_id=trip_id,
+                    route=f"/api/workspace/{trip_id}/proposal/submit",
+                )
+                submission_payload = submission_response.json()
+                submitted_state = dict(submission_payload.get("proposal_state") or {})
+                proposal_id = str(submitted_state.get("proposal_id") or f"proposal:{trip_id}")
+                execution_id = str(submitted_state.get("execution_id") or "")
+
+                status_response = client.post(f"/api/workspace/{trip_id}/proposal/refresh")
+                _require(
+                    status_response.status_code == 200,
+                    "live TPP proposal status poll failed",
+                    status=status_response.status_code,
+                    body=status_response.text,
+                    trip_id=trip_id,
+                    proposal_id=proposal_id,
+                    execution_id=execution_id,
+                )
+                status_summary = dict(status_response.json().get("summary") or {})
+
+                readback_response = client.get(f"/api/workspace/{trip_id}/proposal")
+                _require(
+                    readback_response.status_code == 200,
+                    "live TPP persisted proposal readback failed",
+                    status=readback_response.status_code,
+                    body=readback_response.text,
+                    trip_id=trip_id,
+                    proposal_id=proposal_id,
+                    route=f"/api/workspace/{trip_id}/proposal",
+                )
+                readback_payload = readback_response.json()
+                readback_state = dict(readback_payload.get("proposal_state") or {})
+                readback_summary = dict(readback_payload.get("summary") or {})
+            finally:
+                setattr(client, "request", original_request)
+
+            _assert_native_live_tpp_transitions(
                 trip_id=trip_id,
-                proposal_id=proposal["proposal_id"],
-                execution_id=execution_id,
+                configured_organization_id=configured_organization_id,
+                selected_scenario_id=selected_scenario_id,
+                expected_source_version=expected_source_version,
+                expected_evaluation_status=expected_evaluation_status,
+                observed_transitions=observed_transitions,
+                policy_state=policy_state,
+                submitted_state=submitted_state,
+                readback_state=readback_state,
+                readback_summary=readback_summary,
             )
 
-            evaluation_request = _prepared_evaluation_request(
-                trip_id,
-                proposal["proposal_id"],
-                execution_id,
-                fixture_name=evaluation_fixture_name,
+            policy_id = str(policy_state["policy_id"])
+            policy_version = str(policy_state["policy_version"])
+            policy_request_id = str(policy_state["source_request_id"])
+            submission_request_id = str(dict(submitted_state.get("submission") or {})["request_id"])
+            readback_evaluation = dict(readback_state.get("evaluation") or {})
+            readback_evaluation_result = dict(readback_evaluation.get("evaluation_result") or {})
+            evaluation_id = str(readback_evaluation_result["evaluation_id"])
+            readback_source_version = dict(
+                dict(readback_state.get("proposal") or {}).get("source_version") or {}
             )
-            evaluation_response = client.put(
-                f"/api/workspace/{trip_id}/proposal/evaluation",
-                json={
-                    "request": evaluation_request,
-                    "response": None,
-                    "proposal_version": "proposal-v3",
-                    "scenario_id": "scenario-a",
-                },
-            )
-            _require(
-                evaluation_response.status_code == 200,
-                "live TPP evaluation ingestion failed",
-                status=evaluation_response.status_code,
-                body=evaluation_response.text,
-                trip_id=trip_id,
-                proposal_id=proposal["proposal_id"],
-            )
-            payload = evaluation_response.json()
+            policy_summary = dict(policy_payload.get("summary") or {})
+
             return {
                 "base_url": base_url,
                 "trip_id": trip_id,
-                "proposal_id": proposal["proposal_id"],
-                "execution_id": payload["proposal_state"]["execution_id"],
-                "status_poll": status_response.json()["summary"]["submission_status"],
-                "submission_outcome": status_response.json()["summary"]["submission_outcome"],
-                "submission_error": status_response.json()["summary"]["submission_error"],
-                "evaluation_transport_status": payload["summary"]["evaluation_transport_status"],
-                "evaluation_status": payload["summary"]["evaluation_result_status"],
+                "organization_id": configured_organization_id,
+                "policy_id": policy_id,
+                "policy_version": policy_version,
+                "proposal_id": proposal_id,
+                "proposal_version": str(readback_state["proposal_version"]),
+                "scenario_id": selected_scenario_id,
+                "saved_scenario_id": str(expected_source_version["saved_scenario_id"]),
+                "source_version_id": str(expected_source_version["version_id"]),
+                "source_version": readback_source_version,
+                "execution_id": execution_id,
+                "evaluation_id": evaluation_id,
+                "status_poll": status_summary["submission_status"],
+                "submission_outcome": status_summary["submission_outcome"],
+                "submission_error": status_summary["submission_error"],
+                "evaluation_transport_status": readback_summary["evaluation_transport_status"],
+                "evaluation_status": readback_summary["evaluation_result_status"],
+                "follow_up_status": readback_summary["follow_up_status"],
+                "external_ids": {
+                    "policy_id": policy_id,
+                    "policy_request_id": policy_request_id,
+                    "submission_request_id": submission_request_id,
+                    "execution_id": execution_id,
+                    "evaluation_id": evaluation_id,
+                },
+                "verdict_readback": {
+                    "evaluation_id": evaluation_id,
+                    "status": readback_summary["evaluation_result_status"],
+                    "follow_up_status": readback_summary["follow_up_status"],
+                    "scenario_id": str(readback_state["scenario_id"]),
+                    "saved_scenario_id": str(readback_source_version["saved_scenario_id"]),
+                    "source_version_id": str(readback_source_version["version_id"]),
+                },
+                "native_transitions": {
+                    "policy_sync": f"POST /api/workspace/{trip_id}/policy/sync",
+                    "proposal_submit": f"POST /api/workspace/{trip_id}/proposal/submit",
+                    "proposal_refresh": f"POST /api/workspace/{trip_id}/proposal/refresh",
+                    "verdict_readback": f"GET /api/workspace/{trip_id}/proposal",
+                },
+                "input": {
+                    "trip_id": trip_id,
+                    "organization_id": configured_organization_id,
+                    "scenario_id": selected_scenario_id,
+                    "saved_scenario_id": str(expected_source_version["saved_scenario_id"]),
+                    "source_version_id": str(expected_source_version["version_id"]),
+                    "expected_evaluation_status": expected_evaluation_status,
+                    "price": dict(price_input),
+                },
+                "observed_output": {
+                    "organization_id": str(readback_state["organization_id"]),
+                    "policy_id": policy_id,
+                    "policy_version": policy_version,
+                    "proposal_id": proposal_id,
+                    "proposal_version": str(readback_state["proposal_version"]),
+                    "execution_id": execution_id,
+                    "evaluation_id": evaluation_id,
+                    "evaluation_status": readback_summary["evaluation_result_status"],
+                    "follow_up_status": readback_summary["follow_up_status"],
+                    "scenario_id": str(readback_state["scenario_id"]),
+                    "saved_scenario_id": str(readback_source_version["saved_scenario_id"]),
+                    "source_version_id": str(readback_source_version["version_id"]),
+                },
+                "compatibility_control": {
+                    "offline_fixture_journey_retained": True,
+                    "compatible_with_planner_cache": bool(
+                        policy_summary.get("compatible_with_planner_cache")
+                    ),
+                    "contract_version": str(policy_summary.get("contract_version") or ""),
+                    "organization_id": configured_organization_id,
+                    "saved_scenario_lineage_preserved": (
+                        readback_source_version == expected_source_version
+                    ),
+                },
             }
 
 
@@ -903,6 +1396,7 @@ def _temporary_tpp_client_environment(base_url: str, env: Mapping[str, str]) -> 
         "TPP_BASE_URL": base_url,
         "TPP_ACCESS_TOKEN": env["TPP_ACCESS_TOKEN"],
         "TPP_OIDC_PROVIDER": env["TPP_OIDC_PROVIDER"],
+        "TPP_ORGANIZATION_ID": _resolved_tpp_organization_id(env),
     }
     previous = {key: os.environ.get(key) for key in tpp_env}
     os.environ.update(tpp_env)
