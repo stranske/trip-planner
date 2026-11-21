@@ -128,9 +128,8 @@ def load_model(fixture_name: str):
 
 
 def _amount(money: Any) -> float:
-    return (
-        float(getattr(money, "typical_amount", float("nan"))) if money is not None else float("nan")
-    )
+    typical = getattr(money, "typical_amount", None) if money is not None else None
+    return float(typical) if typical is not None else float("nan")
 
 
 def _default_legacy_metrics() -> dict[str, float]:

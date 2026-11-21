@@ -206,6 +206,25 @@ def test_non_transport_roundtrips_use_canonical_models(tmp_path: Path, record_pr
         encoding="utf-8",
     )
 
+    missing_typical_cost_lodging = tmp_path / "missing_typical_cost_central_hotel.json"
+    missing_typical_cost_payload = copy.deepcopy(central_payload)
+    missing_typical_cost_payload["cost_summary"]["total"] = {
+        "currency": "USD",
+        "min_amount": 780.0,
+        "max_amount": 900.0,
+    }
+    missing_typical_cost_lodging.write_text(
+        json.dumps(missing_typical_cost_payload),
+        encoding="utf-8",
+    )
+    assert adapter.roundtrip_is_stable(str(missing_typical_cost_lodging)) is True
+    missing_typical_cost_metrics = adapter.metrics_for(str(missing_typical_cost_lodging))
+    assert math.isnan(missing_typical_cost_metrics["cost_total"])
+    assert_invariants(
+        invariants.check_option(str(missing_typical_cost_lodging)),
+        context="missing_typical_cost_central_hotel",
+    )
+
     central_metrics = adapter.metrics_for("tests/fixtures/options/lodging/central_urban_hotel.json")
     aged_metrics = adapter.metrics_for(str(aged_lodging))
     low_commerciality_metrics = adapter.metrics_for(str(low_commerciality_lodging))
