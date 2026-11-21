@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from trip_planner.app.routes.errors import public_http_error
@@ -8,8 +8,12 @@ from trip_planner.app.services.planner import (
     WorkspacePlannerTripNotFoundError,
     get_planner_session_payload,
     resume_planner_session_payload,
+    submit_in_trip_event,
     submit_planner_turn,
 )
+from trip_planner.app.services.planner_in_trip import InTripEventConflictError
+from trip_planner.app.services.workspace import WorkspaceTripNotFoundError
+from trip_planner.orchestration import InTripTriggerEvent
 from trip_planner.persistence.db import get_db_session
 
 router = APIRouter(tags=["planner"])
@@ -67,5 +71,31 @@ def create_planner_turn(
     except ValueError as error:
         raise public_http_error(
             error, status_code=400, message="The planner request was invalid."
+        ) from error
+    return PlannerSessionResponse.model_validate(result)
+
+
+@router.post("/planner/{trip_id}/in-trip-events", response_model=PlannerSessionResponse)
+def process_in_trip_event(
+    trip_id: str,
+    event: InTripTriggerEvent,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    db_session: Session = Depends(get_db_session),
+) -> PlannerSessionResponse:
+    try:
+        result = submit_in_trip_event(
+            db_session, user=user, trip_id=trip_id, event=event
+        )
+    except WorkspaceTripNotFoundError as error:
+        raise public_http_error(
+            error,
+            status_code=404,
+            message="The requested planner session was not found.",
+        ) from error
+    except InTripEventConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except ValueError as error:
+        raise public_http_error(
+            error, status_code=400, message="The in-trip event could not be applied."
         ) from error
     return PlannerSessionResponse.model_validate(result)

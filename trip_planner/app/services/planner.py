@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from trip_planner.app.services import policy_codes
 from trip_planner.app.services.auth import AuthenticatedUser
+from trip_planner.app.services.planner_in_trip import persist_in_trip_event
 from trip_planner.app.services.planner_memory import (
     build_planner_memory_payload,
     ensure_planner_memory_persisted,
@@ -56,6 +57,7 @@ from trip_planner.observability.langsmith_fleet import (
     build_planner_fleet_records,
     default_fleet_artifact_path,
 )
+from trip_planner.orchestration import InTripTriggerEvent
 from trip_planner.persistence.models.activity import (
     PersistedActivityLogEvent,
     PersistedPlannerAction,
@@ -2386,3 +2388,15 @@ def submit_planner_turn(
         runtime=runtime,
         reply=reply,
     )
+
+
+def submit_in_trip_event(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    event: InTripTriggerEvent,
+) -> dict[str, Any]:
+    persist_in_trip_event(db_session, user=user, trip_id=trip_id, event=event)
+    db_session.commit()
+    return _planner_session_payload(db_session, user=user, trip_id=trip_id)
