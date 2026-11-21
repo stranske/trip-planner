@@ -12,7 +12,8 @@ from tests.restart_harness import (
     clear_inter_app_restart_caches,
     sequential_restart_clients,
 )
-from trip_planner.app.services import planner, policy
+from trip_planner.app.routes import workspace as workspace_routes
+from trip_planner.app.services import planner, planner_in_trip, policy
 from trip_planner.integrations.tpp import TPPResponseEnvelope
 
 
@@ -50,8 +51,8 @@ def _revision_and_turn(client, trip_id, event_id):
     return revisions[0], turns[0], workspace["session"]["current_saved_scenario_id"]
 
 
-def _submit_concurrently(client, path, event, monkeypatch):
-    barrier = Barrier(2)
+def _submit_concurrently(client, path, event, monkeypatch, *, answer=None):
+    barrier = Barrier(3 if answer else 2)
 
     persist = planner.persist_in_trip_event
 
@@ -59,11 +60,25 @@ def _submit_concurrently(client, path, event, monkeypatch):
         barrier.wait(timeout=5)
         return persist(*args, **kwargs)
 
+    answer_decision = workspace_routes.answer_workspace_planner_decision
+
+    def reach_answer_together(*args, **kwargs):
+        barrier.wait(timeout=5)
+        return answer_decision(*args, **kwargs)
+
     with monkeypatch.context() as concurrent:
         concurrent.setattr(planner, "persist_in_trip_event", reach_writer_together)
-        with ThreadPoolExecutor(max_workers=2) as pool:
+        if answer:
+            concurrent.setattr(
+                workspace_routes, "answer_workspace_planner_decision", reach_answer_together
+            )
+        with ThreadPoolExecutor(max_workers=barrier.parties) as pool:
             responses = [pool.submit(client.post, path, json=event.to_dict()) for _ in range(2)]
-            return [_checked(response.result(timeout=10)) for response in responses]
+            answering = pool.submit(client.post, answer[0], json=answer[1]) if answer else None
+            results = [_checked(response.result(timeout=10)) for response in responses]
+            if answering is not None:
+                _checked(answering.result(timeout=10))
+            return results
 
 
 def test_typed_closure_deduplicates_concurrent_requests_and_survives_restart(tmp_path, monkeypatch):
@@ -108,8 +123,17 @@ def test_typed_closure_deduplicates_concurrent_requests_and_survives_restart(tmp
                 affected_checkpoint_id=session["current_checkpoint_id"],
             )
             path = f"/api/planner/{trip_id}/in-trip-events"
-            results = _submit_concurrently(writer, path, event, monkeypatch)
+            bootstrap = session["pending_decisions"][0]
+            answer = (
+                f"/api/workspace/{trip_id}/planner/decisions/{bootstrap['decision_id']}/answer",
+                {"choice": bootstrap["choices"][0]},
+            )
+            results = _submit_concurrently(writer, path, event, monkeypatch, answer=answer)
             assert results[0]["messages"] == results[1]["messages"]
+            pending = _checked(writer.get(f"/api/workspace/{trip_id}"))["session"][
+                "pending_decisions"
+            ]
+            assert bootstrap["decision_id"] not in {item["decision_id"] for item in pending}
             revision, turn, active_id = _revision_and_turn(writer, trip_id, event.trigger_event_id)
             assert active_id == original_id
             assert revision["versions"][0]["based_on_version_id"] == original["current_version_id"]
@@ -141,3 +165,44 @@ def test_typed_closure_deduplicates_concurrent_requests_and_survives_restart(tmp
             "second_started",
             "second_closed",
         ]
+
+
+def test_typed_closure_rolls_back_after_flush_and_checks_decision_id_limit(tmp_path, monkeypatch):
+    with sequential_restart_clients(
+        tmp_path / "in-trip-rollback.sqlite", monkeypatch, email="in-trip-retry@example.test"
+    ) as (clients, _):
+        with clients() as writer:
+            trip_id = _business_trip(writer)
+            workspace_path = f"/api/workspace/{trip_id}"
+            planner_path = f"/api/planner/{trip_id}/session"
+            event_path = f"/api/planner/{trip_id}/in-trip-events"
+            before = _checked(writer.get(workspace_path))
+            planner_before = _checked(writer.get(planner_path))
+            session = before["session"]
+            event = replace(
+                _load_event("closure_driven_replan.json"),
+                trip_id=trip_id,
+                session_state_id=session["session_state_id"],
+                affected_saved_scenario_id=session["current_saved_scenario_id"],
+                affected_checkpoint_id=session["current_checkpoint_id"],
+                trigger_event_id="a" * 87,
+            )
+            too_long = replace(event, trigger_event_id="a" * 88)
+            assert writer.post(event_path, json=too_long.to_dict()).status_code == 400
+            reached_action = []
+
+            def fail_action(*args, **kwargs):
+                reached_action.append(True)
+                raise ValueError("simulate failure after flushing the activity")
+
+            with monkeypatch.context() as fail:
+                fail.setattr(planner_in_trip, "_record_planner_action", fail_action)
+                assert writer.post(event_path, json=event.to_dict()).status_code == 400
+            assert reached_action
+            after = _checked(writer.get(workspace_path))
+            assert after["saved_scenarios"] == before["saved_scenarios"]
+            assert after["activity_log"] == before["activity_log"]
+            assert after["session"]["pending_decisions"] == session["pending_decisions"]
+            assert _checked(writer.get(planner_path))["messages"] == planner_before["messages"]
+            _checked(writer.post(event_path, json=event.to_dict()))
+            _revision_and_turn(writer, trip_id, event.trigger_event_id)

@@ -3,18 +3,15 @@
 import json
 from datetime import UTC, datetime
 from hashlib import sha256
-from typing import Any, cast
 
-from sqlalchemy import update
-from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
 from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.app.services.workspace import (
-    WorkspaceTripNotFoundError,
     _get_or_create_workspace_session_record,
     _get_owned_trip_record,
     _isoformat,
+    _lock_workspace_trip,
     _record_planner_action,
     _serialize_session_record,
 )
@@ -26,7 +23,6 @@ from trip_planner.orchestration import (
 )
 from trip_planner.persistence.models.activity import PersistedActivityLogEvent
 from trip_planner.persistence.models.scenario import PersistedSavedScenario
-from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.state.scenarios import ScenarioArtifactRefs, ScenarioVersion
 from trip_planner.state.sessions import PlanningSessionState
 
@@ -90,15 +86,7 @@ def persist_in_trip_event(
     if event.trip_id != trip_id or len(event.summary) > 600:
         raise ValueError("The event must match the trip and fit the activity summary.")
 
-    # Lock before reading the event and session. The no-op update obtains the
-    # trip row lock on PostgreSQL or the writer lock on SQLite.
-    locked = db.execute(
-        update(PersistedTrip)
-        .where(PersistedTrip.trip_id == trip_id, PersistedTrip.user_id == user.user_id)
-        .values(updated_at=PersistedTrip.updated_at)
-    )
-    if cast(CursorResult[Any], locked).rowcount != 1:
-        raise WorkspaceTripNotFoundError("The trip was not found.")
+    _lock_workspace_trip(db, trip_id=trip_id, user_id=user.user_id)
 
     key = sha256(json.dumps([trip_id, event.trigger_event_id]).encode()).hexdigest()[:32]
     fingerprint = sha256(json.dumps(event.to_dict(), sort_keys=True).encode()).hexdigest()
@@ -156,6 +144,9 @@ def persist_in_trip_event(
         (d.decision_id for d in updated.pending_decisions if d.decision_id not in previous_ids),
         None,
     )
+    # PostgreSQL enforces the same length for both activity and action links.
+    if decision_id is not None and len(decision_id) > 96:
+        raise ValueError("The derived in-trip decision ID exceeds 96 characters.")
     activity = result.activity_event
     db.add(
         PersistedActivityLogEvent(
