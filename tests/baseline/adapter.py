@@ -162,41 +162,40 @@ def _evaluate_source_refs(
     option_kind = (
         intended_option_kind if intended_option_kind in source_schema.SOURCE_OPTION_KINDS else None
     )
-    summary = summarize_sources(
-        source_refs,
-        subject_kind="option",
-        intended_option_kind=option_kind,
-    )
-
-    freshness_source_ids = {
-        ref.source_id
+    freshness_refs = [
+        ref
         for ref in source_refs
         if ref.trust_snapshot is not None and ref.trust_snapshot.freshness_confidence is not None
-    }
-    if freshness_source_ids:
-        for score in summary.per_source_scores:
-            if score.source_id in freshness_source_ids:
-                raw_metrics["freshness_confidence"] = float(score.freshness_score)
-                observed.add("freshness_confidence")
-                break
+    ]
+    if freshness_refs:
+        summary = summarize_sources(
+            freshness_refs,
+            subject_kind="option",
+            intended_option_kind=option_kind,
+        )
+        if summary.per_source_scores:
+            raw_metrics["freshness_confidence"] = float(
+                summary.per_source_scores[0].freshness_score
+            )
+            observed.add("freshness_confidence")
 
-    commerciality_source_ids = {
-        ref.source_id
+    commerciality_refs = [
+        ref
         for ref in source_refs
         if ref.trust_snapshot is not None and ref.trust_snapshot.commerciality is not None
-    }
-    if commerciality_source_ids:
+    ]
+    if commerciality_refs:
         commercial_summary = SourceQualityScorer().summarize(
-            source_refs,
+            commerciality_refs,
             subject_kind="option",
             intended_option_kind=option_kind,
             commerciality_preference=1.0,
         )
-        for score in commercial_summary.per_source_scores:
-            if score.source_id in commerciality_source_ids:
-                raw_metrics["commerciality"] = float(score.provenance_strength)
-                observed.add("commerciality")
-                break
+        if commercial_summary.per_source_scores:
+            raw_metrics["commerciality"] = float(
+                commercial_summary.per_source_scores[0].provenance_strength
+            )
+            observed.add("commerciality")
 
     for attr_name in ("quality_signal", "value_signal", "fit_signal"):
         for ref in source_refs:

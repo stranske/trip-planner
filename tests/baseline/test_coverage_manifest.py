@@ -100,6 +100,29 @@ def _golden_csv_path(fixture: str) -> Path:
     return REPO_ROOT / "tests" / "baseline" / "test_golden" / filename
 
 
+def test_source_metrics_use_the_reference_with_the_snapshot_field(tmp_path: Path):
+    fixture = REPO_ROOT / "tests/fixtures/options/lodging/central_urban_hotel.json"
+    payload = json.loads(fixture.read_text(encoding="utf-8"))
+    eligible = payload["source_refs"][0]
+    other = {
+        **eligible,
+        "provenance_id": "prov-kyoto-central-official",
+        "source_category": "official_operational",
+        "freshness_days_at_capture": 0,
+        "trust_snapshot": {"operational_reliability": 1.0},
+        "quality_value_fit": {"confidence": 0.99},
+    }
+    combined = tmp_path / "same_source_two_references.json"
+    payload["source_refs"].append(other)
+    combined.write_text(json.dumps(payload), encoding="utf-8")
+
+    expected = adapter.metrics_for(str(fixture))
+    actual = adapter.metrics_for(str(combined))
+    assert {key: actual[key] for key in ("freshness_confidence", "commerciality")} == pytest.approx(
+        {key: expected[key] for key in ("freshness_confidence", "commerciality")}
+    )
+
+
 def test_non_transport_roundtrips_use_canonical_models(tmp_path: Path, record_property):
     env = os.environ.copy()
     existing_pythonpath = env.get("PYTHONPATH", "")
