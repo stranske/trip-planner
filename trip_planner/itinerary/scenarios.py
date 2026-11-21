@@ -12,7 +12,7 @@ from trip_planner._validators import (
     require_strings,
 )
 from trip_planner.contracts import MoneyRange
-from trip_planner.ranking import ExplanationRecord
+from trip_planner.ranking.explanations import ExplanationRecord
 
 SCHEMA_VERSION = "0.1.0"
 SCENARIO_KINDS: tuple[str, ...] = ("primary", "alternative", "fallback")

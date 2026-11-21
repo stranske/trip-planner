@@ -15,8 +15,10 @@ from trip_planner._option_contracts import (
 )
 from trip_planner.candidates import CandidateSet
 from trip_planner.contracts import ItineraryObjectives
-from trip_planner.itinerary import evaluate_bundle_feasibility
-from trip_planner.itinerary.feasibility import FeasibilityAssessment
+from trip_planner.itinerary.feasibility import (
+    FeasibilityAssessment,
+    evaluate_bundle_feasibility,
+)
 from trip_planner.options import InventoryBundle
 from trip_planner.preferences import LeisurePreferenceProfile
 from trip_planner.preferences.models import Anchor
