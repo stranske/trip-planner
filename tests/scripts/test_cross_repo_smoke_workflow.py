@@ -8,6 +8,7 @@ with `pytest tests/scripts/test_cross_repo_smoke_workflow.py`.
 from __future__ import annotations
 
 import importlib
+import os
 import re
 import shlex
 import shutil
@@ -262,17 +263,25 @@ def test_ci_guide_matches_make_full_product_check_contract() -> None:
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _ACTIONLINT = _REPO_ROOT / ".workflows-lib" / "actionlint"
-_ACTIONLINT_CMD = str(_ACTIONLINT) if _ACTIONLINT.is_file() else shutil.which("actionlint")
 
 
-@pytest.mark.skipif(
-    _ACTIONLINT_CMD is None,
-    reason="actionlint not found (checked .workflows-lib/actionlint and PATH)",
-)
-def test_workflow_passes_actionlint() -> None:
-    assert _ACTIONLINT_CMD is not None
+@pytest.fixture
+def actionlint() -> str:
+    if os.environ.get("TRIP_PLANNER_REQUIRE_ACTIONLINT") == "1":
+        executable = shutil.which("actionlint")
+        if executable is None:
+            pytest.fail("required actionlint missing from PATH")
+        return executable
+    if _ACTIONLINT.is_file():
+        return str(_ACTIONLINT)
+    return shutil.which("actionlint") or pytest.skip(
+        "actionlint not found (checked .workflows-lib/actionlint and PATH)"
+    )
+
+
+def test_workflow_passes_actionlint(actionlint: str) -> None:
     result = subprocess.run(
-        [_ACTIONLINT_CMD, str(WORKFLOW_PATH)],
+        [actionlint, str(WORKFLOW_PATH)],
         capture_output=True,
         text=True,
         check=False,
@@ -280,6 +289,14 @@ def test_workflow_passes_actionlint() -> None:
     assert (
         result.returncode == 0
     ), f"actionlint reported errors in {WORKFLOW_PATH.name}:\n{result.stdout}{result.stderr}"
+
+
+def test_actionlint_rejects_invalid_workflow(actionlint: str, tmp_path: Path) -> None:
+    invalid = tmp_path / WORKFLOW_PATH.name
+    invalid.write_bytes(WORKFLOW_PATH.read_bytes() + b"\nunexpected-root-key: true\n")
+    result = subprocess.run([actionlint, str(invalid)], capture_output=True, text=True)
+    assert result.returncode == 1, result
+    assert 'unexpected key "unexpected-root-key"' in result.stdout, result
 
 
 # ---------------------------------------------------------------------------
