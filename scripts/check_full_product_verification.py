@@ -1277,6 +1277,18 @@ def _assert_native_live_tpp_reoptimization_readback(
     return plan
 
 
+def _normalize_public_reoptimization_plan(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {
+            key: _normalize_public_reoptimization_plan(item)
+            for key, item in value.items()
+            if key not in {"policy_state_id", "proposal_state_id"}
+        }
+    if isinstance(value, list):
+        return [_normalize_public_reoptimization_plan(item) for item in value]
+    return value
+
+
 def _execute_live_tpp_reoptimization(
     client: TestClient,
     *,
@@ -1307,6 +1319,10 @@ def _execute_live_tpp_reoptimization(
         proposal_id=proposal_id,
         route=f"/api/workspace/{trip_id}/proposal",
     )
+    reoptimized_payload = reoptimized_readback_response.json()
+    reoptimized_state = dict(reoptimized_payload.get("proposal_state") or {})
+    reoptimized_summary = dict(reoptimized_payload.get("summary") or {})
+    reoptimized_plan = dict(reoptimized_state.get("follow_up") or {}).get("reoptimization_plan")
     reloaded_workspace_response = client.get(f"/api/workspace/{trip_id}")
     _require(
         reloaded_workspace_response.status_code == 200,
@@ -1321,22 +1337,39 @@ def _execute_live_tpp_reoptimization(
     reloaded_follow_up = dict(reloaded_proposal.get("follow_up") or {})
     reloaded_summary = dict(reloaded_proposal.get("summary") or {})
     reloaded_plan = reloaded_follow_up.get("reoptimization_plan")
+    reoptimized_source_version = (
+        dict(reoptimized_plan.get("source_version") or {})
+        if isinstance(reoptimized_plan, Mapping)
+        else {}
+    )
+    reloaded_source_version = (
+        dict(reloaded_plan.get("source_version") or {})
+        if isinstance(reloaded_plan, Mapping)
+        else {}
+    )
     _require(
         reloaded_follow_up.get("status") == "reoptimized"
+        and isinstance(reoptimized_plan, Mapping)
+        and bool(reoptimized_plan)
         and isinstance(reloaded_plan, Mapping)
         and bool(reloaded_plan)
+        and bool(reloaded_source_version.get("version_id"))
+        and reloaded_source_version.get("version_id")
+        == reoptimized_source_version.get("version_id")
+        and _normalize_public_reoptimization_plan(reloaded_plan)
+        == _normalize_public_reoptimization_plan(reoptimized_plan)
         and reloaded_summary.get("evaluation_result_status") == expected_evaluation_status,
         "live TPP workspace reload did not preserve reoptimization plan and pre-action verdict",
         trip_id=trip_id,
         proposal_id=proposal_id,
         reloaded_follow_up_status=reloaded_follow_up.get("status"),
         reloaded_evaluation_status=reloaded_summary.get("evaluation_result_status"),
+        expected_source_version_id=reoptimized_source_version.get("version_id"),
+        reloaded_source_version_id=reloaded_source_version.get("version_id"),
+        expected_reoptimization_plan=_normalize_public_reoptimization_plan(reoptimized_plan),
+        reloaded_reoptimization_plan=_normalize_public_reoptimization_plan(reloaded_plan),
     )
-    reoptimized_payload = reoptimized_readback_response.json()
-    return (
-        dict(reoptimized_payload.get("proposal_state") or {}),
-        dict(reoptimized_payload.get("summary") or {}),
-    )
+    return reoptimized_state, reoptimized_summary
 
 
 def _assert_native_live_tpp_transitions(
@@ -1581,6 +1614,28 @@ def _run_live_tpp_journey(
                 reoptimized_state: dict[str, Any] | None = None
                 reoptimized_summary: dict[str, Any] | None = None
                 if expected_evaluation_status != "compliant":
+                    _assert_native_live_tpp_verdict_readback(
+                        trip_id=trip_id,
+                        configured_organization_id=configured_organization_id,
+                        execution_id=execution_id,
+                        selected_scenario_id=selected_scenario_id,
+                        expected_source_version=expected_source_version,
+                        expected_evaluation_status=expected_evaluation_status,
+                        readback_state=readback_state,
+                        readback_summary=readback_summary,
+                    )
+                    _require(
+                        dict(
+                            dict(readback_state.get("evaluation") or {}).get("evaluation_result")
+                            or {}
+                        ).get("status")
+                        == "non_compliant"
+                        and readback_summary.get("evaluation_result_status") == "non_compliant",
+                        "live TPP reoptimization requires an actual non_compliant verdict readback",
+                        trip_id=trip_id,
+                        proposal_id=proposal_id,
+                        actual_evaluation_status=readback_summary.get("evaluation_result_status"),
+                    )
                     reoptimized_state, reoptimized_summary = _execute_live_tpp_reoptimization(
                         client,
                         trip_id=trip_id,

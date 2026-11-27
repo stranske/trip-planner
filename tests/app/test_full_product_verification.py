@@ -972,3 +972,160 @@ def test_live_tpp_journey_fails_when_reoptimization_fails_or_readback_mismatches
                 assert "did not retain plan and source lineage" in str(error)
             else:  # pragma: no cover - assertion guard
                 raise AssertionError("expected mismatched source_version_id to fail")
+
+
+def test_live_tpp_journey_fails_when_workspace_reload_plan_mismatches_proposal_readback(
+    monkeypatch, tmp_path
+) -> None:
+    _install_live_tpp_transport_stub(monkeypatch)
+    env = {
+        "TPP_BASE_URL": "https://tpp.example.test",
+        "TPP_ACCESS_TOKEN": "token-2071",
+        "TPP_OIDC_PROVIDER": "google",
+        "TPP_ORGANIZATION_ID": "org-2071",
+    }
+    with (
+        verifier._temporary_database_url(f"sqlite:///{tmp_path / 'reload-mismatch.db'}"),
+        verifier._force_planner_fallback_runtime(),
+    ):
+        verifier.reset_database_state()
+        verifier.ensure_database_ready()
+        with verifier.TestClient(verifier.create_app()) as client:
+            verifier._signup(client)
+            trip_id = verifier._create_trip(
+                client,
+                mode="business",
+                title="Reload plan mismatch journey",
+                region="Chicago",
+            )
+            original_get = client.get
+
+            class _TamperedWorkspaceResponse:
+                def __init__(self, inner: Any) -> None:
+                    self._inner = inner
+                    self.status_code = inner.status_code
+                    self.text = inner.text
+
+                def json(self) -> dict[str, Any]:
+                    payload = dict(self._inner.json())
+                    proposal_state = dict(payload.get("proposal_state") or {})
+                    follow_up = dict(proposal_state.get("follow_up") or {})
+                    plan = dict(follow_up.get("reoptimization_plan") or {})
+                    if plan:
+                        source_version = dict(plan.get("source_version") or {})
+                        source_version["version_id"] = "saved-scenario:wrong-version"
+                        plan["source_version"] = source_version
+                        plan["target_title"] = "Wrong reloaded plan"
+                        follow_up["reoptimization_plan"] = plan
+                        proposal_state["follow_up"] = follow_up
+                        payload["proposal_state"] = proposal_state
+                    return payload
+
+            def tampered_get(url: str, *args: Any, **kwargs: Any) -> Any:
+                response = original_get(url, *args, **kwargs)
+                if str(url) == f"/api/workspace/{trip_id}":
+                    return _TamperedWorkspaceResponse(response)
+                return response
+
+            monkeypatch.setattr(client, "get", tampered_get)
+            try:
+                verifier._run_live_tpp_journey(
+                    client,
+                    trip_id,
+                    env,
+                    expected_evaluation_status="non_compliant",
+                )
+            except verifier.VerificationFailure as error:
+                assert "live TPP workspace reload did not preserve reoptimization plan" in str(
+                    error
+                )
+            else:  # pragma: no cover - assertion guard
+                raise AssertionError("expected mismatched workspace reload plan to fail")
+
+
+def test_live_tpp_journey_fails_before_reoptimize_when_tpp_returns_unexpected_compliant_verdict(
+    monkeypatch, tmp_path
+) -> None:
+    from trip_planner.integrations.tpp import client as tpp_client_module
+
+    _install_live_tpp_transport_stub(monkeypatch)
+    base_send = tpp_client_module.HTTPTPPIntegrationClient._send_json_request
+
+    def always_compliant_send(
+        self,
+        *,
+        method: str,
+        path: str,
+        url: str,
+        json_payload: dict[str, Any],
+    ) -> dict[str, object]:
+        if method == "POST" and path == "/api/planner/proposals":
+            adjusted_payload = dict(json_payload)
+            trip_plan = dict(adjusted_payload.get("trip_plan") or {})
+            trip_plan["lowest_fare"] = trip_plan.get("selected_fare", 620.0)
+            adjusted_payload["trip_plan"] = trip_plan
+            return base_send(
+                self,
+                method=method,
+                path=path,
+                url=url,
+                json_payload=adjusted_payload,
+            )
+        return base_send(
+            self,
+            method=method,
+            path=path,
+            url=url,
+            json_payload=json_payload,
+        )
+
+    monkeypatch.setattr(
+        tpp_client_module.HTTPTPPIntegrationClient,
+        "_send_json_request",
+        always_compliant_send,
+    )
+    env = {
+        "TPP_BASE_URL": "https://tpp.example.test",
+        "TPP_ACCESS_TOKEN": "token-2071",
+        "TPP_OIDC_PROVIDER": "google",
+        "TPP_ORGANIZATION_ID": "org-2071",
+    }
+    with (
+        verifier._temporary_database_url(f"sqlite:///{tmp_path / 'unexpected-compliant.db'}"),
+        verifier._force_planner_fallback_runtime(),
+    ):
+        verifier.reset_database_state()
+        verifier.ensure_database_ready()
+        with verifier.TestClient(verifier.create_app()) as client:
+            verifier._signup(client)
+            trip_id = verifier._create_trip(
+                client,
+                mode="business",
+                title="Unexpected compliant journey",
+                region="Chicago",
+            )
+            reoptimize_posts: list[str] = []
+            original_post = client.post
+
+            def tracking_post(url: str, *args: Any, **kwargs: Any) -> Any:
+                if str(url).endswith("/proposal/reoptimize"):
+                    reoptimize_posts.append(str(url))
+                return original_post(url, *args, **kwargs)
+
+            monkeypatch.setattr(client, "post", tracking_post)
+            try:
+                verifier._run_live_tpp_journey(
+                    client,
+                    trip_id,
+                    env,
+                    expected_evaluation_status="non_compliant",
+                )
+            except verifier.VerificationFailure as error:
+                assert "live TPP persisted verdict readback did not match native evaluation" in str(
+                    error
+                )
+                assert reoptimize_posts == []
+            else:  # pragma: no cover - assertion guard
+                raise AssertionError(
+                    "expected unexpected compliant readback to fail before reoptimization"
+                )

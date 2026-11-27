@@ -1381,6 +1381,10 @@ function WorkspacePageContent({
   useEffect(() => {
     const previousWorkspace = previousWorkspaceRef.current;
     previousWorkspaceRef.current = workspace;
+    if (previousWorkspace !== workspace) {
+      proposalRefreshVersion.current += 1;
+      setProposalBusyLabel(null);
+    }
     setCurrentWorkspace(workspace);
     const tripChanged = previousWorkspace.trip_record.trip.trip_id !== workspace.trip_record.trip.trip_id;
     if (tripChanged) {
@@ -2038,6 +2042,9 @@ function WorkspacePageContent({
   }
 
   async function handleProposalReoptimize() {
+    if (tripPricesBusy) {
+      return;
+    }
     const refreshVersion = ++proposalRefreshVersion.current;
     setProposalError(null);
     setProposalStatusMessage(null);
@@ -3278,7 +3285,7 @@ function WorkspacePageContent({
                           <button
                             type="button"
                             className="primary-button"
-                            disabled={Boolean(proposalBusyLabel)}
+                            disabled={Boolean(proposalBusyLabel) || tripPricesBusy}
                             onClick={() => void handleProposalReoptimize()}
                           >
                             Reoptimize

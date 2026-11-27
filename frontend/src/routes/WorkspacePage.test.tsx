@@ -5410,6 +5410,187 @@ describe("WorkspacePage", () => {
     } finally { fetchPrices.mockRestore(); savePrice.mockRestore(); }
   });
 
+  it("ignores an in-flight reoptimization response and clears busy state when the workspace changes", async () => {
+    const pending = deferred<WorkspaceData["proposal_state"]>();
+    const reoptimizeFollowUp = {
+      status: "reoptimization_required",
+      path: "reoptimization",
+      title: "Reoptimization path required",
+      summary: "Use a compliant downtown property before resubmitting the approval packet.",
+      recommended_action: "reoptimize",
+      recommended_label: "Reoptimize plan",
+      alternatives: [],
+      guidance: [],
+      notes: [],
+      selected_alternative: null,
+      requested_exception: null,
+    };
+    const tripAWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      proposal_state: {
+        ...workspacePayload.proposal_state!,
+        follow_up: reoptimizeFollowUp,
+        summary: {
+          ...workspacePayload.proposal_state!.summary,
+          approval_ready: false,
+          evaluation_result_status: "non_compliant",
+          follow_up_status: "reoptimization_required",
+        },
+      },
+    };
+    const tripBWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      trip_record: {
+        ...workspacePayload.trip_record,
+        trip: {
+          ...workspacePayload.trip_record.trip,
+          trip_id: "trip-business-osaka-other",
+          title: "Osaka client briefing",
+        },
+      },
+      proposal_state: {
+        ...workspacePayload.proposal_state!,
+        trip_id: "trip-business-osaka-other",
+        proposal_id: "proposal:trip-business-osaka-other",
+        follow_up: reoptimizeFollowUp,
+        summary: {
+          ...workspacePayload.proposal_state!.summary,
+          approval_ready: false,
+          evaluation_result_status: "non_compliant",
+          follow_up_status: "reoptimization_required",
+        },
+      },
+    };
+    mockedReoptimizeWorkspaceProposal.mockReturnValueOnce(pending.promise);
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(tripAWorkspace),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    const rendered = render(
+      <TestMemoryRouter>
+        <WorkspacePage />
+      </TestMemoryRouter>
+    );
+    await selectWorkspaceTab("Policy");
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Reoptimize" }));
+    expect(mockedReoptimizeWorkspaceProposal).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Reoptimize" })).toBeDisabled();
+
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(tripBWorkspace),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+    rendered.rerender(
+      <TestMemoryRouter>
+        <WorkspacePage />
+      </TestMemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Osaka client briefing" })).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "Reoptimize" })).not.toBeDisabled();
+
+    await act(async () => {
+      pending.resolve({
+        ...tripAWorkspace.proposal_state!,
+        follow_up: {
+          ...reoptimizeFollowUp,
+          status: "reoptimized",
+          reoptimization_plan: {
+            proposal_id: "proposal:trip-leisure-kyoto-draft",
+            evaluation_id: "eval-kyoto-stale",
+            reaction_kind: "narrow_candidates",
+            target_label: "compliant_first",
+            comparison_outcome: "preferred",
+            target_title: "Stale trip A reoptimization plan",
+            candidate_categories: ["lodging"],
+          },
+        },
+      });
+    });
+
+    expect(screen.queryByTestId("reoptimization-plan")).not.toBeInTheDocument();
+    expect(screen.queryByText("Stale trip A reoptimization plan")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reoptimize" })).not.toBeDisabled();
+  });
+
+  it("disables Reoptimize while a trip price save is in progress", async () => {
+    const prices = {
+      components: [
+        {
+          component: "transport",
+          label: "Flights and ground travel",
+          currency: "USD",
+          typical_amount: 620,
+          note: "",
+          price_source: null,
+        },
+      ],
+      total: null,
+      priced_component_count: 1,
+      unpriced_component_count: 0,
+    };
+    const pendingSave = deferred<typeof prices>();
+    const fetchPrices = vi.spyOn(workspaceApi, "fetchTripPrices").mockResolvedValue(prices);
+    const savePrice = vi.spyOn(workspaceApi, "saveTripPrice").mockReturnValue(pendingSave.promise);
+    mockedFetchWorkspace.mockResolvedValue({
+      ...workspacePayload,
+      proposal_state: null,
+      view_model: null,
+    });
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state!,
+          follow_up: {
+            status: "reoptimization_required",
+            path: "reoptimization",
+            title: "Reoptimization path required",
+            summary: "Use a compliant downtown property before resubmitting the approval packet.",
+            recommended_action: "reoptimize",
+            recommended_label: "Reoptimize plan",
+            alternatives: [],
+            guidance: [],
+            notes: [],
+            selected_alternative: null,
+            requested_exception: null,
+          },
+          summary: {
+            ...workspacePayload.proposal_state!.summary,
+            approval_ready: false,
+            evaluation_result_status: "non_compliant",
+            follow_up_status: "reoptimization_required",
+          },
+        },
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    try {
+      renderWorkspacePage();
+      await selectWorkspaceTab("Budget");
+      await userEvent.setup().click(
+        await screen.findByRole("button", { name: "Update Flights and ground travel" })
+      );
+      await waitFor(() => expect(savePrice).toHaveBeenCalledTimes(1));
+
+      await selectWorkspaceTab("Policy");
+      const reoptimizeButton = await screen.findByRole("button", { name: "Reoptimize" });
+      expect(reoptimizeButton).toBeDisabled();
+      expect(mockedReoptimizeWorkspaceProposal).not.toHaveBeenCalled();
+
+      await act(async () => {
+        pendingSave.resolve(prices);
+      });
+    } finally {
+      fetchPrices.mockRestore();
+      savePrice.mockRestore();
+    }
+  });
+
 });
 
 async function completePortalAnswers() {
