@@ -537,7 +537,7 @@ def test_contract_report_mode_does_not_write_strict_result(monkeypatch, tmp_path
     result_path = tmp_path / "result.json"
     monkeypatch.setenv(verifier.FULL_PRODUCT_RESULT_ENV, str(result_path))
     monkeypatch.setattr(verifier, "run_product_journeys", _passing_journeys)
-    monkeypatch.setattr(verifier, "run_contract_report", lambda: [])
+    monkeypatch.setattr(verifier, "run_contract_report", list)
 
     assert verifier.main(["--live-tpp=required", f"--contract-report={tmp_path / 'r.json'}"]) == 0
     assert not result_path.exists()
