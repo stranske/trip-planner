@@ -21,6 +21,18 @@ not prove the authorized receipt/status return until TPP #1658 and consumer
 #1842 integration are accepted. Keep #1842 open and preserve unknown manager
 status/decision until authenticated correlated receipt evidence exists.
 
+Each run also publishes section-15 execution receipts (see
+`docs/design-coverage-map.md` section 15). The `section-15-evidence` artifact holds
+the pinned two-app pytest JUnit report and exit code plus the strict
+`configured_full_product` result written through `FULL_PRODUCT_RESULT_JSON`.
+`scripts/build_section15_receipt.py` then writes `pinned_two_app.json` and
+`configured_full_product.json` into the `section-15-execution-receipts` artifact
+with both checkout SHAs, this run's URL and that evidence artifact's URL. Both
+artifacts are published even when a gate fails; a failed, skipped, missing or
+mismatched result is recorded as such and never as PASS. Download them with
+`gh run download <run-id> -R stranske/trip-planner -n section-15-execution-receipts`.
+Receipts do not promote documentation on their own; promotion stays a reviewed edit.
+
 ## CI recovery validation (2026-10-10)
 
 The original hosted run 37423019366 failed importing SQLAlchemy in the TPP

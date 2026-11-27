@@ -21,6 +21,9 @@ on:
 
 env:
   TPP_PINNED_REF: 50992156e4a1f97c1115b6c7af84a219a3b9aae7
+  # Same-run section-15 evidence (see docs/design-coverage-map.md section 15).
+  SECTION15_EVIDENCE_DIR: ${{ github.workspace }}/section15-evidence
+  SECTION15_RECEIPTS_DIR: ${{ github.workspace }}/section15-receipts
 
 jobs:
   cross-repo-full-product:
@@ -42,10 +45,13 @@ jobs:
           token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
 
       - name: Log resolved pinned TPP SHA
+        id: checkout_shas
         working-directory: Travel-Plan-Permission
         run: |
           echo "TPP_PINNED_REF=${TPP_PINNED_REF}"
           echo "TPP_RESOLVED_SHA=$(git rev-parse HEAD)"
+          echo "producer_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "consumer_sha=$(git -C ../trip-planner rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -115,7 +121,12 @@ jobs:
         working-directory: trip-planner
         env:
           TPP_REPO_PATH: ../Travel-Plan-Permission
-        run: ../Travel-Plan-Permission/.venv/bin/python -m pytest tests/integration/test_tpp_portal_contract.py tests/integration/test_authenticated_two_app_handoff.py -q
+        run: |
+          mkdir -p "$SECTION15_EVIDENCE_DIR"
+          status=0
+          ../Travel-Plan-Permission/.venv/bin/python -m pytest tests/integration/test_tpp_portal_contract.py tests/integration/test_authenticated_two_app_handoff.py -q --junitxml="$SECTION15_EVIDENCE_DIR/pinned_two_app.junit.xml" || status=$?
+          echo "$status" > "$SECTION15_EVIDENCE_DIR/pinned_two_app.exit_code"
+          exit "$status"
 
       - name: Run full-product-check against sibling TPP checkout
         working-directory: trip-planner
@@ -124,6 +135,47 @@ jobs:
           TPP_ACCESS_TOKEN: ci-cross-repo-smoke-token
           TPP_OIDC_PROVIDER: google
           LIVE_TPP: required
+          FULL_PRODUCT_RESULT_JSON: ${{ env.SECTION15_EVIDENCE_DIR }}/configured_full_product.result.json
         run: |
           echo "Using TPP_REPO_PATH=${TPP_REPO_PATH}"
           make full-product-check
+
+      # Publish evidence and receipts even when a gate failed: a failed or skipped
+      # result is recorded as such and stays ineligible for a VERIFIED claim.
+      - name: Upload section-15 evidence
+        id: section15_evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: section-15-evidence
+          path: ${{ env.SECTION15_EVIDENCE_DIR }}
+          if-no-files-found: warn
+
+      - name: Build section-15 execution receipts
+        if: ${{ !cancelled() }}
+        working-directory: trip-planner
+        env:
+          CONSUMER_SHA: ${{ steps.checkout_shas.outputs.consumer_sha }}
+          PRODUCER_SHA: ${{ steps.checkout_shas.outputs.producer_sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ARTIFACT_URL: ${{ steps.section15_evidence.outputs.artifact-url }}
+        run: |
+          python scripts/build_section15_receipt.py --layer pinned_two_app \
+            --consumer-sha "$CONSUMER_SHA" --producer-sha "$PRODUCER_SHA" \
+            --run-url "$RUN_URL" --artifact-url "$ARTIFACT_URL" \
+            --junit-xml "$SECTION15_EVIDENCE_DIR/pinned_two_app.junit.xml" \
+            --pytest-exit-code-file "$SECTION15_EVIDENCE_DIR/pinned_two_app.exit_code" \
+            --output "$SECTION15_RECEIPTS_DIR/pinned_two_app.json"
+          python scripts/build_section15_receipt.py --layer configured_full_product \
+            --consumer-sha "$CONSUMER_SHA" --producer-sha "$PRODUCER_SHA" \
+            --run-url "$RUN_URL" --artifact-url "$ARTIFACT_URL" \
+            --result-json "$SECTION15_EVIDENCE_DIR/configured_full_product.result.json" \
+            --output "$SECTION15_RECEIPTS_DIR/configured_full_product.json"
+
+      - name: Upload section-15 execution receipts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: section-15-execution-receipts
+          path: ${{ env.SECTION15_RECEIPTS_DIR }}
+          if-no-files-found: error

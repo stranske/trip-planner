@@ -8,6 +8,7 @@ with `pytest tests/scripts/test_cross_repo_smoke_workflow.py`.
 from __future__ import annotations
 
 import importlib
+import json
 import os
 import re
 import shlex
@@ -19,6 +20,8 @@ from pathlib import Path
 import pytest
 import yaml
 from packaging.requirements import Requirement
+
+from scripts import build_section15_receipt as receipts
 
 WORKFLOW_PATH = (
     Path(__file__).resolve().parents[2] / ".github" / "workflows" / "cross-repo-smoke.yml"
@@ -159,7 +162,8 @@ def test_portal_contract_installs_both_projects_in_its_interpreter(workflow: dic
     install = next(
         step for step in steps if step["name"] == "Install Travel-Plan-Permission dependencies"
     )
-    test_python = shlex.split(contract["run"])[0]
+    pytest_line = next(line for line in contract["run"].splitlines() if " -m pytest " in line)
+    test_python = shlex.split(pytest_line)[0]
     # Resolve the executable relative to each step's working directory: a pip
     # install in setup-python does not populate TPP's private test interpreter.
     test_python = (Path(contract["working-directory"]) / test_python).as_posix()
@@ -258,7 +262,7 @@ def test_ci_guide_matches_make_full_product_check_contract() -> None:
 
     assert "make full-product-check" in guide
     assert "TPP_REPO_PATH=../Travel-Plan-Permission" in guide
-    assert "python scripts/check_full_product_verification.py --live-tpp $(LIVE_TPP)" in makefile
+    assert "python scripts/check_full_product_verification.py --live-tpp=$(LIVE_TPP)" in makefile
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -408,3 +412,196 @@ def test_http_client_exposes_contract_method(method_name: str) -> None:
         f"HTTPTPPIntegrationClient.{method_name} is missing or not callable. "
         "This breaks the live cross-repo handshake and will fail the smoke job."
     )
+
+
+# --- Section 15 execution receipts (issue #2066) ---------------------------------
+
+
+_CONSUMER = "a" * 40
+_PRODUCER = "b" * 40
+_RUN = "https://github.com/stranske/trip-planner/actions/runs/123"
+_ARTIFACT = _RUN + "/artifacts/456"
+
+
+def _steps(workflow: dict) -> list[dict]:
+    return workflow["jobs"]["cross-repo-full-product"]["steps"]
+
+
+def _step(workflow: dict, name: str) -> dict:
+    return next(step for step in _steps(workflow) if step.get("name") == name)
+
+
+def test_workflow_publishes_section15_receipts_after_same_run_evidence(
+    workflow: dict,
+) -> None:
+    steps = _steps(workflow)
+    shas = _step(workflow, "Log resolved pinned TPP SHA")
+    evidence = _step(workflow, "Upload section-15 evidence")
+    build = _step(workflow, "Build section-15 execution receipts")
+    publish = _step(workflow, "Upload section-15 execution receipts")
+
+    assert shas["id"] == "checkout_shas"
+    assert 'producer_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"' in shas["run"]
+    assert (
+        'consumer_sha=$(git -C ../trip-planner rev-parse HEAD)" >> "$GITHUB_OUTPUT"' in shas["run"]
+    )
+    assert evidence["id"] == "section15_evidence"
+    assert evidence["with"]["name"] == "section-15-evidence"
+    assert evidence["with"]["path"] == "${{ env.SECTION15_EVIDENCE_DIR }}"
+    assert publish["with"]["name"] == "section-15-execution-receipts"
+    assert publish["with"]["path"] == "${{ env.SECTION15_RECEIPTS_DIR }}"
+    assert publish["with"]["if-no-files-found"] == "error"
+    for step in (evidence, build, publish):
+        assert step["if"] == "${{ !cancelled() }}", step["name"]
+    assert steps.index(evidence) < steps.index(build) < steps.index(publish)
+
+    env = build["env"]
+    assert env["CONSUMER_SHA"] == "${{ steps.checkout_shas.outputs.consumer_sha }}"
+    assert env["PRODUCER_SHA"] == "${{ steps.checkout_shas.outputs.producer_sha }}"
+    # The evidence locator is the URL returned by this run's upload step.
+    assert env["ARTIFACT_URL"] == "${{ steps.section15_evidence.outputs.artifact-url }}"
+    assert env["RUN_URL"] == (
+        "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+    )
+    run = build["run"]
+    assert "--layer pinned_two_app" in run and "--layer configured_full_product" in run
+    assert "$SECTION15_RECEIPTS_DIR/pinned_two_app.json" in run
+    assert "$SECTION15_RECEIPTS_DIR/configured_full_product.json" in run
+
+
+def test_workflow_captures_pinned_two_app_result_with_recorded_command(
+    workflow: dict,
+) -> None:
+    contract = _step(workflow, "Verify TPP portal handoff contract")
+    lines = [line.strip() for line in contract["run"].splitlines()]
+    pytest_line = next(line for line in lines if " -m pytest " in line)
+    assert pytest_line.startswith(receipts.PINNED_TWO_APP_COMMAND + " --junitxml=")
+    assert '"$SECTION15_EVIDENCE_DIR/pinned_two_app.junit.xml"' in pytest_line
+    assert pytest_line.endswith("|| status=$?")
+    # The job still fails on a failed pinned two-app run.
+    assert lines[-1] == 'exit "$status"'
+    assert 'echo "$status" > "$SECTION15_EVIDENCE_DIR/pinned_two_app.exit_code"' in lines
+
+
+def test_workflow_full_product_writes_strict_result_into_evidence(
+    workflow: dict,
+) -> None:
+    run_step = _step(workflow, "Run full-product-check against sibling TPP checkout")
+    assert run_step["env"]["FULL_PRODUCT_RESULT_JSON"] == (
+        "${{ env.SECTION15_EVIDENCE_DIR }}/configured_full_product.result.json"
+    )
+    makefile = MAKEFILE_PATH.read_text()
+    assert receipts.CONFIGURED_FULL_PRODUCT_COMMAND.replace("required", "$(LIVE_TPP)") in makefile
+
+
+def _junit(path: Path, *, tests: int, failures: int = 0, errors: int = 0, skipped: int = 0) -> Path:
+    path.write_text(
+        f'<testsuites><testsuite name="pytest" tests="{tests}" failures="{failures}" '
+        f'errors="{errors}" skipped="{skipped}"/></testsuites>',
+        encoding="utf-8",
+    )
+    return path
+
+
+def _two_app(tmp_path: Path, **overrides) -> dict:
+    kwargs = {
+        "layer": "pinned_two_app",
+        "consumer_sha": _CONSUMER,
+        "producer_sha": _PRODUCER,
+        "run_url": _RUN,
+        "artifact_url": _ARTIFACT,
+        "environment_text": "env",
+        "junit_xml": _junit(tmp_path / "junit.xml", tests=3),
+        "pytest_exit_code": 0,
+    }
+    kwargs.update(overrides)
+    return receipts.build_receipt(**kwargs)
+
+
+def test_pinned_two_app_receipt_records_actual_counts(tmp_path: Path) -> None:
+    receipt = _two_app(tmp_path)
+    observed = receipt["observed_result"]
+    assert observed["status"] == "PASS"
+    assert observed["skipped"] == 0
+    assert (observed["passed"], observed["tests"]) == (3, 3)
+    assert (
+        observed["summary"] == "3 passed, 0 failed, 0 errors, 0 skipped of 3 pinned two-app tests"
+    )
+    assert "ineligible_reasons" not in observed
+    assert receipt["command"] == receipts.PINNED_TWO_APP_COMMAND
+    assert (receipt["consumer_sha"], receipt["producer_sha"]) == (_CONSUMER, _PRODUCER)
+    assert (receipt["run"], receipt["artifact"]) == (_RUN, _ARTIFACT)
+
+
+@pytest.mark.parametrize(
+    "case, expected_status, reason",
+    [
+        ("skipped", "SKIPPED", "pytest skipped required tests"),
+        ("failed", "FAIL", "pytest reported failures or errors"),
+        ("no-tests", "FAIL", "pytest collected no tests"),
+        ("missing-report", "MISSING", "pinned two-app pytest report missing"),
+        ("missing-exit-code", "FAIL", "pytest exit code None"),
+        ("short-sha", "INELIGIBLE", "consumer_sha is not a full 40-character SHA"),
+        ("other-run", "INELIGIBLE", "evidence artifact does not belong to this run"),
+        (
+            "no-artifact",
+            "INELIGIBLE",
+            "evidence artifact URL is missing or not an Actions artifact URL",
+        ),
+    ],
+)
+def test_pinned_two_app_receipt_fails_closed(
+    tmp_path: Path, case: str, expected_status: str, reason: str
+) -> None:
+    junit = tmp_path / "j.xml"
+    overrides = {
+        "skipped": lambda: {"junit_xml": _junit(junit, tests=3, skipped=1)},
+        "failed": lambda: {
+            "junit_xml": _junit(junit, tests=3, failures=1),
+            "pytest_exit_code": 1,
+        },
+        "no-tests": lambda: {
+            "junit_xml": _junit(junit, tests=0),
+            "pytest_exit_code": 5,
+        },
+        "missing-report": lambda: {"junit_xml": tmp_path / "absent.xml"},
+        "missing-exit-code": lambda: {"pytest_exit_code": None},
+        "short-sha": lambda: {"consumer_sha": "abc1234"},
+        "other-run": lambda: {"artifact_url": _RUN[:-3] + "999/artifacts/456"},
+        "no-artifact": lambda: {"artifact_url": ""},
+    }[case]()
+    observed = _two_app(tmp_path, **overrides)["observed_result"]
+    assert observed["status"] == expected_status
+    assert reason in observed["ineligible_reasons"]
+
+
+def test_receipt_builder_cli_writes_configured_receipt_without_result(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "receipts" / "configured_full_product.json"
+    assert (
+        receipts.main(
+            [
+                "--layer=configured_full_product",
+                f"--consumer-sha={_CONSUMER}",
+                f"--producer-sha={_PRODUCER}",
+                f"--run-url={_RUN}",
+                f"--artifact-url={_ARTIFACT}",
+                f"--result-json={tmp_path / 'absent.json'}",
+                f"--output={output}",
+            ]
+        )
+        == 0
+    )
+    receipt = json.loads(output.read_text())
+    assert receipt["command"] == receipts.CONFIGURED_FULL_PRODUCT_COMMAND
+    assert receipt["observed_result"]["status"] == "MISSING"
+    assert receipt["observed_result"]["skipped"] is None
+    assert receipt["environment"].startswith("GitHub Actions ubuntu-latest runner, CPython ")
+    for boundary in (
+        "127.0.0.1 loopback HTTP",
+        "SQLite",
+        "no managed LLM",
+        "not hosted",
+    ):
+        assert boundary in receipt["environment"]
