@@ -3258,13 +3258,14 @@ function WorkspacePageContent({
                             <p className="muted-copy">
                               Action: {renderableProposalFollowUp.reoptimization_plan.reaction_kind}
                             </p>
-                            {renderableProposalFollowUp.reoptimization_plan.candidate_categories.length >
-                            0 ? (
+                            {(renderableProposalFollowUp.reoptimization_plan.candidate_categories ?? [])
+                              .length > 0 ? (
                               <p className="muted-copy">
                                 Affected categories:{" "}
-                                {renderableProposalFollowUp.reoptimization_plan.candidate_categories.join(
-                                  ", "
-                                )}
+                                {(
+                                  renderableProposalFollowUp.reoptimization_plan
+                                    .candidate_categories ?? []
+                                ).join(", ")}
                               </p>
                             ) : null}
                           </div>

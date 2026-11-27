@@ -4087,6 +4087,8 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Policy review finished with follow-up" })).toBeInTheDocument();
     });
+    expect(screen.getByTestId("policy-state-non-compliant")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Policy non-compliant" })).toBeInTheDocument();
     expect(screen.getByText("Needs exception")).toBeInTheDocument();
     expect(screen.getAllByText("Reoptimize plan").length).toBeGreaterThan(0);
     expect(screen.getByText("Use a compliant downtown property")).toBeInTheDocument();
@@ -4109,6 +4111,12 @@ describe("WorkspacePage", () => {
     );
     expect(renderedPlan).toHaveTextContent("Action: narrow_candidates");
     expect(renderedPlan).toHaveTextContent("Affected categories: lodging");
+    expect(
+      screen.getByText(
+        "Reoptimization plan ready: Narrow candidate search around policy-preferred alternatives"
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("policy-state-non-compliant")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Advanced diagnostics"));
     await waitFor(() => {
@@ -4130,8 +4138,10 @@ describe("WorkspacePage", () => {
     await selectWorkspaceTab("Policy");
 
     await waitFor(() => {
+      expect(screen.getByTestId("policy-state-non-compliant")).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Policy non-compliant" })).toBeInTheDocument();
     });
+    expect(screen.getByText("reoptimized")).toBeInTheDocument();
     const reloadedPlan = await screen.findByTestId("reoptimization-plan");
     expect(reloadedPlan).toHaveTextContent(
       "Narrow candidate search around policy-preferred alternatives"
@@ -4208,6 +4218,127 @@ describe("WorkspacePage", () => {
     expect(screen.queryByRole("button", { name: "Reoptimize" })).not.toBeInTheDocument();
     expect(screen.queryByTestId("reoptimization-plan")).not.toBeInTheDocument();
     expect(mockedReoptimizeWorkspaceProposal).not.toHaveBeenCalled();
+  });
+
+  it("transitions to the materialize_scenario disposition when reoptimization returns HTTP 200 no_scenario_lineage", async () => {
+    const noLineageFollowUp = {
+      status: "no_scenario_lineage",
+      path: "manual_review",
+      title: "Plan a scenario before reoptimization",
+      summary:
+        "This submission has no saved scenario lineage. Plan a scenario and submit it before reoptimizing.",
+      recommended_action: "materialize_scenario",
+      recommended_label: "Plan a scenario",
+      alternatives: [],
+      guidance: [],
+      notes: [],
+      selected_alternative: null,
+      requested_exception: null,
+    };
+    mockedReoptimizeWorkspaceProposal.mockResolvedValueOnce({
+      ...workspacePayload.proposal_state,
+      follow_up: noLineageFollowUp,
+      summary: {
+        ...workspacePayload.proposal_state.summary,
+        approval_ready: false,
+        evaluation_result_status: "non_compliant",
+        follow_up_status: "no_scenario_lineage",
+        follow_up_title: noLineageFollowUp.title,
+        follow_up_summary: noLineageFollowUp.summary,
+      },
+    });
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state,
+          follow_up: {
+            status: "reoptimization_required",
+            path: "reoptimization",
+            title: "Reoptimization path required",
+            summary: "Rebuild around a compliant alternative.",
+            recommended_action: "reoptimize",
+            recommended_label: "Reoptimize plan",
+            alternatives: [],
+            guidance: [],
+            notes: [],
+            selected_alternative: null,
+            requested_exception: null,
+          },
+          summary: {
+            ...workspacePayload.proposal_state.summary,
+            approval_ready: false,
+            evaluation_result_status: "non_compliant",
+            follow_up_status: "reoptimization_required",
+          },
+        },
+      }),
+    });
+
+    renderWorkspacePage();
+    await selectWorkspaceTab("Policy");
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Reoptimize" }));
+
+    await waitFor(() => {
+      expect(mockedReoptimizeWorkspaceProposal).toHaveBeenCalledWith("trip-leisure-kyoto-draft", {
+        comparable_refs: {},
+        justification_refs: {},
+      });
+    });
+    expect(await screen.findByTestId("reoptimization-no-lineage-disposition")).toHaveTextContent(
+      "Disposition: Plan a scenario before reoptimization (materialize_scenario)"
+    );
+    expect(screen.queryByRole("button", { name: "Reoptimize" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("reoptimization-plan")).not.toBeInTheDocument();
+    expect(screen.getByTestId("policy-state-non-compliant")).toBeInTheDocument();
+  });
+
+  it("surfaces an inline error when reoptimization request fails", async () => {
+    mockedReoptimizeWorkspaceProposal.mockRejectedValueOnce(
+      new Error("Proposal reoptimization requires a stored policy evaluation result.")
+    );
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state,
+          follow_up: {
+            status: "reoptimization_required",
+            path: "reoptimization",
+            title: "Reoptimization path required",
+            summary: "Rebuild around a compliant alternative.",
+            recommended_action: "reoptimize",
+            recommended_label: "Reoptimize plan",
+            alternatives: [],
+            guidance: [],
+            notes: [],
+            selected_alternative: null,
+            requested_exception: null,
+          },
+          summary: {
+            ...workspacePayload.proposal_state.summary,
+            approval_ready: false,
+            evaluation_result_status: "non_compliant",
+            follow_up_status: "reoptimization_required",
+          },
+        },
+      }),
+    });
+
+    renderWorkspacePage();
+    await selectWorkspaceTab("Policy");
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Reoptimize" }));
+
+    expect(
+      await screen.findByText(
+        "Proposal reoptimization requires a stored policy evaluation result."
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reoptimize" })).toBeEnabled();
   });
 
   it("surfaces exception guidance and approval requirements from live policy results", async () => {
