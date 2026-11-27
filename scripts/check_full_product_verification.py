@@ -2205,11 +2205,29 @@ def _comparison_figures(payload: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-def _comparison_policy_previews(payload: dict[str, Any]) -> list[Any]:
-    return [
-        row.get("policy_preview")
-        for row in sorted(payload.get("scenarios", []), key=lambda row: row["rank"])
-    ]
+def _comparison_parity_records(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    records: dict[str, dict[str, Any]] = {}
+    for row in sorted(payload.get("scenarios", []), key=lambda row: row["rank"]):
+        scenario_id = row.get("scenario_id")
+        if not isinstance(scenario_id, str) or not scenario_id:
+            raise VerificationFailure(
+                "scenario comparison row missing scenario_id",
+                row=row,
+            )
+        _require(
+            scenario_id not in records,
+            "scenario comparison contained duplicate scenario_id",
+            scenario_id=scenario_id,
+        )
+        records[scenario_id] = {
+            "rank": row["rank"],
+            "metrics": {
+                key: row.get("metrics", {}).get(key)
+                for key in ("estimated_total", "travel_minutes", "transfers")
+            },
+            "policy_preview": row.get("policy_preview"),
+        }
+    return records
 
 
 def _comparison_pair(
@@ -2250,15 +2268,17 @@ def _comparison_pair(
             compare = _observe(
                 client, evidence, "GET", f"/api/workspace/{trip_id}/scenarios/compare"
             )
-            workspace_figures = _comparison_figures(payload)
-            compare_figures = _comparison_figures(compare)
+            workspace_records = _comparison_parity_records(payload)
+            compare_records = _comparison_parity_records(compare)
             _require(
-                compare_figures == workspace_figures
-                and _comparison_policy_previews(compare) == _comparison_policy_previews(payload),
+                set(compare_records) == set(workspace_records)
+                and compare_records == workspace_records,
                 "scenario comparison endpoint did not match workspace route_comparison",
                 trip_id=trip_id,
-                workspace_figures=workspace_figures,
-                compare_figures=compare_figures,
+                workspace_scenario_ids=sorted(workspace_records),
+                compare_scenario_ids=sorted(compare_records),
+                workspace_figures=_comparison_figures(payload),
+                compare_figures=_comparison_figures(compare),
             )
         observation["figures"] = _comparison_figures(payload)
         observations.append(observation)

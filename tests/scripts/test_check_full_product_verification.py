@@ -844,6 +844,7 @@ def test_tp3_probe_checks_compare_tab_response(monkeypatch, corrupt_amount, corr
         minutes = 120 if trips[trip_id]["region"] == "Reykjavik, Iceland" else 60
         scenarios = [
             {
+                "scenario_id": f"scenario-{rank}",
                 "rank": rank,
                 "metrics": {
                     "estimated_total": {
@@ -897,7 +898,7 @@ def test_tp3_probe_checks_compare_tab_response(monkeypatch, corrupt_amount, corr
     assert verdict == ("WORKS" if corruption == "none" else "PARTIAL"), evidence
 
 
-@pytest.mark.parametrize("mismatch", ["price", "policy_preview"])
+@pytest.mark.parametrize("mismatch", ["price", "policy_preview", "scenario_id"])
 def test_tp3_probe_comparison_pair_asserts_compare_endpoint_parity(monkeypatch, mismatch):
     import json
 
@@ -911,9 +912,10 @@ def test_tp3_probe_comparison_pair_asserts_compare_endpoint_parity(monkeypatch, 
         trips[trip_id] = kwargs
         return trip_id
 
-    def build_scenarios(amount, *, policy_status):
+    def build_scenarios(amount, *, policy_status, id_prefix="scenario"):
         return [
             {
+                "scenario_id": f"{id_prefix}-{rank}",
                 "rank": rank,
                 "metrics": {
                     "estimated_total": (
@@ -952,9 +954,16 @@ def test_tp3_probe_comparison_pair_asserts_compare_endpoint_parity(monkeypatch, 
         assert path == f"/api/workspace/{trip_id}/scenarios/compare"
         compare_amount = None if mismatch == "price" else amount
         compare_policy = "not_applicable" if mismatch == "policy_preview" else "preview_unavailable"
+        compare_prefix = "other-scenario" if mismatch == "scenario_id" else "scenario"
         return httpx.Response(
             200,
-            json={"scenarios": build_scenarios(compare_amount, policy_status=compare_policy)},
+            json={
+                "scenarios": build_scenarios(
+                    compare_amount,
+                    policy_status=compare_policy,
+                    id_prefix=compare_prefix,
+                )
+            },
         )
 
     monkeypatch.setattr(verifier, "_create_trip", create_trip)
