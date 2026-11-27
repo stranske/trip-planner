@@ -29,6 +29,13 @@ EXPECTED_COMMANDS = {
     "configured_full_product": CONFIGURED_FULL_PRODUCT_COMMAND,
     "pinned_two_app": PINNED_TWO_APP_COMMAND,
 }
+# Mirror verifier.FULL_PRODUCT_REQUIRED_CHECKS; stay import-free for stdlib-only runs.
+FULL_PRODUCT_REQUIRED_CHECK_NAMES = (
+    "frontend-runtime-smoke",
+    "local-leisure-journey",
+    "local-business-journey",
+    "live-tpp",
+)
 _SHA = re.compile(r"[0-9a-f]{40}")
 _RUN_URL = re.compile(r"https://github\.com/[^/\s?#]+/[^/\s?#]+/actions/runs/[1-9][0-9]*")
 _ARTIFACT_URL = re.compile(_RUN_URL.pattern + r"/artifacts/[1-9][0-9]*")
@@ -80,6 +87,26 @@ def _full_product_observation(
     if not isinstance(required, list) or not required:
         reasons.append("strict result lists no required checks")
         required = []
+    names: list[str] = []
+    for check in required:
+        if not isinstance(check, dict):
+            continue
+        name = check.get("name")
+        if isinstance(name, str):
+            names.append(name)
+    if len(names) != len(required):
+        reasons.append("required_checks entries must be objects with a name")
+    required_set = set(FULL_PRODUCT_REQUIRED_CHECK_NAMES)
+    seen: set[str] = set()
+    for name in names:
+        if name in seen:
+            reasons.append(f"duplicate required check name: {name}")
+        seen.add(name)
+        if name not in required_set:
+            reasons.append(f"unknown required check name: {name}")
+    for name in FULL_PRODUCT_REQUIRED_CHECK_NAMES:
+        if name not in seen:
+            reasons.append(f"required check missing: {name}")
     statuses = [check.get("status") for check in required if isinstance(check, dict)]
     skipped = sum(status in {"SKIPPED", "BLOCKED"} for status in statuses)
     if result.get("exit_code") != 0:
@@ -171,8 +198,15 @@ def build_receipt(
     expected_command = EXPECTED_COMMANDS[layer]
     observations: list[dict[str, Any]] = []
     if layer == "configured_full_product":
-        observed, command, observations, reasons = _full_product_observation(result_json)
-        command = command or expected_command
+        observed, recorded_command, observations, reasons = _full_product_observation(
+            result_json
+        )
+        if observed.get("status") == "MISSING":
+            command = expected_command
+        else:
+            if not recorded_command or not recorded_command.strip():
+                reasons.append("strict result recorded no command")
+            command = recorded_command or expected_command
     else:
         observed, reasons = _pinned_two_app_observation(junit_xml, pytest_exit_code)
         command = expected_command

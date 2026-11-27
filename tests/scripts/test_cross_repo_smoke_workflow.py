@@ -578,6 +578,89 @@ def test_pinned_two_app_receipt_fails_closed(
     assert reason in observed["ineligible_reasons"]
 
 
+def _full_product_checks(
+    names: list[str], *, status: str = "PASS"
+) -> list[dict[str, str]]:
+    return [{"name": name, "status": status} for name in names]
+
+
+def _configured(tmp_path: Path, result: dict[str, Any], **overrides: Any) -> dict[str, Any]:
+    path = tmp_path / "result.json"
+    path.write_text(json.dumps(result), encoding="utf-8")
+    kwargs: dict[str, Any] = {
+        "layer": "configured_full_product",
+        "consumer_sha": _CONSUMER,
+        "producer_sha": _PRODUCER,
+        "run_url": _RUN,
+        "artifact_url": _ARTIFACT,
+        "environment_text": "env",
+        "result_json": path,
+    }
+    kwargs.update(overrides)
+    return receipts.build_receipt(**kwargs)
+
+
+def _passing_full_product_result(**overrides: Any) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "status": "PASS",
+        "exit_code": 0,
+        "command": receipts.CONFIGURED_FULL_PRODUCT_COMMAND,
+        "required_checks": _full_product_checks(list(receipts.FULL_PRODUCT_REQUIRED_CHECK_NAMES)),
+    }
+    result.update(overrides)
+    return result
+
+
+def test_configured_full_product_receipt_passes_with_complete_checks(tmp_path: Path) -> None:
+    observed = _configured(tmp_path, _passing_full_product_result())["observed_result"]
+    assert observed["status"] == "PASS"
+    assert "ineligible_reasons" not in observed
+
+
+@pytest.mark.parametrize(
+    "case, reason",
+    [
+        (
+            "missing-name",
+            "required check missing: live-tpp",
+        ),
+        ("duplicate-name", "duplicate required check name: live-tpp"),
+        ("unknown-name", "unknown required check name: extra-check"),
+    ],
+)
+def test_configured_full_product_receipt_rejects_incomplete_check_set(
+    tmp_path: Path, case: str, reason: str
+) -> None:
+    names = list(receipts.FULL_PRODUCT_REQUIRED_CHECK_NAMES)
+    if case == "missing-name":
+        names = names[:-1]
+    elif case == "duplicate-name":
+        names = names + ["live-tpp"]
+    elif case == "unknown-name":
+        names = names + ["extra-check"]
+    observed = _configured(
+        tmp_path,
+        _passing_full_product_result(
+            required_checks=_full_product_checks(names),
+        ),
+    )["observed_result"]
+    assert observed["status"] == "INELIGIBLE"
+    assert reason in observed["ineligible_reasons"]
+
+
+def test_configured_full_product_receipt_ineligible_when_command_omitted(
+    tmp_path: Path,
+) -> None:
+    receipt = _configured(
+        tmp_path,
+        _passing_full_product_result(command=""),
+    )
+    observed = receipt["observed_result"]
+    assert observed["status"] == "INELIGIBLE"
+    assert "strict result recorded no command" in observed["ineligible_reasons"]
+    assert receipt["command"] == receipts.CONFIGURED_FULL_PRODUCT_COMMAND
+
+
 def test_receipt_builder_cli_writes_configured_receipt_without_result(
     tmp_path: Path,
 ) -> None:
