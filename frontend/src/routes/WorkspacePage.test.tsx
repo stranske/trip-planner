@@ -16,6 +16,7 @@ import {
   submitWorkspacePortalHandoff,
   recordWorkspaceSpendEvent,
   refreshWorkspaceProposalStatus,
+  reoptimizeWorkspaceProposal,
   saveWorkspaceBudget,
   setNotebookFocus,
   submitPlannerTurn,
@@ -53,6 +54,7 @@ vi.mock("../api/workspace", async () => {
     saveWorkspaceBudget: vi.fn(),
     recordWorkspaceSpendEvent: vi.fn(),
     refreshWorkspaceProposalStatus: vi.fn(),
+    reoptimizeWorkspaceProposal: vi.fn(),
     submitTripForApproval: vi.fn(),
     fetchWorkspace: vi.fn(),
     syncWorkspacePolicy: vi.fn(),
@@ -84,6 +86,7 @@ const mockedUpdateWorkspacePlanningMode = vi.mocked(updateWorkspacePlanningMode)
 const mockedSaveWorkspaceBudget = vi.mocked(saveWorkspaceBudget);
 const mockedRecordWorkspaceSpendEvent = vi.mocked(recordWorkspaceSpendEvent);
 const mockedRefreshWorkspaceProposalStatus = vi.mocked(refreshWorkspaceProposalStatus);
+const mockedReoptimizeWorkspaceProposal = vi.mocked(reoptimizeWorkspaceProposal);
 const mockedSubmitTripForApproval = vi.mocked(submitTripForApproval);
 const mockedFetchWorkspace = vi.mocked(fetchWorkspace);
 const mockedSyncWorkspacePolicy = vi.mocked(syncWorkspacePolicy);
@@ -969,6 +972,7 @@ describe("WorkspacePage", () => {
     mockedPrepareWorkspaceProposalHandoff.mockReset();
     mockedSubmitTppPortalHandoff.mockReset();
     mockedRefreshWorkspaceProposalStatus.mockReset();
+    mockedReoptimizeWorkspaceProposal.mockReset();
     mockedSubmitTripForApproval.mockReset();
     mockedCreateNotebookItem.mockReset();
     mockedUpdateNotebookItem.mockReset();
@@ -3980,52 +3984,89 @@ describe("WorkspacePage", () => {
   });
 
   it("surfaces reoptimization follow-up guidance for non-compliant policy results", async () => {
+    const initialFollowUp = {
+      status: "reoptimization_required",
+      path: "reoptimization",
+      title: "Reoptimization path required",
+      summary: "Use a compliant downtown property before resubmitting the approval packet.",
+      recommended_action: "reoptimize",
+      recommended_label: "Reoptimize plan",
+      alternatives: [
+        {
+          category: "lodging",
+          summary: "Use a compliant downtown property",
+          rationale: "Alternative meets nightly cap and booking-channel requirements.",
+          comparable_ref: "lodging-alt-2",
+        },
+      ],
+      guidance: ["Keep the policy-safe lodging alternative attached to the next submission."],
+      notes: [],
+      selected_alternative: {
+        category: "lodging",
+        summary: "Use a compliant downtown property",
+        rationale: "Alternative meets nightly cap and booking-channel requirements.",
+        comparable_ref: "lodging-alt-2",
+      },
+      requested_exception: null,
+    };
+    const reoptimizationPlan = {
+      source_version: {
+        version_id: "saved-scenario:kyoto-baseline-v2",
+        saved_scenario_id: "saved-scenario:kyoto-baseline",
+        trip_id: "trip-leisure-kyoto-draft",
+        title: "Kyoto spring preferred refinement",
+        label: "baseline",
+      },
+      proposal_id: "proposal:trip-leisure-kyoto-draft",
+      evaluation_id: "eval-kyoto-non-compliant",
+      reaction_kind: "narrow_candidates",
+      target_label: "compliant_first",
+      comparison_outcome: "preferred",
+      target_title: "Narrow candidate search around policy-preferred alternatives",
+      candidate_categories: ["lodging"],
+    };
+    const reoptimizedProposalState = {
+      ...workspacePayload.proposal_state,
+      follow_up: {
+        ...initialFollowUp,
+        status: "reoptimized",
+        reoptimization_plan: reoptimizationPlan,
+      },
+      evaluation: {
+        evaluation_result: {
+          ...workspacePayload.proposal_state.evaluation.evaluation_result,
+          status: "non_compliant",
+          failure_reasons: [
+            {
+              code: "lodging_cap_exceeded",
+              message: "Nightly lodging exceeds the allowed cap.",
+              severity: "blocking",
+              related_category: "lodging",
+            },
+          ],
+          notes: ["Proposal requires lodging changes before submission can pass."],
+          compliance_score: 0.42,
+        },
+      },
+      summary: {
+        ...workspacePayload.proposal_state.summary,
+        approval_ready: false,
+        has_saved_verdict: true,
+        evaluation_result_status: "non_compliant",
+        follow_up_status: "reoptimized",
+        follow_up_title: "Reoptimization path required",
+        follow_up_summary:
+          "Use a compliant downtown property before resubmitting the approval packet.",
+      },
+    };
+    mockedReoptimizeWorkspaceProposal.mockResolvedValueOnce(reoptimizedProposalState);
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
         ...workspacePayload,
         proposal_state: {
           ...workspacePayload.proposal_state,
-          follow_up: {
-            status: "reoptimization_required",
-            path: "reoptimization",
-            title: "Reoptimization path required",
-            summary: "Use a compliant downtown property before resubmitting the approval packet.",
-            recommended_action: "reoptimize",
-            recommended_label: "Reoptimize plan",
-            alternatives: [
-              {
-                category: "lodging",
-                summary: "Use a compliant downtown property",
-                rationale: "Alternative meets nightly cap and booking-channel requirements.",
-                comparable_ref: "lodging-alt-2",
-              },
-            ],
-            guidance: ["Keep the policy-safe lodging alternative attached to the next submission."],
-            notes: [],
-            selected_alternative: {
-              category: "lodging",
-              summary: "Use a compliant downtown property",
-              rationale: "Alternative meets nightly cap and booking-channel requirements.",
-              comparable_ref: "lodging-alt-2",
-            },
-            requested_exception: null,
-          },
-          evaluation: {
-            evaluation_result: {
-              ...workspacePayload.proposal_state.evaluation.evaluation_result,
-              status: "non_compliant",
-              failure_reasons: [
-                {
-                  code: "lodging_cap_exceeded",
-                  message: "Nightly lodging exceeds the allowed cap.",
-                  severity: "blocking",
-                  related_category: "lodging",
-                },
-              ],
-              notes: ["Proposal requires lodging changes before submission can pass."],
-              compliance_score: 0.42,
-            },
-          },
+          follow_up: initialFollowUp,
+          evaluation: reoptimizedProposalState.evaluation,
           summary: {
             ...workspacePayload.proposal_state.summary,
             approval_ready: false,
@@ -4051,10 +4092,122 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Use a compliant downtown property")).toBeInTheDocument();
     expect(document.body.textContent ?? "").not.toContain("Nightly lodging exceeds the allowed cap.");
 
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Reoptimize" }));
+
+    await waitFor(() => {
+      expect(mockedReoptimizeWorkspaceProposal).toHaveBeenCalledTimes(1);
+    });
+    expect(mockedReoptimizeWorkspaceProposal).toHaveBeenCalledWith("trip-leisure-kyoto-draft", {
+      comparable_refs: { lodging: ["lodging-alt-2"] },
+      justification_refs: {},
+    });
+
+    const renderedPlan = await screen.findByTestId("reoptimization-plan");
+    expect(renderedPlan).toHaveTextContent(
+      "Narrow candidate search around policy-preferred alternatives"
+    );
+    expect(renderedPlan).toHaveTextContent("Action: narrow_candidates");
+    expect(renderedPlan).toHaveTextContent("Affected categories: lodging");
+
     fireEvent.click(screen.getByText("Advanced diagnostics"));
     await waitFor(() => {
       expect(document.body.textContent ?? "").toContain("Nightly lodging exceeds the allowed cap.");
     });
+
+    // Simulate a workspace reload returning the public persisted workspace payload.
+    cleanup();
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: {
+          ...reoptimizedProposalState,
+          evaluation: { evaluation_result: null },
+        },
+      }),
+    });
+    renderWorkspacePage();
+    await selectWorkspaceTab("Policy");
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Policy non-compliant" })).toBeInTheDocument();
+    });
+    const reloadedPlan = await screen.findByTestId("reoptimization-plan");
+    expect(reloadedPlan).toHaveTextContent(
+      "Narrow candidate search around policy-preferred alternatives"
+    );
+    expect(reloadedPlan).toHaveTextContent("Action: narrow_candidates");
+    expect(reloadedPlan).toHaveTextContent("Affected categories: lodging");
+    expect(mockedReoptimizeWorkspaceProposal).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders the materialize_scenario disposition without a reoptimize button for no-lineage reoptimization follow-up", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state,
+          follow_up: {
+            status: "no_scenario_lineage",
+            path: "manual_review",
+            title: "Plan a scenario before reoptimization",
+            summary:
+              "This submission has no saved scenario lineage. Plan a scenario and submit it before reoptimizing.",
+            recommended_action: "materialize_scenario",
+            recommended_label: "Plan a scenario",
+            alternatives: [],
+            guidance: [],
+            notes: [],
+            selected_alternative: null,
+            requested_exception: null,
+          },
+          evaluation: {
+            evaluation_result: {
+              ...workspacePayload.proposal_state.evaluation.evaluation_result,
+              status: "non_compliant",
+              failure_reasons: [
+                {
+                  code: "lodging_cap_exceeded",
+                  message: "Nightly lodging exceeds the allowed cap.",
+                  severity: "blocking",
+                  related_category: "lodging",
+                },
+              ],
+              notes: ["Proposal requires lodging changes before submission can pass."],
+              compliance_score: 0.42,
+            },
+          },
+          summary: {
+            ...workspacePayload.proposal_state.summary,
+            approval_ready: false,
+            evaluation_result_status: "non_compliant",
+            follow_up_status: "no_scenario_lineage",
+            follow_up_title: "Plan a scenario before reoptimization",
+            follow_up_summary:
+              "This submission has no saved scenario lineage. Plan a scenario and submit it before reoptimizing.",
+          },
+        },
+      }),
+    });
+
+    renderWorkspacePage();
+    await selectWorkspaceTab("Policy");
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Plan a scenario" })).toBeInTheDocument();
+    });
+    const detailsSection = screen.getByTestId("tpp-label");
+    expect(
+      within(detailsSection).getByText(
+        "This submission has no saved scenario lineage. Plan a scenario and submit it before reoptimizing."
+      )
+    ).toBeInTheDocument();
+    expect(within(detailsSection).getByTestId("reoptimization-no-lineage-disposition")).toHaveTextContent(
+      "Disposition: Plan a scenario before reoptimization (materialize_scenario)"
+    );
+    expect(screen.queryByRole("button", { name: "Reoptimize" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("reoptimization-plan")).not.toBeInTheDocument();
+    expect(mockedReoptimizeWorkspaceProposal).not.toHaveBeenCalled();
   });
 
   it("surfaces exception guidance and approval requirements from live policy results", async () => {

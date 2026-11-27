@@ -768,6 +768,7 @@ export type WorkspaceData = {
         requested_approval_roles: string[];
         notes: string[];
       } | null;
+      reoptimization_plan?: ProposalReoptimizationPlan | null;
     } | null;
     summary: {
       submission_status?: string;
@@ -883,11 +884,58 @@ export async function submitPlannerTurn(
   });
 }
 
+export type ProposalReoptimizationPlan = {
+  source_version?: {
+    version_id: string;
+    saved_scenario_id?: string;
+    trip_id?: string;
+    title?: string;
+    label?: string;
+  };
+  proposal_id: string;
+  evaluation_id: string;
+  reaction_kind: string;
+  target_label: string;
+  comparison_outcome: string;
+  target_title: string;
+  candidate_categories: string[];
+  ranking_focus_areas?: string[];
+  preserved_comparable_refs?: string[];
+  preserved_justification_refs?: string[];
+  required_approval_roles?: string[];
+  failure_codes?: string[];
+  notes?: string[];
+};
+
+export type ProposalReoptimizePayload = {
+  comparable_refs?: Record<string, string[]>;
+  justification_refs?: Record<string, string[]>;
+};
+
 export async function refreshWorkspaceProposalStatus(tripId: string): Promise<WorkspaceData["proposal_state"]> {
   const response = await fetchJson<WorkspaceProposalApiResponse>({
     path: `/api/workspace/${tripId}/proposal/refresh`,
     method: "POST",
     credentials: "include",
+  });
+  return response?.proposal_state ?? null;
+}
+
+export async function reoptimizeWorkspaceProposal(
+  tripId: string,
+  body: ProposalReoptimizePayload = {}
+): Promise<WorkspaceData["proposal_state"]> {
+  const response = await fetchJson<WorkspaceProposalApiResponse>({
+    path: `/api/workspace/${tripId}/proposal/reoptimize`,
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      comparable_refs: body.comparable_refs ?? {},
+      justification_refs: body.justification_refs ?? {},
+    }),
   });
   return response?.proposal_state ?? null;
 }

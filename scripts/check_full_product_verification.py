@@ -175,6 +175,24 @@ def _assert_live_tpp_record_invariants(
             verdict_readback=dict(verdict_readback),
             trip_id=live_details.get("trip_id"),
         )
+    native_transitions = live_details.get("native_transitions")
+    if isinstance(native_transitions, Mapping):
+        if expected_evaluation_status == "compliant":
+            _require(
+                "reoptimize" not in native_transitions,
+                "live TPP compliant control unexpectedly recorded a reoptimize transition",
+                native_transitions=dict(native_transitions),
+                trip_id=live_details.get("trip_id"),
+            )
+        else:
+            _require(
+                bool(str(native_transitions.get("reoptimize") or "").strip())
+                and live_details.get("follow_up_status") == "reoptimized",
+                "live TPP non-compliant journey did not record persisted reoptimization",
+                native_transitions=dict(native_transitions),
+                follow_up_status=live_details.get("follow_up_status"),
+                trip_id=live_details.get("trip_id"),
+            )
 
 
 def _assert_business_verification_outcomes(
@@ -997,6 +1015,7 @@ def _assert_native_live_tpp_route_order(
     *,
     trip_id: str,
     observed_transitions: list[tuple[str, str]],
+    expected_evaluation_status: str = EXPECTED_BUSINESS_EVALUATION_STATUS,
 ) -> None:
     forbidden_put_routes = {
         ("PUT", f"/api/workspace/{trip_id}/policy"),
@@ -1010,12 +1029,29 @@ def _assert_native_live_tpp_route_order(
         trip_id=trip_id,
         bypassed_routes=[f"{method} {path}" for method, path in bypassed_puts],
     )
-    required_native_routes = (
-        ("POST", f"/api/workspace/{trip_id}/policy/sync"),
-        ("POST", f"/api/workspace/{trip_id}/proposal/submit"),
-        ("POST", f"/api/workspace/{trip_id}/proposal/refresh"),
-        ("GET", f"/api/workspace/{trip_id}/proposal"),
-    )
+    reoptimize_route = ("POST", f"/api/workspace/{trip_id}/proposal/reoptimize")
+    if expected_evaluation_status == "compliant":
+        _require(
+            reoptimize_route not in observed_transitions,
+            "live TPP compliant control unexpectedly invoked reoptimization",
+            trip_id=trip_id,
+            observed_transitions=[f"{method} {path}" for method, path in observed_transitions],
+        )
+        required_native_routes: tuple[tuple[str, str], ...] = (
+            ("POST", f"/api/workspace/{trip_id}/policy/sync"),
+            ("POST", f"/api/workspace/{trip_id}/proposal/submit"),
+            ("POST", f"/api/workspace/{trip_id}/proposal/refresh"),
+            ("GET", f"/api/workspace/{trip_id}/proposal"),
+        )
+    else:
+        required_native_routes = (
+            ("POST", f"/api/workspace/{trip_id}/policy/sync"),
+            ("POST", f"/api/workspace/{trip_id}/proposal/submit"),
+            ("POST", f"/api/workspace/{trip_id}/proposal/refresh"),
+            ("GET", f"/api/workspace/{trip_id}/proposal"),
+            reoptimize_route,
+            ("GET", f"/api/workspace/{trip_id}/proposal"),
+        )
     cursor = 0
     for expected_route in required_native_routes:
         try:
@@ -1193,6 +1229,116 @@ def _assert_native_live_tpp_verdict_readback(
     )
 
 
+def _assert_native_live_tpp_reoptimization_readback(
+    *,
+    trip_id: str,
+    evaluation_id: str,
+    expected_source_version: Mapping[str, Any],
+    expected_evaluation_status: str,
+    reoptimized_state: Mapping[str, Any],
+    reoptimized_summary: Mapping[str, Any],
+) -> dict[str, Any]:
+    reoptimized_evaluation = dict(reoptimized_state.get("evaluation") or {})
+    reoptimized_result = dict(reoptimized_evaluation.get("evaluation_result") or {})
+    follow_up = dict(reoptimized_state.get("follow_up") or {})
+    raw_plan = follow_up.get("reoptimization_plan")
+    plan = dict(raw_plan) if isinstance(raw_plan, Mapping) else {}
+    plan_source_version = dict(plan.get("source_version") or {})
+    expected_source_version_id = str(expected_source_version.get("version_id") or "")
+    _require(
+        reoptimized_result.get("evaluation_id") == evaluation_id
+        and reoptimized_result.get("status") == expected_evaluation_status
+        and reoptimized_summary.get("evaluation_result_status") == expected_evaluation_status,
+        "live TPP persisted reoptimization readback did not preserve pre-action verdict",
+        trip_id=trip_id,
+        expected_evaluation_id=evaluation_id,
+        actual_evaluation_id=reoptimized_result.get("evaluation_id"),
+        expected_evaluation_status=expected_evaluation_status,
+        actual_evaluation_status=reoptimized_result.get("status"),
+        summary_evaluation_status=reoptimized_summary.get("evaluation_result_status"),
+    )
+    _require(
+        follow_up.get("status") == "reoptimized"
+        and reoptimized_summary.get("follow_up_status") == "reoptimized"
+        and bool(plan)
+        and bool(str(plan.get("target_title") or "").strip())
+        and bool(str(plan.get("reaction_kind") or "").strip())
+        and bool(expected_source_version_id)
+        and plan_source_version.get("version_id") == expected_source_version_id
+        and plan_source_version == dict(expected_source_version),
+        "live TPP persisted reoptimization readback did not retain plan and source lineage",
+        trip_id=trip_id,
+        follow_up_status=follow_up.get("status"),
+        summary_follow_up_status=reoptimized_summary.get("follow_up_status"),
+        reoptimization_plan=plan,
+        expected_source_version_id=expected_source_version_id,
+        actual_source_version_id=plan_source_version.get("version_id"),
+    )
+    return plan
+
+
+def _execute_live_tpp_reoptimization(
+    client: TestClient,
+    *,
+    trip_id: str,
+    proposal_id: str,
+    expected_evaluation_status: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    reoptimize_response = client.post(
+        f"/api/workspace/{trip_id}/proposal/reoptimize",
+        json={},
+    )
+    _require(
+        reoptimize_response.status_code == 200,
+        "live TPP proposal reoptimization failed",
+        status=reoptimize_response.status_code,
+        body=reoptimize_response.text,
+        trip_id=trip_id,
+        proposal_id=proposal_id,
+        route=f"/api/workspace/{trip_id}/proposal/reoptimize",
+    )
+    reoptimized_readback_response = client.get(f"/api/workspace/{trip_id}/proposal")
+    _require(
+        reoptimized_readback_response.status_code == 200,
+        "live TPP persisted reoptimized proposal readback failed",
+        status=reoptimized_readback_response.status_code,
+        body=reoptimized_readback_response.text,
+        trip_id=trip_id,
+        proposal_id=proposal_id,
+        route=f"/api/workspace/{trip_id}/proposal",
+    )
+    reloaded_workspace_response = client.get(f"/api/workspace/{trip_id}")
+    _require(
+        reloaded_workspace_response.status_code == 200,
+        "live TPP workspace reload after reoptimization failed",
+        status=reloaded_workspace_response.status_code,
+        body=reloaded_workspace_response.text,
+        trip_id=trip_id,
+        proposal_id=proposal_id,
+        route=f"/api/workspace/{trip_id}",
+    )
+    reloaded_proposal = dict(reloaded_workspace_response.json().get("proposal_state") or {})
+    reloaded_follow_up = dict(reloaded_proposal.get("follow_up") or {})
+    reloaded_summary = dict(reloaded_proposal.get("summary") or {})
+    reloaded_plan = reloaded_follow_up.get("reoptimization_plan")
+    _require(
+        reloaded_follow_up.get("status") == "reoptimized"
+        and isinstance(reloaded_plan, Mapping)
+        and bool(reloaded_plan)
+        and reloaded_summary.get("evaluation_result_status") == expected_evaluation_status,
+        "live TPP workspace reload did not preserve reoptimization plan and pre-action verdict",
+        trip_id=trip_id,
+        proposal_id=proposal_id,
+        reloaded_follow_up_status=reloaded_follow_up.get("status"),
+        reloaded_evaluation_status=reloaded_summary.get("evaluation_result_status"),
+    )
+    reoptimized_payload = reoptimized_readback_response.json()
+    return (
+        dict(reoptimized_payload.get("proposal_state") or {}),
+        dict(reoptimized_payload.get("summary") or {}),
+    )
+
+
 def _assert_native_live_tpp_transitions(
     *,
     trip_id: str,
@@ -1206,10 +1352,13 @@ def _assert_native_live_tpp_transitions(
     readback_state: Mapping[str, Any],
     readback_summary: Mapping[str, Any],
     policy_summary: Mapping[str, Any] | None = None,
-) -> None:
+    reoptimized_state: Mapping[str, Any] | None = None,
+    reoptimized_summary: Mapping[str, Any] | None = None,
+) -> dict[str, Any] | None:
     _assert_native_live_tpp_route_order(
         trip_id=trip_id,
         observed_transitions=observed_transitions,
+        expected_evaluation_status=expected_evaluation_status,
     )
     policy_id = _assert_native_live_tpp_policy_state(
         trip_id=trip_id,
@@ -1234,6 +1383,28 @@ def _assert_native_live_tpp_transitions(
         expected_evaluation_status=expected_evaluation_status,
         readback_state=readback_state,
         readback_summary=readback_summary,
+    )
+    if expected_evaluation_status == "compliant":
+        return None
+    _require(
+        reoptimized_state is not None and reoptimized_summary is not None,
+        "live TPP non-compliant journey did not capture persisted reoptimization readback",
+        trip_id=trip_id,
+    )
+    assert reoptimized_state is not None and reoptimized_summary is not None
+    evaluation_id = str(
+        dict(dict(readback_state.get("evaluation") or {}).get("evaluation_result") or {}).get(
+            "evaluation_id"
+        )
+        or ""
+    )
+    return _assert_native_live_tpp_reoptimization_readback(
+        trip_id=trip_id,
+        evaluation_id=evaluation_id,
+        expected_source_version=expected_source_version,
+        expected_evaluation_status=expected_evaluation_status,
+        reoptimized_state=reoptimized_state,
+        reoptimized_summary=reoptimized_summary,
     )
 
 
@@ -1407,9 +1578,18 @@ def _run_live_tpp_journey(
                 readback_payload = readback_response.json()
                 readback_state = dict(readback_payload.get("proposal_state") or {})
                 readback_summary = dict(readback_payload.get("summary") or {})
+                reoptimized_state: dict[str, Any] | None = None
+                reoptimized_summary: dict[str, Any] | None = None
+                if expected_evaluation_status != "compliant":
+                    reoptimized_state, reoptimized_summary = _execute_live_tpp_reoptimization(
+                        client,
+                        trip_id=trip_id,
+                        proposal_id=proposal_id,
+                        expected_evaluation_status=expected_evaluation_status,
+                    )
 
             policy_summary = dict(policy_payload.get("summary") or {})
-            _assert_native_live_tpp_transitions(
+            reoptimization_plan = _assert_native_live_tpp_transitions(
                 trip_id=trip_id,
                 configured_organization_id=configured_organization_id,
                 selected_scenario_id=selected_scenario_id,
@@ -1421,6 +1601,8 @@ def _run_live_tpp_journey(
                 readback_state=readback_state,
                 readback_summary=readback_summary,
                 policy_summary=policy_summary,
+                reoptimized_state=reoptimized_state,
+                reoptimized_summary=reoptimized_summary,
             )
 
             policy_id = str(policy_state["policy_id"])
@@ -1433,6 +1615,17 @@ def _run_live_tpp_journey(
             readback_source_version = dict(
                 dict(readback_state.get("proposal") or {}).get("source_version") or {}
             )
+            final_summary = (
+                reoptimized_summary if reoptimized_summary is not None else readback_summary
+            )
+            native_transitions = {
+                "policy_sync": f"POST /api/workspace/{trip_id}/policy/sync",
+                "proposal_submit": f"POST /api/workspace/{trip_id}/proposal/submit",
+                "proposal_refresh": f"POST /api/workspace/{trip_id}/proposal/refresh",
+                "verdict_readback": f"GET /api/workspace/{trip_id}/proposal",
+            }
+            if expected_evaluation_status != "compliant":
+                native_transitions["reoptimize"] = f"POST /api/workspace/{trip_id}/proposal/reoptimize"
             compatibility_control = _build_compatibility_control(
                 trip_id=trip_id,
                 proposal_id=proposal_id,
@@ -1444,7 +1637,7 @@ def _run_live_tpp_journey(
                 offline_control=offline_control,
             )
 
-            return {
+            result: dict[str, Any] = {
                 "base_url": base_url,
                 "trip_id": trip_id,
                 "organization_id": configured_organization_id,
@@ -1463,7 +1656,7 @@ def _run_live_tpp_journey(
                 "submission_error": status_summary["submission_error"],
                 "evaluation_transport_status": readback_summary["evaluation_transport_status"],
                 "evaluation_status": readback_summary["evaluation_result_status"],
-                "follow_up_status": readback_summary["follow_up_status"],
+                "follow_up_status": final_summary["follow_up_status"],
                 "external_ids": {
                     "policy_id": policy_id,
                     "policy_request_id": policy_request_id,
@@ -1479,12 +1672,7 @@ def _run_live_tpp_journey(
                     "saved_scenario_id": str(readback_source_version["saved_scenario_id"]),
                     "source_version_id": str(readback_source_version["version_id"]),
                 },
-                "native_transitions": {
-                    "policy_sync": f"POST /api/workspace/{trip_id}/policy/sync",
-                    "proposal_submit": f"POST /api/workspace/{trip_id}/proposal/submit",
-                    "proposal_refresh": f"POST /api/workspace/{trip_id}/proposal/refresh",
-                    "verdict_readback": f"GET /api/workspace/{trip_id}/proposal",
-                },
+                "native_transitions": native_transitions,
                 "input": {
                     "trip_id": trip_id,
                     "organization_id": configured_organization_id,
@@ -1502,14 +1690,25 @@ def _run_live_tpp_journey(
                     "proposal_version": str(readback_state["proposal_version"]),
                     "execution_id": execution_id,
                     "evaluation_id": evaluation_id,
-                    "evaluation_status": readback_summary["evaluation_result_status"],
-                    "follow_up_status": readback_summary["follow_up_status"],
+                    "evaluation_status": final_summary["evaluation_result_status"],
+                    "follow_up_status": final_summary["follow_up_status"],
                     "scenario_id": str(readback_state["scenario_id"]),
                     "saved_scenario_id": str(readback_source_version["saved_scenario_id"]),
                     "source_version_id": str(readback_source_version["version_id"]),
                 },
                 "compatibility_control": compatibility_control,
             }
+            if reoptimization_plan is not None:
+                plan_source_version = dict(reoptimization_plan.get("source_version") or {})
+                result["reoptimization_readback"] = {
+                    "evaluation_id": evaluation_id,
+                    "evaluation_status": final_summary["evaluation_result_status"],
+                    "follow_up_status": final_summary["follow_up_status"],
+                    "reaction_kind": str(reoptimization_plan["reaction_kind"]),
+                    "target_title": str(reoptimization_plan["target_title"]),
+                    "source_version_id": str(plan_source_version["version_id"]),
+                }
+            return result
 
 
 @contextmanager

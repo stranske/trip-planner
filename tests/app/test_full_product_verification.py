@@ -347,7 +347,7 @@ def test_required_live_tpp_accepts_ready_prerequisite_after_success(monkeypatch)
 
     def fake_live_journey(
         _client, trip_id: str, _env: dict[str, str], **_: object
-    ) -> dict[str, str]:
+    ) -> dict[str, object]:
         return {
             "base_url": "https://tpp.example.test",
             "trip_id": trip_id,
@@ -355,6 +355,14 @@ def test_required_live_tpp_accepts_ready_prerequisite_after_success(monkeypatch)
             "execution_id": "exec-test",
             "status_poll": "succeeded",
             "evaluation_status": "non_compliant",
+            "follow_up_status": "reoptimized",
+            "native_transitions": {
+                "policy_sync": f"POST /api/workspace/{trip_id}/policy/sync",
+                "proposal_submit": f"POST /api/workspace/{trip_id}/proposal/submit",
+                "proposal_refresh": f"POST /api/workspace/{trip_id}/proposal/refresh",
+                "verdict_readback": f"GET /api/workspace/{trip_id}/proposal",
+                "reoptimize": f"POST /api/workspace/{trip_id}/proposal/reoptimize",
+            },
         }
 
     monkeypatch.setattr(verifier, "_run_live_tpp_journey", fake_live_journey)
@@ -541,3 +549,423 @@ def test_contract_report_mode_does_not_write_strict_result(monkeypatch, tmp_path
 
     assert verifier.main(["--live-tpp=required", f"--contract-report={tmp_path / 'r.json'}"]) == 0
     assert not result_path.exists()
+
+
+def _install_live_tpp_transport_stub(monkeypatch) -> list[tuple[str, str]]:
+    from trip_planner.integrations.tpp import client as tpp_client_module
+
+    calls: list[tuple[str, str]] = []
+    outcomes_by_execution: dict[str, str] = {}
+
+    def fake_send_json_request(
+        self,
+        *,
+        method: str,
+        path: str,
+        url: str,
+        json_payload: dict[str, object],
+    ) -> dict[str, object]:
+        del self, url
+        calls.append((method, path))
+        if method == "GET" and path == "/api/planner/policy-snapshot":
+            req = dict(json_payload.get("request") or {})  # type: ignore[arg-type]
+            return {
+                "trip_id": req.get("trip_id", "trip-unknown"),
+                "freshness": "current",
+                "generated_at": "2026-11-27T00:00:00Z",
+                "expires_at": "2026-11-28T00:00:00Z",
+                "invalidated_at": None,
+                "invalidation_reason": None,
+                "policy_status": "pass",
+                "booking_requirements": [
+                    {"code": "approved_channel", "summary": "Book through an approved channel."}
+                ],
+                "documentation_rules": [
+                    {"code": "fare_evidence", "summary": "Attach lowest fare evidence."}
+                ],
+                "approval_triggers": [
+                    {"code": "manager_review", "summary": "Manager approval required."}
+                ],
+                "airfare_rules": {"max_cabin": "economy", "max_over_lowest_fare_usd": 100},
+                "lodging_rules": {"max_nightly_rate_usd": 325},
+                "ground_transport_rules": {},
+                "meal_rules": {},
+                "budget_rules": {},
+                "comparable_requirements": {"lodging": 1},
+                "versioning": {
+                    "contract_version": "2026-04-11",
+                    "policy_version": "2026.11",
+                    "planner_known_policy_version": None,
+                    "compatible_with_planner_cache": True,
+                    "etag": "policy-live-2071",
+                },
+            }
+        if method == "POST" and path == "/api/planner/proposals":
+            req = dict(json_payload.get("request") or {})  # type: ignore[arg-type]
+            trip_plan = dict(json_payload.get("trip_plan") or {})  # type: ignore[arg-type]
+            trip_id = str(req.get("trip_id") or trip_plan.get("trip_id") or "trip-unknown")
+            proposal_id = str(req.get("proposal_id") or f"proposal:{trip_id}")
+            selected_fare = float(trip_plan.get("selected_fare") or 0.0)  # type: ignore[arg-type]
+            lowest_fare = float(trip_plan.get("lowest_fare") or selected_fare)  # type: ignore[arg-type]
+            execution_id = f"exec-live-2071-{len(outcomes_by_execution) + 1}"
+            is_compliant = selected_fare <= lowest_fare
+            outcomes_by_execution[execution_id] = "compliant" if is_compliant else "non_compliant"
+            if is_compliant:
+                return {
+                    "operation": "submit_proposal",
+                    "submission_status": "submitted",
+                    "request_id": "tpp-submit-2071",
+                    "correlation_id": {
+                        "value": f"submit-proposal:{trip_id}",
+                        "issued_by": "tpp",
+                    },
+                    "transport_pattern": "deferred",
+                    "execution_status": {
+                        "state": "deferred",
+                        "terminal": False,
+                        "summary": "Proposal queued for evaluation",
+                        "poll_after_seconds": 0,
+                        "external_status": "202 Accepted",
+                        "updated_at": "2026-11-27T00:00:01Z",
+                    },
+                    "result_payload": {
+                        "execution_id": execution_id,
+                        "queue_state": "waiting_for_policy_engine",
+                        "trip_id": trip_id,
+                        "proposal_id": proposal_id,
+                    },
+                    "received_at": "2026-11-27T00:00:01Z",
+                    "status_endpoint": (
+                        f"https://tpp.example.test/api/planner/proposals/{proposal_id}"
+                        f"/executions/{execution_id}"
+                    ),
+                }
+            return {
+                "operation": "submit_proposal",
+                "submission_status": "rejected",
+                "request_id": "tpp-submit-2071",
+                "correlation_id": {
+                    "value": f"submit-proposal:{trip_id}",
+                    "issued_by": "tpp",
+                },
+                "transport_pattern": "sync",
+                "execution_status": {
+                    "state": "failed",
+                    "terminal": True,
+                    "summary": "Proposal blocked by policy",
+                    "external_status": "200 OK",
+                    "updated_at": "2026-11-27T00:00:01Z",
+                },
+                "result_payload": {
+                    "execution_id": execution_id,
+                    "queue_state": "blocked_by_policy",
+                    "trip_id": trip_id,
+                    "proposal_id": proposal_id,
+                    "blocking_codes": ["fare_above_lowest"],
+                },
+                "error": {
+                    "code": "proposal_blocked_by_policy",
+                    "message": "Selected fare exceeds lowest available fare.",
+                    "category": "policy",
+                    "retryable": False,
+                },
+                "received_at": "2026-11-27T00:00:01Z",
+                "status_endpoint": (
+                    f"https://tpp.example.test/api/planner/proposals/{proposal_id}"
+                    f"/executions/{execution_id}"
+                ),
+            }
+        if method == "GET" and "/executions/" in path and not path.endswith("/evaluation-result"):
+            execution_id = path.rsplit("/", 1)[-1]
+            proposal_id = str(json_payload.get("proposal_id") or "proposal-unknown")
+            outcome = outcomes_by_execution.get(execution_id, "compliant")
+            if outcome == "compliant":
+                return {
+                    "operation": "poll_execution_status",
+                    "transport_pattern": "deferred",
+                    "execution_status": {
+                        "state": "deferred",
+                        "terminal": False,
+                        "summary": "Awaiting evaluator completion",
+                        "updated_at": "2026-11-27T00:00:02Z",
+                    },
+                    "result_payload": {
+                        "execution_id": execution_id,
+                        "proposal_id": proposal_id,
+                        "queue_state": "waiting_for_policy_engine",
+                    },
+                    "received_at": "2026-11-27T00:00:02Z",
+                    "status_endpoint": (
+                        f"https://tpp.example.test/api/planner/proposals/{proposal_id}"
+                        f"/executions/{execution_id}"
+                    ),
+                }
+            return {
+                "operation": "poll_execution_status",
+                "transport_pattern": "sync",
+                "execution_status": {
+                    "state": "failed",
+                    "terminal": True,
+                    "summary": "Proposal blocked by policy",
+                    "updated_at": "2026-11-27T00:00:02Z",
+                },
+                "result_payload": {
+                    "execution_id": execution_id,
+                    "proposal_id": proposal_id,
+                    "queue_state": "blocked_by_policy",
+                    "blocking_codes": ["fare_above_lowest"],
+                },
+                "error": {
+                    "code": "proposal_blocked_by_policy",
+                    "message": "Selected fare exceeds lowest available fare.",
+                    "category": "policy",
+                    "retryable": False,
+                },
+                "received_at": "2026-11-27T00:00:02Z",
+                "status_endpoint": (
+                    f"https://tpp.example.test/api/planner/proposals/{proposal_id}"
+                    f"/executions/{execution_id}"
+                ),
+            }
+        if method == "GET" and path.endswith("/evaluation-result"):
+            execution_id = path.split("/executions/", 1)[1].split("/", 1)[0]
+            trip_id = str(json_payload.get("trip_id") or "trip-unknown")
+            proposal_id = str(json_payload.get("proposal_id") or f"proposal:{trip_id}")
+            proposal_version = str(json_payload.get("proposal_version") or "v1")
+            outcome = outcomes_by_execution.get(execution_id, "non_compliant")
+            return {
+                "trip_id": trip_id,
+                "proposal_id": proposal_id,
+                "proposal_version": proposal_version,
+                "execution_id": execution_id,
+                "request_id": f"eval-2071-{execution_id}",
+                "correlation_id": {
+                    "value": f"submit-proposal:{trip_id}",
+                    "issued_by": "tpp",
+                },
+                "outcome": outcome,
+                "result_endpoint": f"GET /api/planner/executions/{execution_id}/evaluation-result",
+                "status_endpoint": (
+                    f"https://tpp.example.test/api/planner/proposals/{proposal_id}"
+                    f"/executions/{execution_id}"
+                ),
+                "policy_result": {
+                    "status": "fail" if outcome == "non_compliant" else "pass",
+                    "issues": [],
+                    "policy_version": "2026.11",
+                },
+                "blocking_issues": (
+                    [
+                        {
+                            "code": "fare_above_lowest",
+                            "summary": "Selected fare exceeds lowest available fare threshold.",
+                            "category": "airfare",
+                        }
+                    ]
+                    if outcome == "non_compliant"
+                    else []
+                ),
+                "preferred_alternatives": (
+                    [
+                        {
+                            "category": "airfare",
+                            "summary": "Rebook the lowest available economy fare.",
+                            "rationale": "Matches the $400 lowest fare threshold.",
+                        }
+                    ]
+                    if outcome == "non_compliant"
+                    else []
+                ),
+                "exception_requirements": [],
+                "reoptimization_guidance": [],
+                "generated_at": "2026-11-27T00:00:03Z",
+            }
+        raise AssertionError(f"Unexpected TPP transport request: {method} {path}")
+
+    monkeypatch.setattr(
+        tpp_client_module.HTTPTPPIntegrationClient,
+        "_send_json_request",
+        fake_send_json_request,
+    )
+    return calls
+
+
+def test_live_tpp_journey_reoptimizes_non_compliant_verdict_and_persists_plan(
+    monkeypatch, tmp_path
+) -> None:
+    _install_live_tpp_transport_stub(monkeypatch)
+    env = {
+        "TPP_BASE_URL": "https://tpp.example.test",
+        "TPP_ACCESS_TOKEN": "token-2071",
+        "TPP_OIDC_PROVIDER": "google",
+        "TPP_ORGANIZATION_ID": "org-2071",
+    }
+    with (
+        verifier._temporary_database_url(f"sqlite:///{tmp_path / 'reoptimize.db'}"),
+        verifier._force_planner_fallback_runtime(),
+    ):
+        verifier.reset_database_state()
+        verifier.ensure_database_ready()
+        with verifier.TestClient(verifier.create_app()) as client:
+            verifier._signup(client)
+            trip_id = verifier._create_trip(
+                client,
+                mode="business",
+                title="Live reoptimize journey",
+                region="Chicago",
+            )
+            live_details = verifier._run_live_tpp_journey(
+                client,
+                trip_id,
+                env,
+                expected_evaluation_status="non_compliant",
+            )
+
+            assert live_details["evaluation_status"] == "non_compliant"
+            assert live_details["follow_up_status"] == "reoptimized"
+            assert live_details["verdict_readback"]["status"] == "non_compliant"
+            assert live_details["verdict_readback"]["follow_up_status"] == "reoptimization_required"
+            assert live_details["native_transitions"]["reoptimize"] == (
+                f"POST /api/workspace/{trip_id}/proposal/reoptimize"
+            )
+            assert live_details["reoptimization_readback"]["follow_up_status"] == "reoptimized"
+            assert (
+                live_details["reoptimization_readback"]["source_version_id"]
+                == live_details["source_version_id"]
+            )
+
+            persisted_proposal = client.get(f"/api/workspace/{trip_id}/proposal")
+            assert persisted_proposal.status_code == 200
+            proposal_state = persisted_proposal.json()["proposal_state"]
+            assert proposal_state["evaluation"]["evaluation_result"]["status"] == "non_compliant"
+            assert proposal_state["follow_up"]["status"] == "reoptimized"
+            plan = proposal_state["follow_up"]["reoptimization_plan"]
+            assert plan["target_title"]
+            assert plan["source_version"]["version_id"] == live_details["source_version_id"]
+
+            reloaded_workspace = client.get(f"/api/workspace/{trip_id}")
+            assert reloaded_workspace.status_code == 200
+            reloaded_state = reloaded_workspace.json()["proposal_state"]
+            assert reloaded_state["summary"]["evaluation_result_status"] == "non_compliant"
+            reloaded_plan = reloaded_state["follow_up"]["reoptimization_plan"]
+            assert reloaded_plan["target_title"] == plan["target_title"]
+            assert reloaded_plan["reaction_kind"] == plan["reaction_kind"]
+            assert reloaded_plan["candidate_categories"] == plan["candidate_categories"]
+            assert reloaded_plan["source_version"]["version_id"] == live_details["source_version_id"]
+
+
+def test_live_tpp_journey_leaves_compliant_control_unreoptimized(monkeypatch, tmp_path) -> None:
+    _install_live_tpp_transport_stub(monkeypatch)
+    env = {
+        "TPP_BASE_URL": "https://tpp.example.test",
+        "TPP_ACCESS_TOKEN": "token-2071",
+        "TPP_OIDC_PROVIDER": "google",
+        "TPP_ORGANIZATION_ID": "org-2071",
+    }
+    with (
+        verifier._temporary_database_url(f"sqlite:///{tmp_path / 'compliant.db'}"),
+        verifier._force_planner_fallback_runtime(),
+    ):
+        verifier.reset_database_state()
+        verifier.ensure_database_ready()
+        with verifier.TestClient(verifier.create_app()) as client:
+            verifier._signup(client)
+            trip_id = verifier._create_trip(
+                client,
+                mode="business",
+                title="Compliant control journey",
+                region="Chicago",
+            )
+            live_details = verifier._run_live_tpp_journey(
+                client,
+                trip_id,
+                env,
+                expected_evaluation_status="compliant",
+            )
+
+            assert live_details["evaluation_status"] == "compliant"
+            assert live_details["follow_up_status"] == "resolved"
+            assert "reoptimize" not in live_details["native_transitions"]
+            assert "reoptimization_readback" not in live_details
+
+            persisted = client.get(f"/api/workspace/{trip_id}/proposal").json()["proposal_state"]
+            assert persisted["follow_up"]["status"] == "resolved"
+            assert "reoptimization_plan" not in persisted["follow_up"]
+
+
+def test_live_tpp_journey_fails_when_reoptimization_fails_or_readback_mismatches(
+    monkeypatch, tmp_path
+) -> None:
+    _install_live_tpp_transport_stub(monkeypatch)
+    env = {
+        "TPP_BASE_URL": "https://tpp.example.test",
+        "TPP_ACCESS_TOKEN": "token-2071",
+        "TPP_OIDC_PROVIDER": "google",
+        "TPP_ORGANIZATION_ID": "org-2071",
+    }
+    with (
+        verifier._temporary_database_url(f"sqlite:///{tmp_path / 'reoptimize-fail.db'}"),
+        verifier._force_planner_fallback_runtime(),
+    ):
+        verifier.reset_database_state()
+        verifier.ensure_database_ready()
+        with verifier.TestClient(verifier.create_app()) as client:
+            verifier._signup(client)
+            trip_id = verifier._create_trip(
+                client,
+                mode="business",
+                title="Broken reoptimize journey",
+                region="Chicago",
+            )
+            original_post = client.post
+
+            def failing_reoptimize_post(url: str, *args, **kwargs):
+                if str(url).endswith("/proposal/reoptimize"):
+                    return verifier.TestClient(verifier.create_app()).get("/api/no-such-route")
+                return original_post(url, *args, **kwargs)
+
+            monkeypatch.setattr(client, "post", failing_reoptimize_post)
+            try:
+                verifier._run_live_tpp_journey(
+                    client,
+                    trip_id,
+                    env,
+                    expected_evaluation_status="non_compliant",
+                )
+            except verifier.VerificationFailure as error:
+                assert "live TPP proposal reoptimization failed" in str(error)
+            else:  # pragma: no cover - assertion guard
+                raise AssertionError("expected HTTP failure on /proposal/reoptimize to fail")
+
+            monkeypatch.setattr(client, "post", original_post)
+            try:
+                verifier._assert_native_live_tpp_reoptimization_readback(
+                    trip_id=trip_id,
+                    evaluation_id="eval-1",
+                    expected_source_version={"version_id": "ver-expected", "trip_id": trip_id},
+                    expected_evaluation_status="non_compliant",
+                    reoptimized_state={
+                        "evaluation": {
+                            "evaluation_result": {
+                                "evaluation_id": "eval-1",
+                                "status": "non_compliant",
+                            }
+                        },
+                        "follow_up": {
+                            "status": "reoptimized",
+                            "reoptimization_plan": {
+                                "target_title": "Plan",
+                                "reaction_kind": "narrow_candidates",
+                                "source_version": {"version_id": "ver-wrong", "trip_id": trip_id},
+                            },
+                        },
+                    },
+                    reoptimized_summary={
+                        "evaluation_result_status": "non_compliant",
+                        "follow_up_status": "reoptimized",
+                    },
+                )
+            except verifier.VerificationFailure as error:
+                assert "did not retain plan and source lineage" in str(error)
+            else:  # pragma: no cover - assertion guard
+                raise AssertionError("expected mismatched source_version_id to fail")

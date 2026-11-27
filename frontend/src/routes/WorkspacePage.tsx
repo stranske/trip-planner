@@ -17,6 +17,7 @@ import {
   refreshWorkspacePortalReceipt,
   recordWorkspaceSpendEvent,
   refreshWorkspaceProposalStatus,
+  reoptimizeWorkspaceProposal,
   syncWorkspacePolicy,
   retryPolicyServiceCheck,
   saveTripPrice,
@@ -41,6 +42,7 @@ import {
   type PlanningNotebookFocus,
   type PlanningNotebookItem,
   type PlanningNotebookState,
+  type ProposalReoptimizePayload,
   type RouteOptionActionType,
   type RuntimeScenarioComparison,
   submitPlannerOptionFeedback,
@@ -931,6 +933,31 @@ function hasRenderableFollowUp(
   followUp: NonNullable<WorkspaceData["proposal_state"]>["follow_up"]
 ): followUp is NonNullable<NonNullable<WorkspaceData["proposal_state"]>["follow_up"]> {
   return Boolean(followUp?.status && followUp?.title && followUp?.summary);
+}
+
+function buildProposalReoptimizePayload(
+  followUp: NonNullable<WorkspaceData["proposal_state"]>["follow_up"]
+): ProposalReoptimizePayload {
+  const comparableRefs: Record<string, string[]> = {};
+  const candidates = [
+    ...(followUp?.selected_alternative ? [followUp.selected_alternative] : []),
+    ...(followUp?.alternatives ?? []),
+  ];
+  for (const item of candidates) {
+    const category = item.category?.trim();
+    const ref = item.comparable_ref?.trim();
+    if (!category || !ref) {
+      continue;
+    }
+    const existing = comparableRefs[category] ?? [];
+    if (!existing.includes(ref)) {
+      comparableRefs[category] = [...existing, ref];
+    }
+  }
+  return {
+    comparable_refs: comparableRefs,
+    justification_refs: {},
+  };
 }
 
 function rebuildNotebookState(
@@ -2002,6 +2029,48 @@ function WorkspacePageContent({
     } catch (error) {
       if (refreshVersion === proposalRefreshVersion.current) {
         setProposalError(error instanceof Error ? error.message : "Proposal status refresh failed.");
+      }
+    } finally {
+      if (refreshVersion === proposalRefreshVersion.current) {
+        setProposalBusyLabel(null);
+      }
+    }
+  }
+
+  async function handleProposalReoptimize() {
+    const refreshVersion = ++proposalRefreshVersion.current;
+    setProposalError(null);
+    setProposalStatusMessage(null);
+    setProposalBusyLabel("Reoptimizing proposal...");
+    try {
+      const nextProposalState = await reoptimizeWorkspaceProposal(
+        trip.trip_id,
+        buildProposalReoptimizePayload(renderableProposalFollowUp)
+      );
+      if (refreshVersion !== proposalRefreshVersion.current) {
+        return;
+      }
+      if (nextProposalState == null) {
+        setProposalStatusMessage("Reoptimization returned no saved proposal state.");
+        return;
+      }
+      startTransition(() => {
+        setCurrentWorkspace((current) => ({
+          ...current,
+          proposal_state: nextProposalState,
+        }));
+      });
+      const nextFollowUp = nextProposalState.follow_up;
+      setProposalStatusMessage(
+        nextFollowUp?.reoptimization_plan
+          ? `Reoptimization plan ready: ${nextFollowUp.reoptimization_plan.target_title}`
+          : nextFollowUp?.summary ?? "Proposal follow-up updated."
+      );
+    } catch (error) {
+      if (refreshVersion === proposalRefreshVersion.current) {
+        setProposalError(
+          error instanceof Error ? error.message : "Proposal reoptimization failed."
+        );
       }
     } finally {
       if (refreshVersion === proposalRefreshVersion.current) {
@@ -3179,6 +3248,40 @@ function WorkspacePageContent({
                           <p className="muted-copy">
                             Exception rationale: {renderableProposalFollowUp.requested_exception.reason}
                           </p>
+                        ) : null}
+                        {renderableProposalFollowUp.reoptimization_plan ? (
+                          <div className="reoptimization-plan" data-testid="reoptimization-plan">
+                            <p>
+                              <strong>Target plan:</strong>{" "}
+                              {renderableProposalFollowUp.reoptimization_plan.target_title}
+                            </p>
+                            <p className="muted-copy">
+                              Action: {renderableProposalFollowUp.reoptimization_plan.reaction_kind}
+                            </p>
+                            {renderableProposalFollowUp.reoptimization_plan.candidate_categories.length >
+                            0 ? (
+                              <p className="muted-copy">
+                                Affected categories:{" "}
+                                {renderableProposalFollowUp.reoptimization_plan.candidate_categories.join(
+                                  ", "
+                                )}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : renderableProposalFollowUp.recommended_action === "materialize_scenario" ? (
+                          <p className="muted-copy" data-testid="reoptimization-no-lineage-disposition">
+                            Disposition: {renderableProposalFollowUp.title} (materialize_scenario)
+                          </p>
+                        ) : null}
+                        {renderableProposalFollowUp.recommended_action === "reoptimize" ? (
+                          <button
+                            type="button"
+                            className="primary-button"
+                            disabled={Boolean(proposalBusyLabel)}
+                            onClick={() => void handleProposalReoptimize()}
+                          >
+                            Reoptimize
+                          </button>
                         ) : null}
                       </article>
                     ) : null}
