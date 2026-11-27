@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 
@@ -446,3 +447,97 @@ def test_main_succeeds_when_tpp_base_url_unset_in_auto_mode(monkeypatch) -> None
     exit_code = verifier.main(["--live-tpp", "auto"])
 
     assert exit_code == 0
+
+
+def _stub_frontend(monkeypatch) -> None:
+    monkeypatch.setattr(
+        verifier,
+        "run_frontend_runtime_smoke",
+        lambda: CheckResult("frontend-runtime-smoke", "PASS", {"source": "stub"}),
+    )
+
+
+def _passing_journeys(*, live_tpp: str) -> list[CheckResult]:
+    return [
+        CheckResult("local-leisure-journey", "PASS", {}),
+        CheckResult("local-business-journey", "PASS", {}),
+        CheckResult("map-provider", "SKIPPED", {"provider_state": "fallback"}),
+        CheckResult("planner-llm", "SKIPPED", {"mode": "fallback"}),
+        CheckResult("live-tpp", "PASS" if live_tpp == "required" else "SKIPPED", {}),
+    ]
+
+
+def test_main_writes_strict_pass_result_with_exact_command(monkeypatch, tmp_path) -> None:
+    result_path = tmp_path / "evidence" / "result.json"
+    monkeypatch.setenv(verifier.FULL_PRODUCT_RESULT_ENV, str(result_path))
+    monkeypatch.setenv("TPP_ACCESS_TOKEN", "ci-secret-token-value")
+    _stub_frontend(monkeypatch)
+    monkeypatch.setattr(verifier, "run_product_journeys", _passing_journeys)
+
+    assert verifier.main(["--live-tpp=required"]) == 0
+
+    result = json.loads(result_path.read_text())
+    assert (
+        result["command"] == "python scripts/check_full_product_verification.py --live-tpp=required"
+    )
+    assert result["status"] == "PASS"
+    assert result["exit_code"] == 0
+    assert result["required_skipped"] == 0
+    assert [check["name"] for check in result["required_checks"]] == list(
+        verifier.FULL_PRODUCT_REQUIRED_CHECKS
+    )
+    # Optional provider skips stay visible, outside the required checks.
+    assert result["optional_observations"] == [
+        {"name": "map-provider", "status": "SKIPPED"},
+        {"name": "planner-llm", "status": "SKIPPED"},
+    ]
+    assert "ci-secret-token-value" not in result_path.read_text()
+
+
+def test_main_records_skipped_required_live_tpp_as_not_pass(monkeypatch, tmp_path) -> None:
+    result_path = tmp_path / "result.json"
+    monkeypatch.setenv(verifier.FULL_PRODUCT_RESULT_ENV, str(result_path))
+    _stub_frontend(monkeypatch)
+    monkeypatch.setattr(verifier, "run_product_journeys", _passing_journeys)
+
+    # Disabled live-TPP keeps the existing zero exit but cannot produce a PASS result.
+    assert verifier.main(["--live-tpp=off"]) == 0
+
+    result = json.loads(result_path.read_text())
+    assert result["command"] == "python scripts/check_full_product_verification.py --live-tpp=off"
+    assert result["status"] == "SKIPPED"
+    assert result["required_skipped"] == 1
+
+
+def test_required_live_tpp_blocked_exits_nonzero_and_records_failure(monkeypatch, tmp_path) -> None:
+    for name in (
+        "TPP_BASE_URL",
+        "TPP_ACCESS_TOKEN",
+        "TPP_OIDC_PROVIDER",
+        "TPP_REPO_PATH",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("TPP_REPO_PATH", str(tmp_path / "missing-tpp"))
+    monkeypatch.setenv("TPP_ACCESS_TOKEN", "ci-secret-token-value")
+    result_path = tmp_path / "result.json"
+    monkeypatch.setenv(verifier.FULL_PRODUCT_RESULT_ENV, str(result_path))
+    _stub_frontend(monkeypatch)
+
+    assert verifier.main(["--live-tpp=required"]) == 1
+
+    result = json.loads(result_path.read_text())
+    assert result["status"] == "FAIL"
+    assert result["exit_code"] == 1
+    assert result["failure"].startswith("VerificationFailure: ")
+    assert {"name": "live-tpp", "status": "MISSING"} in result["required_checks"]
+    assert "ci-secret-token-value" not in result_path.read_text()
+
+
+def test_contract_report_mode_does_not_write_strict_result(monkeypatch, tmp_path) -> None:
+    result_path = tmp_path / "result.json"
+    monkeypatch.setenv(verifier.FULL_PRODUCT_RESULT_ENV, str(result_path))
+    monkeypatch.setattr(verifier, "run_product_journeys", _passing_journeys)
+    monkeypatch.setattr(verifier, "run_contract_report", list)
+
+    assert verifier.main(["--live-tpp=required", f"--contract-report={tmp_path / 'r.json'}"]) == 0
+    assert not result_path.exists()

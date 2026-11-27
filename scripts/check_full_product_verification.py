@@ -2245,7 +2245,80 @@ def _print_results(results: list[CheckResult]) -> None:
             print(f"- WARNING uncovered surface: {result.name}")
 
 
+# Section 15 receipt capture for the strict gate. The claimed layer depends only on
+# these checks; optional providers stay visible as observations outside the claim.
+FULL_PRODUCT_RESULT_ENV = "FULL_PRODUCT_RESULT_JSON"
+FULL_PRODUCT_REQUIRED_CHECKS = (
+    "frontend-runtime-smoke",
+    "local-leisure-journey",
+    "local-business-journey",
+    "live-tpp",
+)
+FULL_PRODUCT_OPTIONAL_CHECKS = ("map-provider", "planner-llm")
+_SECRET_ENV_NAME = re.compile(r"TOKEN|SECRET|PASSWORD|API_KEY|CREDENTIAL", re.IGNORECASE)
+
+
+def _redacted_failure(exc: BaseException, env: Mapping[str, str]) -> str:
+    message = f"{type(exc).__name__}: {exc}"
+    for name, value in env.items():
+        if _SECRET_ENV_NAME.search(name) and len(value.strip()) >= 4:
+            message = message.replace(value.strip(), "[redacted]")
+    return message[:400]
+
+
+def full_product_result(
+    *,
+    command: str,
+    exit_code: int,
+    results: list[CheckResult] | None,
+    failure: BaseException | None = None,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Summarise a strict run by check name and status only; details stay in the log."""
+    by_name = {result.name: result.status for result in results or []}
+    required = [
+        {"name": name, "status": by_name.get(name, "MISSING")}
+        for name in FULL_PRODUCT_REQUIRED_CHECKS
+    ]
+    required_skipped = sum(check["status"] in {"SKIPPED", "BLOCKED"} for check in required)
+    if exit_code != 0 or failure is not None:
+        status = "FAIL"
+    elif required_skipped:
+        status = "SKIPPED"
+    elif any(check["status"] != "PASS" for check in required):
+        status = "INCOMPLETE"
+    else:
+        status = "PASS"
+    payload: dict[str, Any] = {
+        "layer": "configured_full_product",
+        "command": command,
+        "exit_code": exit_code,
+        "status": status,
+        "required_checks": required,
+        "required_skipped": required_skipped,
+        "optional_observations": [
+            {"name": name, "status": by_name[name]}
+            for name in FULL_PRODUCT_OPTIONAL_CHECKS
+            if name in by_name
+        ],
+    }
+    if failure is not None:
+        payload["failure"] = _redacted_failure(failure, os.environ if env is None else env)
+    return payload
+
+
+def _write_full_product_result(payload: dict[str, Any]) -> None:
+    destination = os.environ.get(FULL_PRODUCT_RESULT_ENV, "").strip()
+    if not destination:
+        return
+    path = Path(destination)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    command = shlex.join(["python", "scripts/check_full_product_verification.py", *argv])
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--live-tpp",
@@ -2282,13 +2355,16 @@ def main(argv: list[str] | None = None) -> int:
         args.contract_report.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
         print(contract_headline(rows))
         return 0
+    results: list[CheckResult] = []
     try:
-        results = []
         if not args.skip_frontend_smoke:
             results.append(run_frontend_runtime_smoke())
         results.extend(run_product_journeys(live_tpp=args.live_tpp))
     except VerificationFailure as exc:
         print(f"Full-product verification failed: {exc}", file=sys.stderr)
+        _write_full_product_result(
+            full_product_result(command=command, exit_code=1, results=results, failure=exc)
+        )
         return 1
     except Exception as exc:  # noqa: BLE001 - CLI boundary reports unexpected failures.
         print(
@@ -2297,8 +2373,12 @@ def main(argv: list[str] | None = None) -> int:
             "and local service setup, including TPP_REPO_PATH and subprocess working directories.",
             file=sys.stderr,
         )
+        _write_full_product_result(
+            full_product_result(command=command, exit_code=1, results=results, failure=exc)
+        )
         return 1
     _print_results(results)
+    _write_full_product_result(full_product_result(command=command, exit_code=0, results=results))
     return 0
 
 

@@ -706,3 +706,95 @@ def test_coverage_map_keeps_claims_scoped_to_their_evidence(
         return
     errors = _coverage_claim_errors(claim, tmp_path)
     assert errors == expected
+
+
+_RECEIPT_RUN = "https://github.com/stranske/trip-planner/actions/runs/123"
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "valid-configured",
+        "valid-two-app",
+        "required-skip",
+        "failure",
+        "wrong-sha",
+        "wrong-command",
+        "other-run-artifact",
+    ],
+)
+def test_emitted_section15_receipts_round_trip_through_claim_validator(
+    tmp_path: Path, case: str
+) -> None:
+    """Receipts from the real producers pass only when the observed run supports them."""
+    from scripts import build_section15_receipt as builder
+    from scripts import check_full_product_verification as verifier
+
+    consumer, producer = "a" * 40, "b" * 40
+    layer = "pinned_two_app" if case == "valid-two-app" else "configured_full_product"
+    live_tpp = {"required-skip": "off", "wrong-command": "auto"}.get(case, "required")
+    checks = [
+        verifier.CheckResult(name, "PASS", {}) for name in verifier.FULL_PRODUCT_REQUIRED_CHECKS
+    ]
+    if live_tpp != "required":
+        checks[-1] = verifier.CheckResult("live-tpp", "SKIPPED", {})
+    checks.append(verifier.CheckResult("map-provider", "SKIPPED", {}))
+    result = verifier.full_product_result(
+        command=f"python scripts/check_full_product_verification.py --live-tpp={live_tpp}",
+        exit_code=1 if case == "failure" else 0,
+        results=checks[:2] if case == "failure" else checks,
+        failure=verifier.VerificationFailure("live journey failed") if case == "failure" else None,
+    )
+    (tmp_path / "result.json").write_text(json.dumps(result), encoding="utf-8")
+    junit = tmp_path / "junit.xml"
+    junit.write_text('<testsuite tests="3" failures="0" errors="0" skipped="0"/>', encoding="utf-8")
+    run_id = "999" if case == "other-run-artifact" else "123"
+    receipt = builder.build_receipt(
+        layer=layer,
+        consumer_sha=consumer,
+        producer_sha=producer,
+        run_url=_RECEIPT_RUN,
+        artifact_url=f"https://github.com/stranske/trip-planner/actions/runs/{run_id}/artifacts/7",
+        environment_text=builder.environment(
+            layer, runner="ubuntu-latest", python_version="3.14.0"
+        ),
+        result_json=tmp_path / "result.json",
+        junit_xml=junit,
+        pytest_exit_code=0,
+    )
+    (tmp_path / "receipt.json").write_text(json.dumps(receipt), encoding="utf-8")
+    claim = {
+        "layer": layer,
+        "status": "VERIFIED",
+        # A wrong SHA is a claim for a revision the run did not check out.
+        "consumer_sha": "c" * 40 if case == "wrong-sha" else consumer,
+        "producer_sha": producer,
+        "environment": receipt["environment"],
+        "command": builder.EXPECTED_COMMANDS[layer],
+        "receipt": "receipt.json",
+    }
+    expected = {
+        "valid-configured": [],
+        "valid-two-app": [],
+        "required-skip": [
+            "Receipt command mismatch",
+            "Receipt needs an observed PASS, summary and zero skips",
+        ],
+        "failure": ["Receipt needs an observed PASS, summary and zero skips"],
+        "wrong-sha": ["Receipt consumer_sha mismatch"],
+        "wrong-command": [
+            "Receipt command mismatch",
+            "Receipt needs an observed PASS, summary and zero skips",
+        ],
+        "other-run-artifact": [
+            "Receipt artifact must belong to its recorded run",
+            "Receipt needs an observed PASS, summary and zero skips",
+        ],
+    }[case]
+    assert _coverage_claim_errors(claim, tmp_path) == expected
+    # Optional provider skips remain visible but never inside the claimed layer.
+    if layer == "configured_full_product" and case != "failure":
+        assert {"name": "map-provider", "status": "SKIPPED"} in receipt[
+            "observations_outside_claim"
+        ]
+        assert "map-provider" not in receipt["observed_result"]["summary"]
