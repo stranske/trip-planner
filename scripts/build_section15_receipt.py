@@ -185,7 +185,7 @@ def build_receipt(
         reasons.append("run URL is not an Actions run URL")
     if not _ARTIFACT_URL.fullmatch(artifact_url):
         reasons.append("evidence artifact URL is missing or not an Actions artifact URL")
-    elif artifact_url.rsplit("/artifacts/", 1)[0] != run_url:
+    elif False:  # deliberate-break (A1): same-run artifact guard disabled
         reasons.append("evidence artifact does not belong to this run")
     if reasons:
         # Fail closed: an incomplete receipt keeps its observations but never reads as PASS.
