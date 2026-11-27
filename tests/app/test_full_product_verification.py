@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+from typing import Any
 
 from scripts import check_full_product_verification as verifier
 from scripts.check_full_product_verification import (
@@ -563,12 +564,12 @@ def _install_live_tpp_transport_stub(monkeypatch) -> list[tuple[str, str]]:
         method: str,
         path: str,
         url: str,
-        json_payload: dict[str, object],
+        json_payload: dict[str, Any],
     ) -> dict[str, object]:
         del self, url
         calls.append((method, path))
         if method == "GET" and path == "/api/planner/policy-snapshot":
-            req = dict(json_payload.get("request") or {})  # type: ignore[arg-type]
+            req = dict(json_payload.get("request") or {})
             return {
                 "trip_id": req.get("trip_id", "trip-unknown"),
                 "freshness": "current",
@@ -601,12 +602,12 @@ def _install_live_tpp_transport_stub(monkeypatch) -> list[tuple[str, str]]:
                 },
             }
         if method == "POST" and path == "/api/planner/proposals":
-            req = dict(json_payload.get("request") or {})  # type: ignore[arg-type]
-            trip_plan = dict(json_payload.get("trip_plan") or {})  # type: ignore[arg-type]
+            req = dict(json_payload.get("request") or {})
+            trip_plan = dict(json_payload.get("trip_plan") or {})
             trip_id = str(req.get("trip_id") or trip_plan.get("trip_id") or "trip-unknown")
             proposal_id = str(req.get("proposal_id") or f"proposal:{trip_id}")
-            selected_fare = float(trip_plan.get("selected_fare") or 0.0)  # type: ignore[arg-type]
-            lowest_fare = float(trip_plan.get("lowest_fare") or selected_fare)  # type: ignore[arg-type]
+            selected_fare = float(trip_plan.get("selected_fare") or 0.0)
+            lowest_fare = float(trip_plan.get("lowest_fare") or selected_fare)
             execution_id = f"exec-live-2071-{len(outcomes_by_execution) + 1}"
             is_compliant = selected_fare <= lowest_fare
             outcomes_by_execution[execution_id] = "compliant" if is_compliant else "non_compliant"
@@ -851,7 +852,9 @@ def test_live_tpp_journey_reoptimizes_non_compliant_verdict_and_persists_plan(
             assert reloaded_plan["target_title"] == plan["target_title"]
             assert reloaded_plan["reaction_kind"] == plan["reaction_kind"]
             assert reloaded_plan["candidate_categories"] == plan["candidate_categories"]
-            assert reloaded_plan["source_version"]["version_id"] == live_details["source_version_id"]
+            assert (
+                reloaded_plan["source_version"]["version_id"] == live_details["source_version_id"]
+            )
 
 
 def test_live_tpp_journey_leaves_compliant_control_unreoptimized(monkeypatch, tmp_path) -> None:

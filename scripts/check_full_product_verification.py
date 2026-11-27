@@ -1625,7 +1625,9 @@ def _run_live_tpp_journey(
                 "verdict_readback": f"GET /api/workspace/{trip_id}/proposal",
             }
             if expected_evaluation_status != "compliant":
-                native_transitions["reoptimize"] = f"POST /api/workspace/{trip_id}/proposal/reoptimize"
+                native_transitions["reoptimize"] = (
+                    f"POST /api/workspace/{trip_id}/proposal/reoptimize"
+                )
             compatibility_control = _build_compatibility_control(
                 trip_id=trip_id,
                 proposal_id=proposal_id,
