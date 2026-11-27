@@ -198,9 +198,7 @@ def build_receipt(
     expected_command = EXPECTED_COMMANDS[layer]
     observations: list[dict[str, Any]] = []
     if layer == "configured_full_product":
-        observed, recorded_command, observations, reasons = _full_product_observation(
-            result_json
-        )
+        observed, recorded_command, observations, reasons = _full_product_observation(result_json)
         if observed.get("status") == "MISSING":
             command = expected_command
         else:

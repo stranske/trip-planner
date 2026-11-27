@@ -578,9 +578,7 @@ def test_pinned_two_app_receipt_fails_closed(
     assert reason in observed["ineligible_reasons"]
 
 
-def _full_product_checks(
-    names: list[str], *, status: str = "PASS"
-) -> list[dict[str, str]]:
+def _full_product_checks(names: list[str], *, status: str = "PASS") -> list[dict[str, str]]:
     return [{"name": name, "status": status} for name in names]
 
 
