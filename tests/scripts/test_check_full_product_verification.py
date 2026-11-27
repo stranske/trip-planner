@@ -917,9 +917,7 @@ def test_tp3_probe_comparison_pair_asserts_compare_endpoint_parity(monkeypatch, 
                 "rank": rank,
                 "metrics": {
                     "estimated_total": (
-                        None
-                        if amount is None
-                        else {"currency": "USD", "typical_amount": amount}
+                        None if amount is None else {"currency": "USD", "typical_amount": amount}
                     ),
                     "travel_minutes": 60,
                     "transfers": 0,
@@ -947,24 +945,16 @@ def test_tp3_probe_comparison_pair_asserts_compare_endpoint_parity(monkeypatch, 
                 200,
                 json={
                     "route_comparison": {
-                        "scenarios": build_scenarios(
-                            amount, policy_status="preview_unavailable"
-                        )
+                        "scenarios": build_scenarios(amount, policy_status="preview_unavailable")
                     }
                 },
             )
         assert path == f"/api/workspace/{trip_id}/scenarios/compare"
         compare_amount = None if mismatch == "price" else amount
-        compare_policy = (
-            "not_applicable" if mismatch == "policy_preview" else "preview_unavailable"
-        )
+        compare_policy = "not_applicable" if mismatch == "policy_preview" else "preview_unavailable"
         return httpx.Response(
             200,
-            json={
-                "scenarios": build_scenarios(
-                    compare_amount, policy_status=compare_policy
-                )
-            },
+            json={"scenarios": build_scenarios(compare_amount, policy_status=compare_policy)},
         )
 
     monkeypatch.setattr(verifier, "_create_trip", create_trip)
@@ -978,12 +968,8 @@ def test_tp3_probe_comparison_pair_asserts_compare_endpoint_parity(monkeypatch, 
             match="scenario comparison endpoint did not match workspace route_comparison",
         ),
     ):
-        verifier._comparison_pair(
-            client, evidence, (("Chicago", 1, 250.0), ("Chicago", 1, 700.0))
-        )
-    assert any(
-        request["path"].endswith("/scenarios/compare") for request in evidence["requests"]
-    )
+        verifier._comparison_pair(client, evidence, (("Chicago", 1, 250.0), ("Chicago", 1, 700.0)))
+    assert any(request["path"].endswith("/scenarios/compare") for request in evidence["requests"])
 
 
 @pytest.mark.parametrize("corrupt_amount", [250.0, 700.0])

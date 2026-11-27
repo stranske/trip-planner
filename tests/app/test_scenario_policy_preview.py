@@ -600,9 +600,7 @@ def test_scenario_comparison_endpoint_reports_currency_uncheckable_for_non_usd_p
                 row["scenario_id"]: row
                 for row in workspace_response.json()["route_comparison"]["scenarios"]
             }
-            compare_rows = {
-                row["scenario_id"]: row for row in compare_response.json()["scenarios"]
-            }
+            compare_rows = {row["scenario_id"]: row for row in compare_response.json()["scenarios"]}
             assert compare_rows
             assert set(compare_rows) == set(workspace_rows)
             for scenario_id, compare_row in compare_rows.items():

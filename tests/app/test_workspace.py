@@ -1389,9 +1389,7 @@ def test_workspace_comparison_endpoint_matches_persisted_prices_and_policy(
             row["scenario_id"]: row
             for row in workspace_response.json()["route_comparison"]["scenarios"]
         }
-        compare_rows = {
-            row["scenario_id"]: row for row in compare_response.json()["scenarios"]
-        }
+        compare_rows = {row["scenario_id"]: row for row in compare_response.json()["scenarios"]}
         assert workspace_rows
         assert set(compare_rows) == set(workspace_rows)
 
@@ -1407,10 +1405,7 @@ def test_workspace_comparison_endpoint_matches_persisted_prices_and_policy(
             workspace_preview = workspace_row["policy_preview"]
             compare_preview = compare_row["policy_preview"]
             assert compare_preview["snapshot_available"] is True
-            assert (
-                compare_preview["snapshot_available"]
-                == workspace_preview["snapshot_available"]
-            )
+            assert compare_preview["snapshot_available"] == workspace_preview["snapshot_available"]
             assert compare_preview["status"] == "preview_incomplete"
             assert compare_preview["status"] == workspace_preview["status"]
             assert compare_preview == workspace_preview
