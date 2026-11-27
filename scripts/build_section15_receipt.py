@@ -70,7 +70,7 @@ def _full_product_observation(
 ) -> tuple[dict[str, Any], str | None, list[dict[str, Any]], list[str]]:
     result = _load_json(result_path)
     if result is None:
-        observed = {
+        observed: dict[str, Any] = {
             "status": "MISSING",
             "summary": "No strict full-product result was written.",
         }
@@ -111,7 +111,7 @@ def _pinned_two_app_observation(
     junit_path: Path | None, exit_code: int | None
 ) -> tuple[dict[str, Any], list[str]]:
     if junit_path is None or not junit_path.is_file():
-        observed = {
+        observed: dict[str, Any] = {
             "status": "MISSING",
             "summary": "No pinned two-app pytest report was written.",
         }

@@ -15,7 +15,9 @@ import shlex
 import shutil
 import subprocess
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -503,8 +505,8 @@ def _junit(path: Path, *, tests: int, failures: int = 0, errors: int = 0, skippe
     return path
 
 
-def _two_app(tmp_path: Path, **overrides) -> dict:
-    kwargs = {
+def _two_app(tmp_path: Path, **overrides: Any) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {
         "layer": "pinned_two_app",
         "consumer_sha": _CONSUMER,
         "producer_sha": _PRODUCER,
@@ -554,7 +556,7 @@ def test_pinned_two_app_receipt_fails_closed(
     tmp_path: Path, case: str, expected_status: str, reason: str
 ) -> None:
     junit = tmp_path / "j.xml"
-    overrides = {
+    cases: dict[str, Callable[[], dict[str, Any]]] = {
         "skipped": lambda: {"junit_xml": _junit(junit, tests=3, skipped=1)},
         "failed": lambda: {
             "junit_xml": _junit(junit, tests=3, failures=1),
@@ -569,7 +571,8 @@ def test_pinned_two_app_receipt_fails_closed(
         "short-sha": lambda: {"consumer_sha": "abc1234"},
         "other-run": lambda: {"artifact_url": _RUN[:-3] + "999/artifacts/456"},
         "no-artifact": lambda: {"artifact_url": ""},
-    }[case]()
+    }
+    overrides = cases[case]()
     observed = _two_app(tmp_path, **overrides)["observed_result"]
     assert observed["status"] == expected_status
     assert reason in observed["ineligible_reasons"]
