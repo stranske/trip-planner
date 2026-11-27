@@ -1316,6 +1316,161 @@ def test_workspace_scenario_comparison_endpoint_returns_runtime_surface_for_pers
     assert "route option" in payload["summary"].lower()
 
 
+def test_workspace_comparison_endpoint_matches_persisted_prices_and_policy(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Chicago policy comparison",
+            "summary": "Comparison endpoint must match workspace prices and policy preview.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+                "traveler_party": {
+                    "kind": "team",
+                    "traveler_count": 2,
+                    "notes": "Policy parity check",
+                },
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    # Missing-price control: both routes report a null estimated_total before any price write.
+    initial_workspace = client.get(f"/api/workspace/{trip_id}")
+    initial_compare = client.get(f"/api/workspace/{trip_id}/scenarios/compare")
+    assert initial_workspace.status_code == 200
+    assert initial_compare.status_code == 200
+    for row in initial_compare.json()["scenarios"]:
+        assert row["metrics"]["estimated_total"] is None
+
+    fixture = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "fixtures"
+            / "integrations"
+            / "tpp"
+            / "policy"
+            / "standard_policy_sync.json"
+        ).read_text(encoding="utf-8")
+    )
+    constraint_set = fixture["response"]["result_payload"]["constraint_set"]
+    constraint_set["budget_rules"] = {"rule_id": "BUD-001", "max_trip_total_usd": 2300}
+    constraint_set["lodging_rules"]["max_nightly_rate_usd"] = 125
+
+    imported = client.put(
+        f"/api/workspace/{trip_id}/policy",
+        json={
+            "request": fixture["request"],
+            "response": fixture["response"],
+            "notes": ["Import USD 125 lodging cap and USD 2300 budget cap."],
+        },
+    )
+    assert imported.status_code == 200
+
+    for expected_amount in (250.0, 700.0):
+        saved_price = client.put(
+            f"/api/workspace/{trip_id}/prices",
+            json={"component": "lodging", "amount": expected_amount, "currency": "USD"},
+        )
+        assert saved_price.status_code == 200
+
+        workspace_response = client.get(f"/api/workspace/{trip_id}")
+        compare_response = client.get(f"/api/workspace/{trip_id}/scenarios/compare")
+        assert workspace_response.status_code == 200
+        assert compare_response.status_code == 200
+
+        workspace_rows = {
+            row["scenario_id"]: row
+            for row in workspace_response.json()["route_comparison"]["scenarios"]
+        }
+        compare_rows = {row["scenario_id"]: row for row in compare_response.json()["scenarios"]}
+        assert workspace_rows
+        assert set(compare_rows) == set(workspace_rows)
+
+        for scenario_id, workspace_row in workspace_rows.items():
+            compare_row = compare_rows[scenario_id]
+            workspace_total = workspace_row["metrics"]["estimated_total"]
+            compare_total = compare_row["metrics"]["estimated_total"]
+            assert compare_total is not None
+            assert compare_total["typical_amount"] == expected_amount
+            assert workspace_total["typical_amount"] == expected_amount
+            assert compare_total == workspace_total
+
+            workspace_preview = workspace_row["policy_preview"]
+            compare_preview = compare_row["policy_preview"]
+            assert compare_preview["snapshot_available"] is True
+            assert compare_preview["snapshot_available"] == workspace_preview["snapshot_available"]
+            assert compare_preview["status"] == "preview_incomplete"
+            assert compare_preview["status"] == workspace_preview["status"]
+            assert compare_preview == workspace_preview
+
+    # Non-USD entered price with a USD cap yields currency_uncheckable (not not_applicable).
+    eur_price = client.put(
+        f"/api/workspace/{trip_id}/prices",
+        json={"component": "lodging", "amount": 250.0, "currency": "EUR"},
+    )
+    assert eur_price.status_code == 200
+    eur_workspace = client.get(f"/api/workspace/{trip_id}").json()
+    eur_compare = client.get(f"/api/workspace/{trip_id}/scenarios/compare").json()
+    eur_workspace_rows = {
+        row["scenario_id"]: row for row in eur_workspace["route_comparison"]["scenarios"]
+    }
+    eur_compare_rows = {row["scenario_id"]: row for row in eur_compare["scenarios"]}
+    assert set(eur_compare_rows) == set(eur_workspace_rows)
+    for scenario_id, compare_row in eur_compare_rows.items():
+        workspace_row = eur_workspace_rows[scenario_id]
+        assert compare_row["metrics"]["estimated_total"]["currency"] == "EUR"
+        assert compare_row["policy_preview"]["status"] == "preview_incomplete"
+        assert compare_row["policy_preview"]["status"] != "not_applicable"
+        assert compare_row["policy_preview"] == workspace_row["policy_preview"]
+        assert any(
+            item.get("reason") == "currency_uncheckable"
+            for item in compare_row["policy_preview"]["violations"]
+        )
+
+    # Leisure control still reports not_applicable.
+    leisure_trip = client.post(
+        "/api/trips",
+        json={
+            "title": "Lisbon leisure control",
+            "summary": "Leisure comparison keeps not_applicable policy preview.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        },
+    )
+    assert leisure_trip.status_code == 201
+    leisure_id = leisure_trip.json()["trip"]["trip_id"]
+    leisure_compare = client.get(f"/api/workspace/{leisure_id}/scenarios/compare")
+    assert leisure_compare.status_code == 200
+    assert all(
+        row["policy_preview"]["status"] == "not_applicable"
+        for row in leisure_compare.json()["scenarios"]
+    )
+
+    # Cross-owner control still returns HTTP 404.
+    other_signup = client.post(
+        "/api/auth/signup",
+        json={
+            "email": "other-workspace-owner@example.com",
+            "password": "password123",
+            "display_name": "Other Workspace Owner",
+        },
+    )
+    assert other_signup.status_code == 201
+    assert client.get(f"/api/workspace/{trip_id}/scenarios/compare").status_code == 404
+
+
 def test_workspace_endpoint_returns_bounded_empty_runtime_state_when_trip_frame_is_sparse(
     client: TestClient,
 ) -> None:

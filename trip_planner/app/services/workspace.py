@@ -1802,6 +1802,10 @@ def _build_runtime_scenario_comparison_payload(
     ]
     persisted_inventory_bundles, inventory_summary = _build_workspace_inventory_inputs(record)
     inventory_status = str((inventory_summary.get("runtime_state") or {}).get("status") or "empty")
+    policy_context = get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
+    raw_policy_state = (policy_context or {}).get("policy_state")
+    price_rows = read_trip_prices_for_owner(db_session, user_id=user.user_id, trip_id=trip_id)
+    entered_prices = build_trip_prices_payload(price_rows)
     return _build_runtime_scenario_comparison(
         trip_id=trip_id,
         trip_title=record.title,
@@ -1810,11 +1814,13 @@ def _build_runtime_scenario_comparison_payload(
             inventory_bundles=persisted_inventory_bundles,
             saved_scenarios=persisted_saved_scenarios,
             inventory_status=inventory_status,
-            organization_comparable_requirements=_policy_comparable_requirements(
-                get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
-            ),
+            organization_comparable_requirements=_policy_comparable_requirements(policy_context),
         ),
         session=_serialize_session_record(session_record),
+        policy_state=raw_policy_state if isinstance(raw_policy_state, dict) else None,
+        trip_mode=record.mode,
+        duration_days=record.duration_days,
+        entered_total=(entered_prices or {}).get("total"),
         route_stops=_journey_stops(record),
     )
 

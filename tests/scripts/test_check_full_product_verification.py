@@ -844,6 +844,7 @@ def test_tp3_probe_checks_compare_tab_response(monkeypatch, corrupt_amount, corr
         minutes = 120 if trips[trip_id]["region"] == "Reykjavik, Iceland" else 60
         scenarios = [
             {
+                "scenario_id": f"scenario-{rank}",
                 "rank": rank,
                 "metrics": {
                     "estimated_total": {
@@ -856,11 +857,7 @@ def test_tp3_probe_checks_compare_tab_response(monkeypatch, corrupt_amount, corr
             }
             for rank in (1, 2)
         ]
-        if path.endswith("/scenarios/compare"):
-            return httpx.Response(200, json={"scenarios": scenarios})
-        assert path == f"/api/workspace/{trip_id}"
-        assert request.method == "GET"
-        if prices[trip_id] == corrupt_amount and corruption != "none":
+        if prices.get(trip_id) == corrupt_amount and corruption != "none":
             if corruption == "empty":
                 scenarios.clear()
             else:
@@ -871,7 +868,12 @@ def test_tp3_probe_checks_compare_tab_response(monkeypatch, corrupt_amount, corr
                     if corruption == "missing"
                     else {"currency": "USD", "typical_amount": 999.0}
                 )
-            corrupted_paths.append(path)
+            if path == f"/api/workspace/{trip_id}":
+                corrupted_paths.append(path)
+        if path.endswith("/scenarios/compare"):
+            return httpx.Response(200, json={"scenarios": scenarios})
+        assert path == f"/api/workspace/{trip_id}"
+        assert request.method == "GET"
         return httpx.Response(200, json={"route_comparison": {"scenarios": scenarios}})
 
     monkeypatch.setattr(verifier, "_create_trip", create_trip)
@@ -894,6 +896,89 @@ def test_tp3_probe_checks_compare_tab_response(monkeypatch, corrupt_amount, corr
     ]
     assert all(request["status"] == 200 for request in evidence["requests"])
     assert verdict == ("WORKS" if corruption == "none" else "PARTIAL"), evidence
+
+
+@pytest.mark.parametrize("mismatch", ["price", "policy_preview", "scenario_id"])
+def test_tp3_probe_comparison_pair_asserts_compare_endpoint_parity(monkeypatch, mismatch):
+    import json
+
+    import httpx
+
+    trips = {}
+    prices = {}
+
+    def create_trip(_client, **kwargs):
+        trip_id = f"trip-{len(trips)}"
+        trips[trip_id] = kwargs
+        return trip_id
+
+    def build_scenarios(amount, *, policy_status, id_prefix="scenario"):
+        return [
+            {
+                "scenario_id": f"{id_prefix}-{rank}",
+                "rank": rank,
+                "metrics": {
+                    "estimated_total": (
+                        None if amount is None else {"currency": "USD", "typical_amount": amount}
+                    ),
+                    "travel_minutes": 60,
+                    "transfers": 0,
+                },
+                "policy_preview": {
+                    "status": policy_status,
+                    "snapshot_available": False,
+                },
+            }
+            for rank in (1, 2)
+        ]
+
+    def respond(request):
+        path = request.url.path
+        trip_id = path.split("/")[3]
+        if path.endswith("/prices"):
+            if request.method == "PUT":
+                prices[trip_id] = json.loads(request.content)["amount"]
+            return httpx.Response(
+                200, json={"total": {"currency": "USD", "typical_amount": prices[trip_id]}}
+            )
+        amount = prices.get(trip_id)
+        if path == f"/api/workspace/{trip_id}":
+            return httpx.Response(
+                200,
+                json={
+                    "route_comparison": {
+                        "scenarios": build_scenarios(amount, policy_status="preview_unavailable")
+                    }
+                },
+            )
+        assert path == f"/api/workspace/{trip_id}/scenarios/compare"
+        compare_amount = None if mismatch == "price" else amount
+        compare_policy = "not_applicable" if mismatch == "policy_preview" else "preview_unavailable"
+        compare_prefix = "other-scenario" if mismatch == "scenario_id" else "scenario"
+        return httpx.Response(
+            200,
+            json={
+                "scenarios": build_scenarios(
+                    compare_amount,
+                    policy_status=compare_policy,
+                    id_prefix=compare_prefix,
+                )
+            },
+        )
+
+    monkeypatch.setattr(verifier, "_create_trip", create_trip)
+    evidence = {}
+    with (
+        httpx.Client(
+            transport=httpx.MockTransport(respond), base_url="http://testserver"
+        ) as client,
+        pytest.raises(
+            verifier.VerificationFailure,
+            match="scenario comparison endpoint did not match workspace route_comparison",
+        ),
+    ):
+        verifier._comparison_pair(client, evidence, (("Chicago", 1, 250.0), ("Chicago", 1, 700.0)))
+    assert any(request["path"].endswith("/scenarios/compare") for request in evidence["requests"])
 
 
 @pytest.mark.parametrize("corrupt_amount", [250.0, 700.0])
