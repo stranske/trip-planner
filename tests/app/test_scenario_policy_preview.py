@@ -538,3 +538,83 @@ def test_policy_import_persists_budget_rules_for_scenario_preview(
             assert preview["authoritative"] is False
     finally:
         reset_database_state()
+
+
+def test_scenario_comparison_endpoint_reports_currency_uncheckable_for_non_usd_price(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'non_usd_compare.db'}")
+    fixture_path = (
+        Path(__file__).resolve().parents[1]
+        / "fixtures/integrations/tpp/policy/standard_policy_sync.json"
+    )
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    fixture["response"]["result_payload"]["constraint_set"]["budget_rules"] = {
+        "rule_id": "BUD-001",
+        "max_trip_total_usd": 2300,
+    }
+    reset_database_state()
+    try:
+        with TestClient(create_app()) as client:
+            signup = client.post(
+                "/api/auth/signup",
+                json={
+                    "email": "non-usd-compare@example.com",
+                    "password": "password123",
+                    "display_name": "Non-USD Owner",
+                },
+            )
+            assert signup.status_code == 201
+            created = client.post(
+                "/api/trips",
+                json={
+                    "title": "Euro-priced business trip",
+                    "mode": "business",
+                    "trip_frame": {
+                        "start_date": "2026-05-04",
+                        "end_date": "2026-05-06",
+                        "duration_days": 3,
+                        "primary_regions": ["Chicago"],
+                    },
+                },
+            )
+            assert created.status_code == 201
+            trip_id = created.json()["trip"]["trip_id"]
+            imported = client.put(
+                f"/api/workspace/{trip_id}/policy",
+                json={"request": fixture["request"], "response": fixture["response"]},
+            )
+            assert imported.status_code == 200
+            saved_price = client.put(
+                f"/api/workspace/{trip_id}/prices",
+                json={"component": "lodging", "amount": 400.0, "currency": "EUR"},
+            )
+            assert saved_price.status_code == 200
+
+            workspace_response = client.get(f"/api/workspace/{trip_id}")
+            compare_response = client.get(f"/api/workspace/{trip_id}/scenarios/compare")
+            assert workspace_response.status_code == 200
+            assert compare_response.status_code == 200
+
+            workspace_rows = {
+                row["scenario_id"]: row
+                for row in workspace_response.json()["route_comparison"]["scenarios"]
+            }
+            compare_rows = {
+                row["scenario_id"]: row for row in compare_response.json()["scenarios"]
+            }
+            assert compare_rows
+            assert set(compare_rows) == set(workspace_rows)
+            for scenario_id, compare_row in compare_rows.items():
+                preview = compare_row["policy_preview"]
+                assert preview["snapshot_available"] is True
+                assert preview["status"] == "preview_incomplete"
+                assert preview["status"] != "not_applicable"
+                assert preview == workspace_rows[scenario_id]["policy_preview"]
+                budget_finding = next(
+                    item for item in preview["violations"] if item["rule_id"] == "BUD-001"
+                )
+                assert budget_finding["incomplete"] is True
+                assert budget_finding["reason"] == "currency_uncheckable"
+    finally:
+        reset_database_state()

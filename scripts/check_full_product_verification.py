@@ -2205,6 +2205,13 @@ def _comparison_figures(payload: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _comparison_policy_previews(payload: dict[str, Any]) -> list[Any]:
+    return [
+        row.get("policy_preview")
+        for row in sorted(payload.get("scenarios", []), key=lambda row: row["rank"])
+    ]
+
+
 def _comparison_pair(
     client: TestClient,
     evidence: dict[str, Any],
@@ -2240,6 +2247,19 @@ def _comparison_pair(
             # entered prices to the scenario figures.
             workspace = _observe(client, evidence, "GET", f"/api/workspace/{trip_id}")
             payload = workspace["route_comparison"]
+            compare = _observe(
+                client, evidence, "GET", f"/api/workspace/{trip_id}/scenarios/compare"
+            )
+            workspace_figures = _comparison_figures(payload)
+            compare_figures = _comparison_figures(compare)
+            _require(
+                compare_figures == workspace_figures
+                and _comparison_policy_previews(compare) == _comparison_policy_previews(payload),
+                "scenario comparison endpoint did not match workspace route_comparison",
+                trip_id=trip_id,
+                workspace_figures=workspace_figures,
+                compare_figures=compare_figures,
+            )
         observation["figures"] = _comparison_figures(payload)
         observations.append(observation)
     return observations
