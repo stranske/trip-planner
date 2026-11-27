@@ -594,7 +594,7 @@ def test_live_tpp_journey_uses_configured_org_native_sync_submit_and_verdict_rea
         == "eval-ext-northwind-001"
     )
     assert readback_state["evaluation"]["evaluation_result"]["status"] == "non_compliant"
-    assert readback.json()["summary"]["follow_up_status"] == "reoptimization_required"
+    assert readback.json()["summary"]["follow_up_status"] == "reoptimized"
     assert source_version["trip_id"] == trip_id
     assert source_version["saved_scenario_id"] == live_details["saved_scenario_id"]
     assert source_version["version_id"] == live_details["source_version_id"]
@@ -622,7 +622,7 @@ def test_live_tpp_journey_uses_configured_org_native_sync_submit_and_verdict_rea
     assert live_details["observed_output"]["execution_id"] == "exec-ext-northwind-001"
     assert live_details["observed_output"]["evaluation_id"] == "eval-ext-northwind-001"
     assert live_details["observed_output"]["evaluation_status"] == "non_compliant"
-    assert live_details["observed_output"]["follow_up_status"] == "reoptimization_required"
+    assert live_details["observed_output"]["follow_up_status"] == "reoptimized"
     assert live_details["compatibility_control"]["offline_fixture_journey_retained"] is True
     assert live_details["compatibility_control"]["compatible_with_planner_cache"] is True
     assert live_details["compatibility_control"]["organization_id"] == "org-northwind"
@@ -762,7 +762,7 @@ def test_same_focused_input_fails_with_previous_staged_put_behavior_and_passes_a
     passing_state = passing_readback.json()["proposal_state"]
     assert passing_state["organization_id"] == "org-northwind"
     assert passing_state["proposal"]["source_version"] == expected_source_version
-    assert passing_readback.json()["summary"]["follow_up_status"] == "reoptimization_required"
+    assert passing_readback.json()["summary"]["follow_up_status"] == "reoptimized"
     assert live_details["verdict_readback"]["evaluation_id"] == "eval-ext-northwind-001"
     assert live_details["verdict_readback"]["saved_scenario_id"] == (
         expected_source_version["saved_scenario_id"]
@@ -1142,6 +1142,7 @@ def test_supported_cli_entrypoint_records_native_two_app_gate_and_compatibility_
         "proposal_submit": f"POST /api/workspace/{trip_id}/proposal/submit",
         "proposal_refresh": f"POST /api/workspace/{trip_id}/proposal/refresh",
         "verdict_readback": f"GET /api/workspace/{trip_id}/proposal",
+        "reoptimize": f"POST /api/workspace/{trip_id}/proposal/reoptimize",
     }
     assert live_output["external_ids"]["policy_id"] == "policy-ext-northwind-2026-11"
     assert live_output["external_ids"]["execution_id"] == "exec-ext-northwind-001"
