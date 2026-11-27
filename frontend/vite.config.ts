@@ -27,6 +27,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",
+    coverage: { provider: "v8", reporter: ["text", "json"] },
     // Playwright specs under frontend/e2e/ also use the *.spec.ts suffix.
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
   },
