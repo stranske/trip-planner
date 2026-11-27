@@ -1,0 +1,28 @@
+# Trial of stranske/Workflows templates/ci-node-basic.yml.
+# The one-shot event and same-repository branch check keep this evidence-only.
+# Optional inputs: https://github.com/stranske/Workflows/blob/main/docs/INTEGRATION_GUIDE.md#ci-workflows
+
+name: Node starter receiver trial
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: Node CI
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'codex/node-starter-receiver-trial-20261126'
+    uses: stranske/Workflows/.github/workflows/reusable-11-ci-node.yml@main
+    with:
+      working-directory: frontend
+      node-versions: '["22"]'
+      test-runner: vitest
+      lint: false
+      format_check: false
+      coverage: false
