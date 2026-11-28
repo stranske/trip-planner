@@ -399,7 +399,7 @@ The [shared opener and closer](https://github.com/stranske/Workflows/blob/main/d
 
 ## Troubleshooting
 
-### Auto-pilot recovery procedures
+### Issue-format hold recovery procedures
 
 When the issue optimizer detects more than three runs for the same issue in one
 hour, it applies `agents:auto-pilot-pause` to stop the recursion.
@@ -475,7 +475,7 @@ a fresh budget.
 
 ---
 
-### Issue has a legacy Auto-Pilot failure marker
+### Issue has a legacy `agents:auto-pilot-failed` marker
 
 Check the issue timeline and linked PR for an existing owner, then read the [shared opener](https://github.com/stranske/Workflows/blob/main/docs/ops/LOCAL_LANES.md#lanes-overview) disposition.
 
@@ -1021,10 +1021,12 @@ Compare a path with the default branch and its run history before changing the w
 
 ---
 
-### `maint-50-tool-version-check.yml` - Tool Version Audit
+### Tool version freshness report (central only)
 **Purpose:** Central read-only freshness audit; it has no consumer-template counterpart.
 
-**Trigger:** Weekly in the central Workflows repository
+**Where:** The "Tool version report" step of `maint-auto-update-pypi-versions.yml`
+in the central Workflows repository, weekly. Until 2026-11-28 this was the separate
+`maint-50-tool-version-check.yml`, which is retired.
 
 **Checks:**
 - PyPI freshness for the central developer-tool pin set (`black`, `ruff`, `mypy`, `pytest`, related tooling)
@@ -1032,10 +1034,9 @@ Compare a path with the default branch and its run history before changing the w
 
 **Result:** Freshness evidence only; it never creates a competing update issue or PR
 
-**Consumer note:** Maint 50 is not synced into consumer repositories. Older
-consumer-local documentation may still describe a legacy
-`maint-50-tool-version-check.yml`; treat those references as historical unless
-that workflow actually exists in the consumer checkout.
+**Consumer note:** This report is not synced into consumer repositories. Any
+`maint-50-tool-version-check.yml` reference in consumer-local documentation is
+historical.
 
 ---
 
