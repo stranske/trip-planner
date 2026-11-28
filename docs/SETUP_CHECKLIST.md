@@ -335,7 +335,8 @@ and neither visible from the value itself:
 ### 3.2.1 Bulk PAT Sync (No Organization Required)
 
 If you manage multiple repositories without GitHub organization secrets, use the
-shared script to fan out PATs from one local source of truth:
+shared script in your local `stranske/Workflows` checkout. From the root of
+that checkout, run the following commands for the receiving repositories.
 
 ```bash
 # 1) Export PAT values once in your local shell
@@ -353,7 +354,7 @@ scripts/sync_pat_secrets.sh \
 Notes:
 - `--verify` validates each token against GitHub API before writing secrets.
 - This avoids per-repo copy/paste while keeping repository-level secrets.
-- Script path: `scripts/sync_pat_secrets.sh`.
+- To preview the target repositories and secret names, use `--dry-run` in place of `--verify`.
 
 ### 3.2.2 Codex CLI Secret (`CODEX_AUTH_JSON`) — Explicit Setup
 
@@ -1290,8 +1291,8 @@ kind it is — the distinction matters and both appear in this repo:
 
 Both were got wrong during the Orchestrator onboarding and caught in review:
 
-* **Routing labels go in `.github/labels-core.yml`**, which Maint 69 syncs — not
-  `.github/labels.yml`. Labels added to the latter never reach consumers. This is
+* **Routing labels go in `.github/labels-core.yml`**, which Maint 69 syncs. (The
+  old `.github/labels.yml` never reached consumers and was retired on 2026-11-28.) This is
   also why `refactor`, `cross-repo`, `epic`, `runtime-ac`, `testgen` and
   `tracker:durable` existed on 12 repos by hand but on no newly-onboarded one:
   applying `labels.yml` gave a fresh consumer 41 labels and **none** that
